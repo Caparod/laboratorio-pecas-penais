@@ -218,7 +218,7 @@ async function apiLogin(req, res) {
   const a = db.alunos[usuario];
   if (!a) return json(res, 401, { erro: 'Matrícula não cadastrada. Fale com o professor.' });
   if (!confereSenha(senha, a.senha)) return json(res, 401, { erro: 'Matrícula ou senha incorreta.' });
-  return json(res, 200, { token: novaSessao(usuario, 'aluno'), tipo: 'aluno', precisaTrocarSenha: !a.mudouSenha, turmaAtiva: db.turmaAtiva, usosSemana: (a.usos && a.usos[semanaAtual()]) || 0, limiteSemana: LIMITE_SEMANAL });
+  return json(res, 200, { token: novaSessao(usuario, 'aluno'), tipo: 'aluno', nome: a.nome || '', precisaTrocarSenha: !a.mudouSenha, turmaAtiva: db.turmaAtiva, usosSemana: (a.usos && a.usos[semanaAtual()]) || 0, limiteSemana: LIMITE_SEMANAL });
 }
 async function apiTrocarSenha(req, res) {
   const sess = sessaoDe(req); if (!sess) return json(res, 401, { erro: 'Sessão expirada. Entre novamente.' });
@@ -233,18 +233,36 @@ async function apiAdmin(req, res) {
   const sess = sessaoDe(req); if (!sess || sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito ao professor.' });
   let d; try { d = await lerJson(req, 200000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
   if (d.turma && (d.turma === 'Estágio I' || d.turma === 'Estágio II')) { db.turmaAtiva = d.turma; }
+  let contNovas = 0, contExistentes = 0;
   if (Array.isArray(d.matriculas)) {
-    const novas = d.matriculas.map(m => String(m).trim()).filter(m => /^[0-9]{4,15}$/.test(m));
-    if (d.substituir) { const antigos = db.alunos; db.alunos = {}; for (const m of novas) db.alunos[m] = antigos[m] || { senha: hashSenha(m), mudouSenha: false, usos: {} }; }
-    else { for (const m of novas) if (!db.alunos[m]) db.alunos[m] = { senha: hashSenha(m), mudouSenha: false, usos: {} }; }
+    const norm = d.matriculas.map(item => {
+      if (typeof item === 'string') { const m = item.match(/^\s*([0-9]{4,15})\s*[-–—,;:.]?\s*(.*)$/); return m ? { matricula: m[1], nome: (m[2] || '').trim() } : null; }
+      if (item && item.matricula) return { matricula: String(item.matricula).trim(), nome: String(item.nome || '').trim() };
+      return null;
+    }).filter(x => x && /^[0-9]{4,15}$/.test(x.matricula));
+    if (d.substituir) {
+      const antigos = db.alunos; db.alunos = {};
+      for (const a of norm) {
+        if (db.alunos[a.matricula]) { contExistentes++; continue; }
+        db.alunos[a.matricula] = antigos[a.matricula] || { senha: hashSenha(a.matricula), mudouSenha: false, usos: {} };
+        if (a.nome) db.alunos[a.matricula].nome = a.nome;
+        if (antigos[a.matricula]) contExistentes++; else contNovas++;
+      }
+    } else {
+      for (const a of norm) {
+        if (db.alunos[a.matricula]) { contExistentes++; if (a.nome && !db.alunos[a.matricula].nome) db.alunos[a.matricula].nome = a.nome; continue; }
+        db.alunos[a.matricula] = { senha: hashSenha(a.matricula), mudouSenha: false, usos: {}, nome: a.nome || '' };
+        contNovas++;
+      }
+    }
   }
   if (d.excluirTodos === true) { db.alunos = {}; }
   if (d.excluirAluno) { delete db.alunos[String(d.excluirAluno).trim()]; }
   if (d.resetarSenha) { const a = db.alunos[String(d.resetarSenha).trim()]; if (a) { a.senha = hashSenha(String(d.resetarSenha).trim()); a.mudouSenha = false; } }
   salvarDb();
   const sem = semanaAtual();
-  const resumo = Object.keys(db.alunos).sort().map(m => ({ matricula: m, trocouSenha: !!db.alunos[m].mudouSenha, usosSemana: (db.alunos[m].usos && db.alunos[m].usos[sem]) || 0 }));
-  json(res, 200, { ok: true, turmaAtiva: db.turmaAtiva, totalAlunos: resumo.length, alunos: resumo, limiteSemana: LIMITE_SEMANAL });
+  const resumo = Object.keys(db.alunos).sort().map(m => ({ matricula: m, nome: db.alunos[m].nome || '', trocouSenha: !!db.alunos[m].mudouSenha, usosSemana: (db.alunos[m].usos && db.alunos[m].usos[sem]) || 0 }));
+  json(res, 200, { ok: true, turmaAtiva: db.turmaAtiva, totalAlunos: resumo.length, alunos: resumo, limiteSemana: LIMITE_SEMANAL, novas: contNovas, existentes: contExistentes });
 }
 
 // ===== Extração de matrículas de PDF (painel do professor) =====
@@ -263,10 +281,27 @@ async function extrairPdf(req, res) {
       const tc = await pg.getTextContent();
       textoPdf += tc.items.map(it => it.str).join(' ') + '\n';
     }
-    const brutas = textoPdf.match(/\d{5,15}/g) || [];
-    const matriculas = [...new Set(brutas)];
-    if (!matriculas.length) return json(res, 422, { erro: 'Nenhuma matrícula encontrada. Se o PDF for escaneado (imagem), o texto não pode ser lido — cole as matrículas manualmente.' });
-    json(res, 200, { matriculas });
+    const ms = [...textoPdf.matchAll(/\d{5,15}/g)];
+    if (!ms.length) return json(res, 422, { erro: 'Nenhuma matrícula encontrada. Se o PDF for escaneado (imagem), o texto não pode ser lido — cole as matrículas manualmente.' });
+    const limpa = t => String(t || '').replace(/[^A-Za-zÀ-ÖØ-öø-ÿ' .-]/g, ' ').replace(/\b[A-Za-z]\b/g, ' ').replace(/\s+/g, ' ').trim();
+    const valido = n => n.length >= 5 && n.indexOf(' ') > -1;
+    const antes = [], depois = [];
+    for (let i = 0; i < ms.length; i++) {
+      const ini = ms[i].index + ms[i][0].length;
+      const fim = (i + 1 < ms.length) ? ms[i + 1].index : textoPdf.length;
+      depois.push(limpa(textoPdf.slice(ini, fim)));
+      const iniA = (i === 0) ? 0 : ms[i - 1].index + ms[i - 1][0].length;
+      antes.push(limpa(textoPdf.slice(iniA, ms[i].index)));
+    }
+    const usarDepois = depois.filter(valido).length >= antes.filter(valido).length;
+    const vistos = new Set(); const alunos = [];
+    for (let i = 0; i < ms.length; i++) {
+      const mat = ms[i][0];
+      if (vistos.has(mat)) continue; vistos.add(mat);
+      const nome = usarDepois ? depois[i] : antes[i];
+      alunos.push({ matricula: mat, nome: valido(nome) ? nome : '' });
+    }
+    json(res, 200, { alunos });
   } catch (e) { json(res, 500, { erro: 'Falha ao ler o PDF: ' + e.message }); }
 }
 

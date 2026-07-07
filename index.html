@@ -556,7 +556,9 @@ function barraUsuario(){
   const el=document.getElementById('progresso');if(!el)return;
   if(!AUTH){el.innerHTML='';return}
   const uso=(AUTH.tipo==='aluno'&&AUTH.limiteSemana)?(' · correções da semana: '+(AUTH.usosSemana||0)+'/'+AUTH.limiteSemana):'';
-  el.innerHTML='<span class="userbar">'+(AUTH.tipo==='professor'?'Professor':'Matrícula '+AUTH.usuario)+uso+'<a onclick="sair()">sair</a></span>';
+  const primeiroNome=AUTH.nome?AUTH.nome.split(' ')[0]:'';
+  const quem=AUTH.tipo==='professor'?'Professor':(primeiroNome?('Olá, '+primeiroNome.charAt(0)+primeiroNome.slice(1).toLowerCase()+' · '+AUTH.usuario):('Matrícula '+AUTH.usuario));
+  el.innerHTML='<span class="userbar">'+quem+uso+'<a onclick="sair()">sair</a></span>';
 }
 function renderLogin(msg){
   menu.innerHTML='';
@@ -578,7 +580,7 @@ async function fazerLogin(){
     const r=await fetch('/api/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({usuario:u,senha:p})});
     const d=await r.json();
     if(!r.ok){e.innerHTML='<p class="erro-ia">'+(d.erro||'Falha no login.')+'</p>';return}
-    AUTH={token:d.token,tipo:d.tipo,usuario:u,turmaAtiva:d.turmaAtiva,precisaTrocarSenha:d.precisaTrocarSenha,usosSemana:d.usosSemana||0,limiteSemana:d.limiteSemana||0};
+    AUTH={token:d.token,tipo:d.tipo,usuario:u,nome:d.nome||'',turmaAtiva:d.turmaAtiva,precisaTrocarSenha:d.precisaTrocarSenha,usosSemana:d.usosSemana||0,limiteSemana:d.limiteSemana||0};
     sset('auth',JSON.stringify(AUTH));
     iniciar();
   }catch(err){e.innerHTML='<p class="erro-ia">Erro de conexão: '+err.message+'</p>'}
@@ -627,8 +629,9 @@ function renderHome(){
   let cards='';
   const pecasVisiveis=(AUTH&&AUTH.tipo==='aluno')?PECAS.filter(x=>x.disc===AUTH.turmaAtiva):PECAS;
   for(const p of pecasVisiveis){cards+='<div class="g" onclick="abrir(\''+p.id+'\')"><b>'+p.nome+'</b><br><small>'+p.disc+'</small></div>'}
+  const saud=(AUTH&&AUTH.tipo==='aluno'&&AUTH.nome)?('Bem-vindo(a), '+AUTH.nome.split(' ')[0].charAt(0)+AUTH.nome.split(' ')[0].slice(1).toLowerCase()+'!'):'Bem-vindo(a) ao Laboratório de Peças Penais';
   conteudo.innerHTML=`<div class="home">
-  <h2>Bem-vindo(a) ao Laboratório de Peças Penais</h2>
+  <h2>${saud}</h2>
   <p>Este sistema acompanha as disciplinas de <b>Estágio I</b> (práticas simuladas — peças da fase de conhecimento e peças de liberdade) e <b>Estágio II</b> (práticas reais — recursos e ações autônomas de impugnação) do curso de Direito do IESB.</p>
   <p><b>Como estudar cada peça:</b> 1) na aba <i>Aprender</i>, domine a ficha técnica (cabimento, prazo, endereçamento) e a estrutura passo a passo; 2) na aba <i>Praticar</i>, leia o caso simulado e redija a peça completa no editor, consultando apenas a legislação seca, como na prova e na OAB; 3) confira seu texto com o <i>checklist de autoavaliação</i>; 4) use a <b>Correção por IA</b>, que corrige sua peça com base no gabarito e nos critérios da disciplina, sugere nota e propõe melhorias; 5) só então abra o <i>gabarito comentado</i>, ajuste o texto e envie ao professor pelo Google for Education.</p>
   <p>A avaliação da disciplina segue o plano de ensino: <b>Média = 0,4×A1 + 0,6×A2</b>, aprovação com média ≥ 5,0 e frequência mínima de 75%. A correção considera cabimento, fundamentos, português, adequação da linguagem, clareza, apresentação formal e legibilidade.</p>
@@ -646,7 +649,7 @@ async function renderPainel(dadosPrev){
   }
   let linhas='';
   for(const a of (dados.alunos||[])){
-    linhas+='<tr><td>'+a.matricula+'</td><td>'+(a.trocouSenha?'✓ trocou a senha':'senha inicial')+'</td><td>'+a.usosSemana+'/'+dados.limiteSemana+'</td>'
+    linhas+='<tr><td>'+a.matricula+'</td><td>'+(a.nome||'—')+'</td><td>'+(a.trocouSenha?'✓ trocou a senha':'senha inicial')+'</td><td>'+a.usosSemana+'/'+dados.limiteSemana+'</td>'
     +'<td><a style="cursor:pointer;color:var(--azul)" onclick="resetarSenha(\''+a.matricula+'\')">resetar senha</a> · <a style="cursor:pointer;color:var(--vermelho)" onclick="excluirAluno(\''+a.matricula+'\')">excluir</a></td></tr>';
   }
   conteudo.innerHTML='<span class="badge">Painel do professor</span><h2 class="titulo-peca">Administração</h2>'
@@ -663,7 +666,7 @@ async function renderPainel(dadosPrev){
   +'<button onclick="if(confirm(\'Substituir TODA a lista pelas matrículas coladas?\'))salvarAlunos(true)">Substituir lista inteira</button>'
   +'<button style="border-color:var(--vermelho);color:var(--vermelho)" onclick="excluirTodos()">🗑 Excluir todos os alunos</button></div>'
   +'<div id="adm_msg"></div>'
-  +'<table><tr><th>Matrícula</th><th>Senha</th><th>Correções na semana</th><th></th></tr>'+(linhas||'<tr><td colspan="4">Nenhum aluno cadastrado ainda.</td></tr>')+'</table></div>';
+  +'<table><tr><th>Matrícula</th><th>Nome</th><th>Senha</th><th>Correções na semana</th><th></th></tr>'+(linhas||'<tr><td colspan="5">Nenhum aluno cadastrado ainda.</td></tr>')+'</table></div>';
   window.scrollTo(0,0);
 }
 function importarPdf(inp){
@@ -677,8 +680,8 @@ function importarPdf(inp){
       const r=await apiPost('/api/extrair-pdf',{pdf:fr.result});
       const d=await r.json();
       if(!r.ok){msg.innerHTML='<p class="erro-ia">'+(d.erro||'Erro ao ler o PDF.')+'</p>';return}
-      document.getElementById('adm_mats').value=d.matriculas.join('\n');
-      msg.innerHTML='<p style="font-family:Arial,sans-serif;font-size:.88rem;color:var(--verde)"><b>'+d.matriculas.length+' matrículas encontradas.</b> Revise a lista acima (remova números que não sejam matrículas, como CPFs ou datas) e clique em Adicionar ou Substituir.</p>';
+      document.getElementById('adm_mats').value=d.alunos.map(a=>a.matricula+(a.nome?' - '+a.nome:'')).join('\n');
+      msg.innerHTML='<p style="font-family:Arial,sans-serif;font-size:.88rem;color:var(--verde)"><b>'+d.alunos.length+' alunos encontrados (sem duplicatas).</b> Revise a lista acima (formato: matrícula - nome) e clique em Adicionar ou Substituir.</p>';
     }catch(e){msg.innerHTML='<p class="erro-ia">Falha: '+e.message+'</p>'}
   };
   fr.readAsDataURL(f);
@@ -687,10 +690,11 @@ function importarPdf(inp){
 async function salvarTurma(t){try{const r=await apiPost('/api/admin',{turma:t});const d=await r.json();if(r.ok){AUTH.turmaAtiva=t;sset('auth',JSON.stringify(AUTH));renderPainel(d)}}catch(e){}}
 async function salvarAlunos(sub){
   const txt=document.getElementById('adm_mats').value;
-  const mats=txt.split(/[\s,;]+/).filter(x=>x.trim());
+  const mats=txt.split(/\n+/).map(x=>x.trim()).filter(x=>x);
   if(!mats.length){document.getElementById('adm_msg').innerHTML='<p class="erro-ia">Cole ao menos uma matrícula.</p>';return}
   try{const r=await apiPost('/api/admin',{matriculas:mats,substituir:!!sub});const d=await r.json();
-  if(r.ok)renderPainel(d);else document.getElementById('adm_msg').innerHTML='<p class="erro-ia">'+(d.erro||'Erro')+'</p>';}catch(e){}
+  if(r.ok){renderPainel(d);setTimeout(()=>{const m2=document.getElementById('adm_msg');if(m2)m2.innerHTML='<p style="font-family:Arial,sans-serif;font-size:.88rem;color:var(--verde)"><b>'+(d.novas||0)+' aluno(s) novo(s) cadastrado(s).</b>'+((d.existentes||0)?' '+d.existentes+' já estavam na lista e foram ignorados — sem duplicatas.':'')+'</p>'},100);}
+  else document.getElementById('adm_msg').innerHTML='<p class="erro-ia">'+(d.erro||'Erro')+'</p>';}catch(e){}
 }
 async function excluirAluno(m){
   if(!confirm('Excluir o aluno '+m+'? Ele perderá o acesso e o histórico de uso.'))return;
