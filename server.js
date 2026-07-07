@@ -253,11 +253,17 @@ async function extrairPdf(req, res) {
   if (!sess || sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito ao professor.' });
   let d; try { d = await lerJson(req, 20000000); } catch { return json(res, 400, { erro: 'Arquivo grande demais (máx ~15 MB) ou inválido.' }); }
   if (!d.pdf) return json(res, 400, { erro: 'Envie o PDF.' });
-  let pdfParse; try { pdfParse = require('pdf-parse'); } catch { return json(res, 500, { erro: 'Leitor de PDF indisponível no servidor. Avise o desenvolvedor.' }); }
+  let pdfjsLib; try { pdfjsLib = require('pdfjs-dist/legacy/build/pdf.js'); } catch { return json(res, 500, { erro: 'Leitor de PDF indisponível no servidor. Avise o desenvolvedor.' }); }
   try {
     const buf = Buffer.from(String(d.pdf).replace(/^data:[^,]*,/, ''), 'base64');
-    const dados = await pdfParse(buf);
-    const brutas = dados.text.match(/\d{5,15}/g) || [];
+    const doc = await pdfjsLib.getDocument({ data: new Uint8Array(buf), isEvalSupported: false, useSystemFonts: true }).promise;
+    let textoPdf = '';
+    for (let i = 1; i <= doc.numPages; i++) {
+      const pg = await doc.getPage(i);
+      const tc = await pg.getTextContent();
+      textoPdf += tc.items.map(it => it.str).join(' ') + '\n';
+    }
+    const brutas = textoPdf.match(/\d{5,15}/g) || [];
     const matriculas = [...new Set(brutas)];
     if (!matriculas.length) return json(res, 422, { erro: 'Nenhuma matrícula encontrada. Se o PDF for escaneado (imagem), o texto não pode ser lido — cole as matrículas manualmente.' });
     json(res, 200, { matriculas });

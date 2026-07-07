@@ -5,5 +5,5 @@
   "main": "server.js",
   "scripts": { "start": "node server.js" },
   "engines": { "node": ">=18" },
-  "dependencies": { "pdf-parse": "1.1.1" }
+  "dependencies": { "pdfjs-dist": "3.11.174" }
 }
