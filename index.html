@@ -410,21 +410,43 @@ const USAR_BACKEND=(location.protocol==='http:'||location.protocol==='https:');
 // ============================================================
 function getKey(){const k=sget('apikey','');if(k)return k;return CHAVE_TURMA.indexOf('sk-')===0?CHAVE_TURMA:'';}
 const LEIS={'CP':['Código Penal','https://www.planalto.gov.br/ccivil_03/decreto-lei/del2848compilado.htm'],'CPP':['Código de Processo Penal','https://www.planalto.gov.br/ccivil_03/decreto-lei/del3689compilado.htm'],'CF':['Constituição Federal','https://www.planalto.gov.br/ccivil_03/constituicao/constituicao.htm'],'LEP':['Lei de Execução Penal (7.210/84)','https://www.planalto.gov.br/ccivil_03/leis/l7210.htm'],'9.099':['Lei 9.099/95 (Juizados Especiais)','https://www.planalto.gov.br/ccivil_03/leis/l9099.htm'],'11.343':['Lei 11.343/06 (Drogas)','https://www.planalto.gov.br/ccivil_03/_ato2004-2006/2006/lei/l11343.htm']};
+const TEMAS={
+queixa:[ 'calúnia e difamação — imputação de fato criminoso (arts. 138 e 139 do CP)','decadência do direito de queixa (art. 38 do CPP)','retratação nos crimes contra a honra (art. 143 do CP)'],
+resposta:[ 'absolvição sumária (art. 397 do CPP)','princípio da insignificância no furto','inépcia da denúncia e rejeição (arts. 41 e 395 do CPP)'],
+alegacoes:[ 'absolvição por insuficiência de provas — in dubio pro reo (art. 386, VII, do CPP)','nulidade do reconhecimento pessoal (art. 226 do CPP)','atenuante da confissão espontânea (Súmula 545 do STJ)'],
+libprov:[ 'liberdade provisória no tráfico privilegiado (art. 33, §4º, da Lei 11.343/06)','fundamentação genérica da prisão preventiva (art. 312 do CPP)','medidas cautelares diversas da prisão (art. 319 do CPP)'],
+relax:[ 'ingresso domiciliar sem mandado — fundadas razões (RE 603.616)','denúncia anônima e busca domiciliar','formalidades do flagrante e nota de culpa (art. 306 do CPP)'],
+revog:[ 'contemporaneidade dos fundamentos da preventiva (art. 316 do CPP)','excesso de prazo na instrução criminal','prisão domiciliar humanitária (art. 318 do CPP)'],
+apelacao:[ 'pena-base e gravidade abstrata do delito (art. 59 do CP)','confissão espontânea usada na condenação (Súmula 545 do STJ)','prova da majorante do concurso de pessoas no roubo'],
+rese:[ 'pronúncia fundada em testemunho indireto (hearsay)','exclusão de qualificadora manifestamente improcedente','impronúncia por ausência de indícios (art. 414 do CPP)'],
+contrarrazoes:[ 'prova ilícita por violação de domicílio (art. 157 do CPP)','manutenção de sentença absolutória em apelação do MP'],
+edcl:[ 'omissão e contradição na sentença penal (art. 382 do CPP)','efeitos infringentes dos embargos de declaração'],
+infringentes:[ 'embargos infringentes e limite da divergência (art. 609, parágrafo único, do CPP)','dolo na receptação e in dubio pro reo (art. 180 do CP)'],
+agravoexec:[ 'progressão de regime e gravidade abstrata (Súmula 439 do STJ)','remição de pena pelo trabalho (art. 126 da LEP)','exame criminológico — exigência de fundamentação concreta'],
+hc:[ 'excesso de prazo na formação da culpa (art. 648, II, do CPP)','prisão domiciliar de mãe de criança (HC coletivo 143.641 do STF)','contemporaneidade dos fundamentos da preventiva'],
+revisao:[ 'revisão criminal com base em prova nova (art. 621, III, do CPP)','indenização por erro judiciário (art. 630 do CPP)'],
+resp_re:[ 'prequestionamento (Súmula 211 do STJ)','vedação ao reexame de prova (Súmula 7 do STJ e 279 do STF)','repercussão geral em matéria criminal']};
+
 function materiaisHtml(p){
   const base=p.ficha.base||'';
   let leis='';
   for(const k in LEIS){if(base.indexOf(k)>-1||(k==='CP'&&/\bCP\b/.test(base))){leis+='<li>📕 <a href="'+LEIS[k][1]+'" target="_blank" rel="noopener">'+LEIS[k][0]+' — texto integral (Planalto)</a></li>'}}
   if(!leis)leis='<li>📕 <a href="'+LEIS['CPP'][1]+'" target="_blank" rel="noopener">Código de Processo Penal — texto integral (Planalto)</a></li>';
-  const q=encodeURIComponent(p.nome+' penal OAB 2ª fase');
   const qv=encodeURIComponent(p.nome+' aula OAB 2ª fase penal');
+  let temasHtml='';
+  for(const t of (TEMAS[p.id]||[])){
+    const et=encodeURIComponent(t);
+    temasHtml+='<li>⚖️ <b>'+t+'</b><br><span style="font-family:Arial,sans-serif;font-size:.82rem">Pesquisar: '
+     +'<a href="https://jurisprudencia.stf.jus.br/pages/search?queryString='+et+'" target="_blank" rel="noopener">STF</a> · '
+     +'<a href="https://scon.stj.jus.br/SCON/pesquisar.jsp?b=ACOR&livre='+et+'" target="_blank" rel="noopener">STJ</a> · '
+     +'<a href="https://jurisdf.tjdft.jus.br/?query='+et+'" target="_blank" rel="noopener">TJDFT</a> · '
+     +'<a href="https://www.jusbrasil.com.br/busca?q='+et+'" target="_blank" rel="noopener">artigos</a></span></li>';
+  }
   return '<div class="card"><h3>Materiais gratuitos na internet</h3><ul class="mat">'
    +leis
    +'<li>🎬 <a href="https://www.youtube.com/results?search_query='+qv+'" target="_blank" rel="noopener">Vídeo-aulas gratuitas sobre '+p.nome+' (YouTube)</a></li>'
-   +'<li>⚖️ <a href="https://jurisprudencia.stf.jus.br/pages/search?queryString='+encodeURIComponent(p.nome)+'" target="_blank" rel="noopener">Jurisprudência do STF sobre o tema</a></li>'
-   +'<li>⚖️ <a href="https://scon.stj.jus.br/SCON/pesquisar.jsp?b=ACOR&livre='+encodeURIComponent(p.nome)+'" target="_blank" rel="noopener">Jurisprudência do STJ sobre o tema</a></li>'
-   +'<li>📄 <a href="https://www.jusbrasil.com.br/busca?q='+q+'" target="_blank" rel="noopener">Artigos e modelos comentados (Jusbrasil)</a></li>'
-   +'<li>🏛️ <a href="https://jurisdf.tjdft.jus.br/?query='+encodeURIComponent(p.nome)+'" target="_blank" rel="noopener">Acórdãos do TJDFT sobre o tema</a></li>'
-   +'</ul><p class="aviso">Links de busca em fontes oficiais e gratuitas — o conteúdo é atualizado pelos próprios sites.</p></div>';
+   +temasHtml
+   +'</ul><p class="aviso">Jurisprudência organizada por teses práticas reais trabalhadas nesta peça — links de busca direto nas fontes oficiais.</p></div>';
 }
 
 const CHECKLIST=[
@@ -453,13 +475,10 @@ function renderMenu(){
   for(const disc of["Estágio I","Estágio II"]){
     html+='<div class="grupo">'+disc+'</div>';
     for(const p of PECAS.filter(x=>x.disc===disc)){
-      const feito=sget('done_'+p.id,'')==='1';
-      html+='<button class="item'+(atual===p.id?' ativo':'')+'" onclick="abrir(\''+p.id+'\')">'+p.nome+(feito?'<span class="feito">✓</span>':'')+'</button>';
+      html+='<button class="item'+(atual===p.id?' ativo':'')+'" onclick="abrir(\''+p.id+'\')">'+p.nome+'</button>';
     }
   }
   menu.innerHTML=html;
-  const done=PECAS.filter(p=>sget('done_'+p.id,'')==='1').length;
-  document.getElementById('progresso').textContent=done+' de '+PECAS.length+' peças concluídas';
 }
 function irHome(){atual=null;renderMenu();renderHome()}
 function abrir(id){atual=id;aba='aprender';renderMenu();renderPeca()}
@@ -480,11 +499,10 @@ function renderHome(){
 
 function renderPeca(){
   const p=PECAS.find(x=>x.id===atual);if(!p)return irHome();
-  const feito=sget('done_'+p.id,'')==='1';
   let html='<span class="badge">'+p.disc+'</span><h2 class="titulo-peca">'+p.nome+'</h2>';
   html+='<div class="abas"><button class="'+(aba==='aprender'?'ativa':'')+'" onclick="trocarAba(\'aprender\')">📖 Aprender</button>';
   if(!p.soficha)html+='<button class="'+(aba==='praticar'?'ativa':'')+'" onclick="trocarAba(\'praticar\')">✍️ Praticar</button>';
-  html+='<button onclick="marcarFeito(\''+p.id+'\')">'+(feito?'✓ Concluída — desmarcar':'Marcar como concluída')+'</button></div>';
+  html+='</div>';
 
   if(aba==='aprender'||p.soficha){
     html+='<div class="card"><h3>Ficha técnica</h3><div class="ficha">'
@@ -528,7 +546,6 @@ function renderPeca(){
     const t=document.getElementById('red');if(t)t.addEventListener('input',()=>sset('txt_'+p.id,t.value));}
   window.scrollTo(0,0);
 }
-function marcarFeito(id){sset('done_'+id,sget('done_'+id,'')==='1'?'':'1');renderMenu();renderPeca()}
 function mudarCheck(id,i,v){sset('ck_'+id+'_'+i,v?'1':'');atualizarScore(id)}
 function atualizarScore(id){const n=CHECKLIST.filter((c,i)=>sget('ck_'+id+'_'+i,'')==='1').length;
   const el=document.getElementById('score');if(!el)return;
