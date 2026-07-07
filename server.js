@@ -6,7 +6,7 @@ const path = require('path');
 const crypto = require('crypto');
 
 // ===== Persistência (disco do Render em DATA_DIR) =====
-const DATA_DIR = process.env.DATA_DIR || __dirname;
+const DATA_DIR = process.env.DATA_DIR || (fs.existsSync('/var/data') ? '/var/data' : __dirname);
 const DB_PATH = path.join(DATA_DIR, 'db.json');
 function hashSenha(senha, salt) {
   salt = salt || crypto.randomBytes(8).toString('hex');
