@@ -220,7 +220,7 @@ async function apiLogin(req, res) {
   if (!usuario || !senha) return json(res, 400, { erro: 'Informe matrícula e senha.' });
   if (usuario === db.professor.login) {
     if (!confereSenha(senha, db.professor.senha)) return json(res, 401, { erro: 'Matrícula ou senha incorreta.' });
-    return json(res, 200, { token: novaSessao(usuario, 'professor'), tipo: 'professor', precisaTrocarSenha: false, turmaAtiva: db.turmaAtiva });
+    return json(res, 200, { token: novaSessao(usuario, 'professor'), tipo: 'professor', precisaTrocarSenha: !db.professor.mudouSenha, turmaAtiva: db.turmaAtiva });
   }
   const a = db.alunos[usuario];
   if (!a) return json(res, 401, { erro: 'Matrícula não cadastrada. Fale com o professor.' });
