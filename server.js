@@ -109,8 +109,43 @@ async function corrigir(req, res) {
   }
 }
 
+
+const SISTEMA_CASO = 'Você é o Professor Me. Rodrigo Silva Pereira (IESB) e elabora enunciados de casos simulados de prática penal no PADRÃO DA 2ª FASE DA OAB: narrativa densa e realista, com qualificação completa das partes (nomes fictícios), datas precisas e coerentes com a data atual, contexto do Distrito Federal (TJDFT, MPDFT, circunscrições reais), fase processual bem definida, número fictício de autos no padrão CNJ, descrição das provas produzidas, transcrição essencial de decisões quando houver, e comando final iniciado por "Na condição de advogado(a) de..." com as vedações típicas (ex.: vedado habeas corpus) e "(Valor: 5,00)". O caso deve exigir EXATAMENTE a peça indicada. Adapte a dificuldade ao nível pedido: BÁSICO = teses evidentes, uma tese principal e uma subsidiária; INTERMEDIÁRIO = duas ou três teses, um detalhe que exige atenção (prazo, endereçamento); AVANÇADO = armadilhas típicas de OAB (peça que se confunde com outra, tese escondida na cronologia, prescrição ou detalhe de legitimidade), múltiplas teses subsidiárias. NUNCA repita casos famosos nem os exemplos da disciplina; crie fatos inéditos. Responda EXATAMENTE neste formato, sem nada antes ou depois:\nCASO:\n(texto do enunciado)\nGABARITO:\n(peça cabível, endereçamento, prazo, todas as teses principais e subsidiárias com artigos, pedidos e erros frequentes esperados)';
+
+
+async function gerarCaso(req, res) {
+  const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+  if (limitado(ip)) return json(res, 429, { erro: 'Muitas solicitações seguidas. Aguarde um minuto.' });
+  let body = '';
+  for await (const c of req) { body += c; if (body.length > 50000) return json(res, 413, { erro: 'Requisição grande demais.' }); }
+  let dados; try { dados = JSON.parse(body); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
+  const { peca, nivel, ultimaNota } = dados || {};
+  if (!peca || !peca.nome) return json(res, 400, { erro: 'Informe a peça.' });
+  if (!process.env.ANTHROPIC_API_KEY) return json(res, 500, { erro: 'Servidor sem chave configurada.' });
+  const f2 = peca.ficha || {};
+  const usuario = 'PEÇA-ALVO: ' + peca.nome + ' (' + (peca.disc || '') + ')\nFicha da peça — cabimento: ' + (f2.cabimento || '') + ' | prazo: ' + (f2.prazo || '') + ' | endereçamento: ' + (f2.end || '') + '\nNÍVEL DE DIFICULDADE: ' + (nivel || 'INTERMEDIÁRIO') + (ultimaNota != null ? ('\nDesempenho anterior do aluno nesta peça (nota 0-10): ' + ultimaNota + ' — calibre a dificuldade: nota baixa, reforce os elementos que induzem à tese correta; nota alta, aumente a complexidade.') : '') + '\nData atual: ' + new Date().toLocaleDateString('pt-BR') + '\nGere um caso INÉDITO agora.';
+  try {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({ model: process.env.MODELO || 'claude-sonnet-5', max_tokens: 3500, system: SISTEMA_CASO, messages: [{ role: 'user', content: usuario }] })
+    });
+    const d = await r.json().catch(() => null);
+    if (!r.ok) {
+      const em = ((d && d.error && d.error.message) || '').toLowerCase();
+      if (em.includes('credit') || em.includes('spend') || em.includes('billing')) return json(res, 402, { erro: 'LIMITE_CREDITOS' });
+      return json(res, 500, { erro: 'Erro ao gerar o caso (' + r.status + ').' });
+    }
+    const texto = (d.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n');
+    const m = texto.match(/CASO:\s*([\s\S]*?)\nGABARITO:\s*([\s\S]*)/);
+    if (!m) return json(res, 500, { erro: 'Formato inesperado. Tente novamente.' });
+    json(res, 200, { caso: m[1].trim(), gab: m[2].trim() });
+  } catch (e) { json(res, 500, { erro: 'Erro interno: ' + e.message }); }
+}
+
 const server = http.createServer((req, res) => {
   if (req.method === 'POST' && req.url === '/api/corrigir') return corrigir(req, res);
+  if (req.method === 'POST' && req.url === '/api/gerar-caso') return gerarCaso(req, res);
   // página única: qualquer GET serve o index.html
   if (req.method !== 'GET') { res.writeHead(405); return res.end(); }
   fs.readFile(path.join(PUBLIC, 'index.html'), (err, buf) => {

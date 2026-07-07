@@ -577,7 +577,14 @@ function renderPeca(){
     if(!p.soficha)html+='<div class="botoes"><button class="primario" onclick="trocarAba(\'praticar\')">Ir para a prática →</button></div>';
   }else{
     const rascunho=sget('txt_'+p.id,'');
-    html+='<div class="card"><h3>Caso simulado</h3><div class="caso">'+p.caso+'</div></div>';
+    const casoAtual=sget('gcaso_'+p.id,'')||p.caso;
+    const ehGerado=!!sget('gcaso_'+p.id,'');
+    html+='<div class="card"><h3>Caso simulado'+(ehGerado?' <span class="badge">gerado por IA para você</span>':'')+'</h3><div class="caso" id="casobox">'+casoAtual+'</div>'
+    +'<div class="botoes" style="margin-top:14px"><select id="nivel" style="padding:8px;border:1px solid var(--azul);border-radius:6px;font-family:Arial,sans-serif;font-size:.85rem">'
+    +'<option value="BÁSICO">Nível: Básico</option><option value="INTERMEDIÁRIO" selected>Nível: Intermediário</option><option value="AVANÇADO">Nível: Avançado (OAB raiz)</option></select>'
+    +'<button class="primario" onclick="gerarCaso(\''+p.id+'\')">🎲 Gerar novo caso com IA</button>'
+    +(ehGerado?'<button onclick="voltarCasoOriginal(\''+p.id+'\')">↩ Voltar ao caso original</button>':'')
+    +'</div><div id="gerafeedback"></div></div>';
     html+='<div class="card"><h3>Sua peça</h3><p style="font-size:.88rem;color:var(--cinza)">Redija a peça completa, como se fosse protocolar. Consulte apenas a legislação seca. O texto fica salvo neste navegador.</p>'
     +'<textarea class="redacao" id="red" placeholder="EXCELENTÍSSIMO SENHOR...">'+rascunho.replace(/</g,'&lt;')+'</textarea>'
     +'<div class="botoes"><button onclick="salvarTxt(\''+p.id+'\')">💾 Salvar rascunho</button><button onclick="baixarTxt(\''+p.id+'\')">⬇️ Baixar como arquivo (.txt)</button></div></div>';
@@ -597,7 +604,7 @@ function renderPeca(){
     +'<div id="iafeedback"></div></div>';
     html+='<div class="card"><h3>Gabarito comentado</h3><p style="font-size:.88rem;color:var(--cinza)">Abra somente depois de terminar sua peça e passar pelo checklist.</p>'
     +'<div class="botoes"><button class="primario" onclick="document.getElementById(\'gab\').classList.toggle(\'aberto\')">👁️ Mostrar/ocultar gabarito</button></div>'
-    +'<div class="gabarito" id="gab"><div class="bloco">'+p.gab+'</div></div></div>';
+    +'<div class="gabarito" id="gab"><div class="bloco">'+(sget('ggab_'+p.id,'')||p.gab)+'</div></div></div>';
   }
   conteudo.innerHTML=html;
   if(aba==='praticar'&&!p.soficha){atualizarScore(p.id);
@@ -636,6 +643,21 @@ function md2html(t){
   if(emLista)out+='</ul>';
   return out;
 }
+async function gerarCaso(id){
+  const p=PECAS.find(x=>x.id===id);
+  const fb=document.getElementById('gerafeedback');
+  const nivel=document.getElementById('nivel')?document.getElementById('nivel').value:'INTERMEDIÁRIO';
+  let ultimaNota=null;const uc=sget('ultimacorrecao_'+id,'');const mN=uc.match(/NOTA SUGERIDA:\s*(\d+(?:[\.,]\d+)?)/i);if(mN)ultimaNota=mN[1];
+  fb.innerHTML='<p style="margin-top:10px;font-family:Arial,sans-serif;font-size:.9rem"><span class="spinner"></span>Criando um caso inédito para você...</p>';
+  try{
+    const r=await fetch('/api/gerar-caso',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({peca:{nome:p.nome,disc:p.disc,ficha:p.ficha},nivel:nivel,ultimaNota:ultimaNota})});
+    const d=await r.json().catch(()=>null);
+    if(!r.ok){let msg=(d&&d.erro)||('Erro '+r.status+'.');if(msg==='LIMITE_CREDITOS')msg='⚠️ LIMITE DE CRÉDITOS EXCEDIDO. Avise o professor (profe.rodrigosilva@gmail.com).';fb.innerHTML='<p class="erro-ia">'+msg+'</p>';return}
+    sset('gcaso_'+id,d.caso);sset('ggab_'+id,d.gab);sset('txt_'+id,'');
+    renderPeca();
+  }catch(e){fb.innerHTML='<p class="erro-ia">Falha de conexão ('+e.message+'). Tente de novo.</p>';}
+}
+function voltarCasoOriginal(id){sset('gcaso_'+id,'');sset('ggab_'+id,'');renderPeca()}
 async function corrigirIA(id){
   const p=PECAS.find(x=>x.id===id);
   const fb=document.getElementById('iafeedback');
@@ -644,7 +666,7 @@ async function corrigirIA(id){
   if(USAR_BACKEND){
     fb.innerHTML='<p style="margin-top:12px;font-family:Arial,sans-serif;font-size:.9rem"><span class="spinner"></span>Corrigindo sua peça... isso leva alguns segundos.</p>';
     try{
-      const r=await fetch('/api/corrigir',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({peca:{nome:p.nome,disc:p.disc,ficha:p.ficha,caso:p.caso,gab:p.gab},texto:texto})});
+      const r=await fetch('/api/corrigir',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({peca:{nome:p.nome,disc:p.disc,ficha:p.ficha,caso:(sget('gcaso_'+p.id,'')||p.caso),gab:(sget('ggab_'+p.id,'')||p.gab)},texto:texto})});
       const d=await r.json().catch(()=>null);
       if(!r.ok){
         let msg=(d&&d.erro)||('Erro '+r.status+'.');
