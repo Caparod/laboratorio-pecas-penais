@@ -179,7 +179,7 @@ Na condição de advogado(a) de Lucas, redija a peça processual cabível, com t
 gab:`PEÇA CABÍVEL: Alegações finais por memoriais (art. 403, §3º, do CPP).
 
 TESES:
-• PRINCIPAL: absolvição por não existir prova suficiente da autoria — reconhecimento judicial frágil (inobservância do art. 226 do CPP), palavra isolada de policial sobre fato que não presenciou, álibi corroborado → art. 386, V e VII, do CPP (in dubio pro reo).
+• PRINCIPAL: absolvição por não existir prova suficiente da autoria — reconhecimento judicial frágil (inobservância do art. 226 do CPP, conforme o HC 598.886 do STJ, que tornou obrigatório o rito do reconhecimento), palavra isolada de policial sobre fato que não presenciou, álibi corroborado → art. 386, V e VII, do CPP (in dubio pro reo).
 • Subsidiárias: afastamento da majorante do concurso (não comprovado o vínculo com o adolescente); desclassificação para furto se afastada a grave ameaça (conforme prova); pena-base no mínimo (primariedade); regime inicial mais brando; direito de recorrer em liberdade.
 
 PEDIDOS: absolvição (art. 386, V ou VII, CPP); subsidiariamente, exclusão da majorante, pena mínima, regime aberto/semiaberto.
@@ -499,6 +499,45 @@ hc:[ 'excesso de prazo na formação da culpa (art. 648, II, do CPP)','prisão d
 revisao:[ 'revisão criminal com base em prova nova (art. 621, III, do CPP)','indenização por erro judiciário (art. 630 do CPP)'],
 resp_re:[ 'prequestionamento (Súmula 211 do STJ)','vedação ao reexame de prova (Súmula 7 do STJ e 279 do STF)','repercussão geral em matéria criminal']};
 
+async function abrirGabarito(id){
+  const box=document.getElementById('gab');
+  box.classList.toggle('aberto');
+  if(!box.classList.contains('aberto'))return;
+  const bloco=document.getElementById('gabbloco');
+  if(bloco.dataset.pronto)return;
+  const p=PECAS.find(x=>x.id===id);
+  const gab=sget('ggab_'+id,'')||p.gab;
+  const caso=sget('gcaso_'+id,'')||p.caso;
+  bloco.innerHTML='<p style="font-family:Arial,sans-serif;font-size:.9rem"><span class="spinner"></span>A IA está verificando a jurisprudência deste gabarito em tempo real (sites oficiais)... pode levar até 1 minuto na primeira vez.</p>';
+  try{
+    const r=await apiPost('/api/gabarito',{peca:{nome:p.nome,disc:p.disc,ficha:p.ficha,caso:caso,gab:gab}});
+    const d=await r.json().catch(()=>null);
+    if(!r.ok){
+      let msg=(d&&d.erro)||('Erro '+r.status);
+      if(msg==='LIMITE_CREDITOS')msg='Limite de créditos do mês atingido — avise o professor.';
+      bloco.innerHTML=md2html(linkCitacoes(gab))+'<p class="erro-ia" style="margin-top:10px">(Verificação por IA indisponível agora: '+msg+'. Exibindo a versão base.)</p>';
+      bloco.dataset.pronto='1';return;
+    }
+    bloco.innerHTML=md2html(d.texto);
+    bloco.dataset.pronto='1';
+  }catch(e){
+    bloco.innerHTML=md2html(linkCitacoes(gab))+'<p class="erro-ia" style="margin-top:10px">(Sem conexão com a IA: '+e.message+'. Exibindo a versão base.)</p>';
+    bloco.dataset.pronto='1';
+  }
+}
+function fontesGabarito(p){
+  const temas=TEMAS[p.id]||[];
+  if(!temas.length)return '';
+  const stf=q=>'https://jurisprudencia.stf.jus.br/pages/search?queryString='+encodeURIComponent(q);
+  const stj=q=>'https://scon.stj.jus.br/SCON/pesquisar.jsp?b=ACOR&livre='+encodeURIComponent(q);
+  const tj=q=>'https://jurisdf.tjdft.jus.br/?query='+encodeURIComponent(q);
+  let h='<div class="bloco" style="background:#f4f6fa;border-color:#d4dce8;margin-top:10px"><h4>📚 Fontes — jurisprudência das teses deste gabarito</h4><ul class="mat" style="margin-top:6px">';
+  for(const t of temas){
+    h+='<li>⚖️ <b>'+t+'</b><br><span style="font-family:Arial,sans-serif;font-size:.82rem">Pesquisar: <a href="'+stf(t)+'" target="_blank" rel="noopener">STF</a> · <a href="'+stj(t)+'" target="_blank" rel="noopener">STJ</a> · <a href="'+tj(t)+'" target="_blank" rel="noopener">TJDFT</a></span></li>';
+  }
+  h+='</ul><p class="aviso">Links de busca nos sites oficiais — confira sempre o teor atualizado.</p></div>';
+  return h;
+}
 function materiaisHtml(p){
   const base=p.ficha.base||'';
   let leis='';
@@ -757,9 +796,9 @@ function renderPeca(){
     +'<div class="botoes"><button onclick="salvarChave()">Salvar chave</button></div>'
     +'<p class="aviso">A chave fica salva apenas neste navegador. Peça a chave ao professor ou crie a sua em console.anthropic.com.</p></div>')
     +'<div id="iafeedback"></div></div>';
-    html+='<div class="card"><h3>Gabarito comentado</h3><p style="font-size:.88rem;color:var(--cinza)">Abra somente depois de terminar sua peça e passar pelo checklist.</p>'
-    +'<div class="botoes"><button class="primario" onclick="document.getElementById(\'gab\').classList.toggle(\'aberto\')">👁️ Mostrar/ocultar gabarito</button></div>'
-    +'<div class="gabarito" id="gab"><div class="bloco">'+md2html(linkCitacoes(sget('ggab_'+p.id,'')||p.gab))+'</div></div></div>';
+    html+='<div class="card"><h3>Gabarito comentado</h3><p style="font-size:.88rem;color:var(--cinza)">Abra somente depois de terminar sua peça e passar pelo checklist. Ao abrir, a IA verifica a jurisprudência das teses em tempo real e anexa os links oficiais.</p>'
+    +'<div class="botoes"><button class="primario" onclick="abrirGabarito(\''+p.id+'\')">👁️ Mostrar/ocultar gabarito</button></div>'
+    +'<div class="gabarito" id="gab"><div class="bloco" id="gabbloco"></div></div></div>';
   }
   conteudo.innerHTML=html;
   if(aba==='praticar'&&!p.soficha){atualizarScore(p.id);

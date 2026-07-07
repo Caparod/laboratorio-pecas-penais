@@ -331,11 +331,66 @@ async function extrairPdf(req, res) {
   } catch (e) { json(res, 500, { erro: 'Falha ao ler o PDF: ' + e.message }); }
 }
 
+// ===== Gabarito comentado enriquecido pela IA em tempo real (com cache) =====
+const SISTEMA_GAB = 'Você é o Professor Me. Rodrigo Silva Pereira (IESB), na área de prática penal. Receberá um CASO e o GABARITO-BASE de uma peça processual penal. Sua tarefa: usando a ferramenta de busca na web (web_search) nos sites oficiais (stf.jus.br, stj.jus.br, tjdft.jus.br, planalto.gov.br), VERIFICAR e ENRIQUECER o gabarito: mantenha todo o conteúdo correto do gabarito-base, acrescente a cada tese a jurisprudência REAL pertinente (súmulas, leading cases, precedentes qualificados) que você CONFIRMOU na busca, com o número correto e um resumo fiel do teor, marcando cada citação com nota [1], [2]...; corrija qualquer citação do gabarito-base que não se confirme. Finalize com a seção "## Fontes e links" listando cada nota com link oficial: legislação no Planalto; súmulas e julgados pelo buscador oficial (https://jurisprudencia.stf.jus.br/pages/search?queryString=TERMO ou https://scon.stj.jus.br/SCON/pesquisar.jsp?b=ACOR&livre=TERMO, espaços como %20) ou o link real encontrado na busca — NUNCA invente link. NÃO redija a peça para o aluno; o gabarito orienta, não substitui a redação. Responda apenas com o gabarito comentado final, em markdown com títulos ##.';
+
+async function gabaritoIA(req, res) {
+  const sess = sessaoDe(req);
+  if (!sess) return json(res, 401, { erro: 'SESSAO' });
+  const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+  if (limitado(ip)) return json(res, 429, { erro: 'Muitas solicitações. Aguarde um minuto.' });
+  let d; try { d = await lerJson(req, 300000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
+  const { peca } = d || {};
+  if (!peca || !peca.nome || !peca.gab) return json(res, 400, { erro: 'Envie a peça e o gabarito.' });
+  if (!process.env.ANTHROPIC_API_KEY) return json(res, 500, { erro: 'Servidor sem chave configurada.' });
+
+  db.gabCache = db.gabCache || {};
+  const chave = crypto.createHash('sha256').update(String(peca.nome) + '|' + String(peca.caso || '') + '|' + String(peca.gab)).digest('hex').slice(0, 32);
+  if (db.gabCache[chave]) return json(res, 200, { texto: db.gabCache[chave], cache: true });
+
+  const usuario = 'PEÇA: ' + peca.nome + ' (' + (peca.disc || '') + ')\n\nCASO:\n' + String(peca.caso || '').slice(0, 8000) + '\n\nGABARITO-BASE (verifique e enriqueça):\n' + String(peca.gab).slice(0, 8000);
+  const tools = [{ type: 'web_search_20250305', name: 'web_search', max_uses: 4, allowed_domains: ['jus.br', 'planalto.gov.br'] }];
+  const mensagens = [{ role: 'user', content: usuario }];
+  const textos = [];
+  const inicioLoop = Date.now();
+  const APRESSAR = 'Encerre as buscas e produza AGORA o gabarito comentado final completo.';
+  let r = null, dd = null;
+  try {
+    for (let volta = 0; volta < 15; volta++) {
+      const estourou = (Date.now() - inicioLoop) > 140000;
+      r = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+        body: JSON.stringify({ model: process.env.MODELO || 'claude-sonnet-5', max_tokens: 4000, system: SISTEMA_GAB, tools, messages: mensagens })
+      });
+      dd = await r.json().catch(() => null);
+      if (!r.ok) break;
+      for (const b of (dd.content || [])) if (b.type === 'text' && b.text) textos.push(b.text);
+      if (dd.stop_reason === 'pause_turn') {
+        mensagens.push({ role: 'assistant', content: dd.content });
+        if (estourou || volta >= 8) mensagens.push({ role: 'user', content: APRESSAR });
+        continue;
+      }
+      break;
+    }
+    if (!r.ok) {
+      const em = ((dd && dd.error && dd.error.message) || '').toLowerCase();
+      if (em.includes('credit') || em.includes('spend') || em.includes('billing')) return json(res, 402, { erro: 'LIMITE_CREDITOS' });
+      return json(res, 500, { erro: 'Falha ao enriquecer o gabarito (' + r.status + ').' });
+    }
+    const texto = textos.join('\n').trim();
+    if (!texto) return json(res, 500, { erro: 'Tempo esgotado. Clique novamente — normalmente funciona na segunda tentativa.' });
+    db.gabCache[chave] = texto; salvarDb();
+    json(res, 200, { texto, cache: false });
+  } catch (e) { json(res, 500, { erro: 'Erro interno: ' + e.message }); }
+}
+
 const server = http.createServer((req, res) => {
   if (req.method === 'POST' && req.url === '/api/login') return apiLogin(req, res);
   if (req.method === 'POST' && req.url === '/api/trocar-senha') return apiTrocarSenha(req, res);
   if (req.method === 'POST' && req.url === '/api/admin') return apiAdmin(req, res);
   if (req.method === 'POST' && req.url === '/api/extrair-pdf') return extrairPdf(req, res);
+  if (req.method === 'POST' && req.url === '/api/gabarito') return gabaritoIA(req, res);
   if (req.method === 'POST' && req.url === '/api/corrigir') return corrigir(req, res);
   if (req.method === 'POST' && req.url === '/api/gerar-caso') return gerarCaso(req, res);
   // página única: qualquer GET serve o index.html
