@@ -70,7 +70,8 @@ async function corrigir(req, res) {
     ];
     const mensagens = [{ role: 'user', content: usuario }];
     let d = null, r = null;
-    for (let volta = 0; volta < 6; volta++) {
+    const textos = [];
+    for (let volta = 0; volta < 10; volta++) {
       r = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
@@ -78,6 +79,8 @@ async function corrigir(req, res) {
       });
       d = await r.json().catch(() => null);
       if (!r.ok) break;
+      for (const b of (d.content || [])) if (b.type === 'text' && b.text) textos.push(b.text);
+      if (d.stop_reason === 'pause_turn') { mensagens.push({ role: 'assistant', content: d.content }); continue; }
       if (d.stop_reason !== 'tool_use') break;
       mensagens.push({ role: 'assistant', content: d.content });
       const resultados = [];
@@ -100,8 +103,7 @@ async function corrigir(req, res) {
       if (r.status === 429) return json(res, 429, { erro: 'Muitas correções ao mesmo tempo. Tente novamente em instantes.' });
       return json(res, 500, { erro: 'Erro na correção (' + r.status + '). Tente novamente.' });
     }
-    const partes = (d.content || []).filter(b => b.type === 'text').map(b => b.text);
-    json(res, 200, { texto: partes.join('\n') || '' });
+    json(res, 200, { texto: textos.join('\n') || '' });
   } catch (e) {
     json(res, 500, { erro: 'Erro interno: ' + e.message });
   }

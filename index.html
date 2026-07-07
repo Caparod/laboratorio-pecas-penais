@@ -58,6 +58,9 @@ textarea.redacao{width:100%;min-height:340px;margin-top:14px;padding:16px;font-f
 .home .grade .g:hover{border-color:var(--dourado)}
 .home .grade .g b{color:var(--azul)}
 .home .grade .g small{color:var(--cinza);font-family:Arial,sans-serif}
+.mat{list-style:none;padding:0}
+.mat li{padding:7px 4px;border-bottom:1px dashed #eee;font-size:.94rem}
+.mat a{color:var(--azul)}
 .iabox{margin-top:14px}
 .iabox .resultado{background:#f4f6fa;border:1px solid #d4dce8;border-radius:8px;padding:18px 20px;font-size:.94rem;margin-top:12px}
 .iabox .resultado h4{color:var(--azul);margin:12px 0 4px}
@@ -406,6 +409,24 @@ const CHAVE_TURMA='';
 const USAR_BACKEND=(location.protocol==='http:'||location.protocol==='https:');
 // ============================================================
 function getKey(){const k=sget('apikey','');if(k)return k;return CHAVE_TURMA.indexOf('sk-')===0?CHAVE_TURMA:'';}
+const LEIS={'CP':['Código Penal','https://www.planalto.gov.br/ccivil_03/decreto-lei/del2848compilado.htm'],'CPP':['Código de Processo Penal','https://www.planalto.gov.br/ccivil_03/decreto-lei/del3689compilado.htm'],'CF':['Constituição Federal','https://www.planalto.gov.br/ccivil_03/constituicao/constituicao.htm'],'LEP':['Lei de Execução Penal (7.210/84)','https://www.planalto.gov.br/ccivil_03/leis/l7210.htm'],'9.099':['Lei 9.099/95 (Juizados Especiais)','https://www.planalto.gov.br/ccivil_03/leis/l9099.htm'],'11.343':['Lei 11.343/06 (Drogas)','https://www.planalto.gov.br/ccivil_03/_ato2004-2006/2006/lei/l11343.htm']};
+function materiaisHtml(p){
+  const base=p.ficha.base||'';
+  let leis='';
+  for(const k in LEIS){if(base.indexOf(k)>-1||(k==='CP'&&/\bCP\b/.test(base))){leis+='<li>📕 <a href="'+LEIS[k][1]+'" target="_blank" rel="noopener">'+LEIS[k][0]+' — texto integral (Planalto)</a></li>'}}
+  if(!leis)leis='<li>📕 <a href="'+LEIS['CPP'][1]+'" target="_blank" rel="noopener">Código de Processo Penal — texto integral (Planalto)</a></li>';
+  const q=encodeURIComponent(p.nome+' penal OAB 2ª fase');
+  const qv=encodeURIComponent(p.nome+' aula OAB 2ª fase penal');
+  return '<div class="card"><h3>Materiais gratuitos na internet</h3><ul class="mat">'
+   +leis
+   +'<li>🎬 <a href="https://www.youtube.com/results?search_query='+qv+'" target="_blank" rel="noopener">Vídeo-aulas gratuitas sobre '+p.nome+' (YouTube)</a></li>'
+   +'<li>⚖️ <a href="https://jurisprudencia.stf.jus.br/pages/search?queryString='+encodeURIComponent(p.nome)+'" target="_blank" rel="noopener">Jurisprudência do STF sobre o tema</a></li>'
+   +'<li>⚖️ <a href="https://scon.stj.jus.br/SCON/pesquisar.jsp?b=ACOR&livre='+encodeURIComponent(p.nome)+'" target="_blank" rel="noopener">Jurisprudência do STJ sobre o tema</a></li>'
+   +'<li>📄 <a href="https://www.jusbrasil.com.br/busca?q='+q+'" target="_blank" rel="noopener">Artigos e modelos comentados (Jusbrasil)</a></li>'
+   +'<li>🏛️ <a href="https://jurisdf.tjdft.jus.br/?query='+encodeURIComponent(p.nome)+'" target="_blank" rel="noopener">Acórdãos do TJDFT sobre o tema</a></li>'
+   +'</ul><p class="aviso">Links de busca em fontes oficiais e gratuitas — o conteúdo é atualizado pelos próprios sites.</p></div>';
+}
+
 const CHECKLIST=[
 "Escolhi a peça cabível para o caso (cabimento correto)",
 "Endereçamento ao juízo/tribunal competente",
@@ -473,6 +494,7 @@ function renderPeca(){
     html+='<div class="card"><h3>Estrutura passo a passo</h3>';
     for(const s of p.estrutura){html+='<div class="passo"><h4>'+s.t+'</h4><p>'+s.p+'</p>'+(s.ex?'<div class="ex">'+s.ex+'</div>':'')+'</div>'}
     html+='</div>';
+    html+=materiaisHtml(p);
     if(!p.soficha)html+='<div class="botoes"><button class="primario" onclick="trocarAba(\'praticar\')">Ir para a prática →</button></div>';
   }else{
     const rascunho=sget('txt_'+p.id,'');
