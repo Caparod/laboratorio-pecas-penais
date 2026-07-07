@@ -27,6 +27,13 @@ function carregarDb() {
 }
 function salvarDb() { try { fs.writeFileSync(DB_PATH, JSON.stringify(db)); } catch (e) { console.error('Falha ao salvar db:', e.message); } }
 carregarDb();
+// Autodiagnóstico de persistência (aparece nos logs do Render)
+try {
+  const marcador = path.join(DATA_DIR, '.persist-check');
+  let anterior = ''; try { anterior = fs.readFileSync(marcador, 'utf8'); } catch {}
+  fs.writeFileSync(marcador, new Date().toISOString());
+  console.log('[PERSIST] DATA_DIR=' + DATA_DIR + ' | db.json existe=' + fs.existsSync(DB_PATH) + ' | alunos=' + Object.keys(db.alunos).length + ' | marcador anterior=' + (anterior || 'NENHUM (disco novo ou não persistente)'));
+} catch (e) { console.log('[PERSIST] ERRO ao escrever em ' + DATA_DIR + ': ' + e.message); }
 
 // ===== Sessões em memória (relogin após reinício) =====
 const sessoes = new Map();
