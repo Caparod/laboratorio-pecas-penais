@@ -65,13 +65,16 @@ async function corrigir(req, res) {
 
   try {
     const tools = [
-      { type: 'web_search_20250305', name: 'web_search', max_uses: 6, allowed_domains: ['jus.br', 'planalto.gov.br', 'jusbrasil.com.br'] },
+      { type: 'web_search_20250305', name: 'web_search', max_uses: 4, allowed_domains: ['jus.br', 'planalto.gov.br', 'jusbrasil.com.br'] },
       { name: 'consultar_tjdft', description: 'Pesquisa acórdãos na API pública oficial de jurisprudência do TJDFT (jurisdf.tjdft.jus.br). Use para verificar acórdãos do TJDFT citados pelo aluno: pesquise por número do acórdão, número do processo ou termos da ementa. Retorna número, processo, órgão julgador, relator, datas, decisão e ementa.', input_schema: { type: 'object', properties: { consulta: { type: 'string', description: 'Termos da pesquisa (número do acórdão, processo ou palavras da ementa)' }, tamanho: { type: 'number', description: 'Quantidade de resultados (máx 5)' } }, required: ['consulta'] } }
     ];
     const mensagens = [{ role: 'user', content: usuario }];
     let d = null, r = null;
     const textos = [];
-    for (let volta = 0; volta < 10; volta++) {
+    const inicioLoop = Date.now();
+    const APRESSAR = 'Encerre imediatamente as buscas e produza AGORA a correção final completa, na estrutura exigida, com o que já foi verificado.';
+    for (let volta = 0; volta < 20; volta++) {
+      const estourou = (Date.now() - inicioLoop) > 150000;
       r = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
@@ -80,7 +83,11 @@ async function corrigir(req, res) {
       d = await r.json().catch(() => null);
       if (!r.ok) break;
       for (const b of (d.content || [])) if (b.type === 'text' && b.text) textos.push(b.text);
-      if (d.stop_reason === 'pause_turn') { mensagens.push({ role: 'assistant', content: d.content }); continue; }
+      if (d.stop_reason === 'pause_turn') {
+        mensagens.push({ role: 'assistant', content: d.content });
+        if (estourou || volta >= 12) mensagens.push({ role: 'user', content: APRESSAR });
+        continue;
+      }
       if (d.stop_reason !== 'tool_use') break;
       mensagens.push({ role: 'assistant', content: d.content });
       const resultados = [];
@@ -93,7 +100,11 @@ async function corrigir(req, res) {
         }
       }
       if (!resultados.length) break;
+      if (estourou || volta >= 12) resultados.push({ type: 'text', text: APRESSAR });
       mensagens.push({ role: 'user', content: resultados });
+    }
+    if (r && r.ok && !textos.join('').trim()) {
+      return json(res, 500, { erro: 'A correção demorou além do limite e não foi concluída. Clique em "Corrigir minha peça" novamente — normalmente funciona na segunda tentativa.' });
     }
     if (!r.ok) {
       const em = ((d && d.error && d.error.message) || '').toLowerCase();
@@ -110,7 +121,7 @@ async function corrigir(req, res) {
 }
 
 
-const SISTEMA_CASO = 'Você é o Professor Me. Rodrigo Silva Pereira (IESB) e elabora enunciados de casos simulados de prática penal no PADRÃO DA 2ª FASE DA OAB: narrativa densa e realista, com qualificação completa das partes (nomes fictícios), datas precisas e coerentes com a data atual, contexto do Distrito Federal (TJDFT, MPDFT, circunscrições reais), fase processual bem definida, número fictício de autos no padrão CNJ, descrição das provas produzidas, transcrição essencial de decisões quando houver, e comando final iniciado por "Na condição de advogado(a) de..." com as vedações típicas (ex.: vedado habeas corpus) e "(Valor: 5,00)". O caso deve exigir EXATAMENTE a peça indicada. Adapte a dificuldade ao nível pedido: BÁSICO = teses evidentes, uma tese principal e uma subsidiária; INTERMEDIÁRIO = duas ou três teses, um detalhe que exige atenção (prazo, endereçamento); AVANÇADO = armadilhas típicas de OAB (peça que se confunde com outra, tese escondida na cronologia, prescrição ou detalhe de legitimidade), múltiplas teses subsidiárias. NUNCA repita casos famosos nem os exemplos da disciplina; crie fatos inéditos. Responda EXATAMENTE neste formato, sem nada antes ou depois:\nCASO:\n(texto do enunciado)\nGABARITO:\n(peça cabível, endereçamento, prazo, todas as teses principais e subsidiárias com artigos, pedidos e erros frequentes esperados)';
+const SISTEMA_CASO = 'Você é o Professor Me. Rodrigo Silva Pereira (IESB) e elabora enunciados de casos simulados de prática penal no PADRÃO DA 2ª FASE DA OAB: narrativa densa e realista, com qualificação completa das partes (nomes fictícios), datas precisas e coerentes com a data atual, contexto do Distrito Federal (TJDFT, MPDFT, circunscrições reais), fase processual bem definida, número fictício de autos no padrão CNJ, descrição das provas produzidas, transcrição essencial de decisões quando houver, e comando final iniciado por "Na condição de advogado(a) de..." com as vedações típicas (ex.: vedado habeas corpus) e "(Valor: 5,00)". O caso deve exigir EXATAMENTE a peça indicada. Adapte a dificuldade ao nível pedido: BÁSICO = teses evidentes, uma tese principal e uma subsidiária; INTERMEDIÁRIO = duas ou três teses, um detalhe que exige atenção (prazo, endereçamento); AVANÇADO = armadilhas típicas de OAB (peça que se confunde com outra, tese escondida na cronologia, prescrição ou detalhe de legitimidade), múltiplas teses subsidiárias. NUNCA repita casos famosos nem os exemplos da disciplina; crie fatos inéditos. Responda EXATAMENTE neste formato, sem nada antes ou depois:\nCASO:\n(texto do enunciado)\nGABARITO:\n(peça cabível, endereçamento, prazo, todas as teses principais e subsidiárias com artigos, pedidos, erros frequentes esperados e, ao final, seção FONTES com as súmulas, julgados e leis do gabarito acompanhados de link oficial: legislação no Planalto; súmulas e julgados pelo buscador oficial — https://jurisprudencia.stf.jus.br/pages/search?queryString=TERMO ou https://scon.stj.jus.br/SCON/pesquisar.jsp?b=ACOR&livre=TERMO — NUNCA invente link direto de acórdão)';
 
 
 async function gerarCaso(req, res) {

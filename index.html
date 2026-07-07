@@ -49,7 +49,10 @@ textarea.redacao{width:100%;min-height:340px;margin-top:14px;padding:16px;font-f
 .score{font-family:Arial,sans-serif;font-weight:bold;margin-top:12px;color:var(--azul)}
 .gabarito{display:none;margin-top:14px}
 .gabarito.aberto{display:block}
-.gabarito .bloco{background:#eef5ee;border:1px solid #cfe3cf;border-radius:8px;padding:16px 18px;margin-top:10px;font-size:.94rem;white-space:pre-wrap}
+.gabarito .bloco{background:#eef5ee;border:1px solid #cfe3cf;border-radius:8px;padding:16px 18px;margin-top:10px;font-size:.94rem}
+.gabarito .bloco p{margin-bottom:8px}
+.gabarito .bloco a{color:var(--azul);word-break:break-all}
+.gabarito .bloco h4{color:var(--azul);margin:10px 0 4px}
 .aviso{font-size:.8rem;color:var(--cinza);font-family:Arial,sans-serif;margin-top:16px}
 .home h2{color:var(--azul);margin-bottom:10px}
 .home p{margin-bottom:10px}
@@ -604,7 +607,7 @@ function renderPeca(){
     +'<div id="iafeedback"></div></div>';
     html+='<div class="card"><h3>Gabarito comentado</h3><p style="font-size:.88rem;color:var(--cinza)">Abra somente depois de terminar sua peça e passar pelo checklist.</p>'
     +'<div class="botoes"><button class="primario" onclick="document.getElementById(\'gab\').classList.toggle(\'aberto\')">👁️ Mostrar/ocultar gabarito</button></div>'
-    +'<div class="gabarito" id="gab"><div class="bloco">'+(sget('ggab_'+p.id,'')||p.gab)+'</div></div></div>';
+    +'<div class="gabarito" id="gab"><div class="bloco">'+md2html(linkCitacoes(sget('ggab_'+p.id,'')||p.gab))+'</div></div></div>';
   }
   conteudo.innerHTML=html;
   if(aba==='praticar'&&!p.soficha){atualizarScore(p.id);
@@ -625,6 +628,30 @@ function toggleChave(){const b=document.getElementById('chavebox');if(b)b.style.
 function salvarChave(){const v=document.getElementById('apikey').value.trim();sset('apikey',v);
   const fb=document.getElementById('iafeedback');fb.innerHTML=v?'<p class="aviso">✓ Chave salva neste navegador.</p>':'<p class="erro-ia">Chave vazia.</p>';
   if(v)document.getElementById('chavebox').style.display='none';}
+function linkCitacoes(t){
+  const stf=q=>'https://jurisprudencia.stf.jus.br/pages/search?queryString='+encodeURIComponent(q);
+  const stj=q=>'https://scon.stj.jus.br/SCON/pesquisar.jsp?b=ACOR&livre='+encodeURIComponent(q);
+  // Súmulas com tribunal indicado
+  t=t.replace(/S[úu]mula\s+(?:n[ºo°]?\s*)?(\d+)(\s*(?:do|da|\/)\s*)(STF|STJ)/gi,function(m,n,sep,trib){
+    const u=trib.toUpperCase()==='STF'?stf('Súmula '+n):stj('Súmula '+n);
+    return '['+m+']('+u+')';});
+  // Julgados STF: RE/ADI/ADPF (e HC por padrão, salvo indicação de STJ)
+  t=t.replace(/\b(RE|ADI|ADPF|ARE)\s+(?:n[ºo°]?\s*)?([\d\.]+)\b/g,function(m,cl,n){return '['+m+']('+stf(cl+' '+n)+')';});
+  t=t.replace(/\b(REsp|AREsp|EREsp)\s+(?:n[ºo°]?\s*)?([\d\.]+)\b/g,function(m,cl,n){return '['+m+']('+stj(cl+' '+n)+')';});
+  t=t.replace(/\bHC\s+(?:coletivo\s+)?(?:n[ºo°]?\s*)?([\d\.]+)(\s*(?:do|da|\/)\s*(STF|STJ))?/gi,function(m,n,sep,trib){
+    const u=(trib&&trib.toUpperCase()==='STJ')?stj('HC '+n):stf('HC '+n);
+    return '['+m+']('+u+')';});
+  // Legislação — primeira ocorrência de cada diploma
+  const leis=[[/\b(C[óo]digo Penal|do CP)\b/, 'https://www.planalto.gov.br/ccivil_03/decreto-lei/del2848compilado.htm'],
+    [/\b(C[óo]digo de Processo Penal|do CPP)\b/, 'https://www.planalto.gov.br/ccivil_03/decreto-lei/del3689compilado.htm'],
+    [/\b(da CF|Constitui[çc][ãa]o Federal)\b/, 'https://www.planalto.gov.br/ccivil_03/constituicao/constituicao.htm'],
+    [/\b(da LEP|Lei de Execu[çc][ãa]o Penal)\b/, 'https://www.planalto.gov.br/ccivil_03/leis/l7210.htm'],
+    [/\bLei\s+(?:n[ºo°]?\s*)?9\.?099\/?95?\b/, 'https://www.planalto.gov.br/ccivil_03/leis/l9099.htm'],
+    [/\bLei\s+(?:n[ºo°]?\s*)?11\.?343\/?(?:20)?06\b/, 'https://www.planalto.gov.br/ccivil_03/_ato2004-2006/2006/lei/l11343.htm'],
+    [/\bLei\s+(?:n[ºo°]?\s*)?12\.?850\/?(?:20)?13\b/, 'https://www.planalto.gov.br/ccivil_03/_ato2011-2014/2013/lei/l12850.htm']];
+  for(const par of leis){t=t.replace(par[0],function(m){return '['+m+']('+par[1]+')'});}
+  return t;
+}
 function md2html(t){
   t=t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   t=t.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');
