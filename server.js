@@ -129,7 +129,7 @@ async function corrigir(req, res) {
       r = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-api-key': chaveUso, 'anthropic-version': '2023-06-01' },
-        body: JSON.stringify({ model: process.env.MODELO || 'claude-sonnet-5', max_tokens: 4000, system: SISTEMA, tools, messages: mensagens })
+        body: JSON.stringify({ model: process.env.MODELO || 'claude-sonnet-5', max_tokens: 6000, system: SISTEMA, tools, messages: mensagens })
       });
       d = await r.json().catch(() => null);
       if (!r.ok) break;
@@ -165,7 +165,7 @@ async function corrigir(req, res) {
         const rf = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
           headers: { 'content-type': 'application/json', 'x-api-key': chaveUso, 'anthropic-version': '2023-06-01' },
-          body: JSON.stringify({ model: process.env.MODELO || 'claude-sonnet-5', max_tokens: 4000, system: SISTEMA + ' ATENÇÃO: a busca na web está indisponível nesta correção; na seção de verificação de citações, classifique como SUSPEITA (sem zerar) o que não puder confirmar de memória, e recomende conferência pelo professor.', messages: [{ role: 'user', content: usuario }] })
+          body: JSON.stringify({ model: process.env.MODELO || 'claude-sonnet-5', max_tokens: 6000, system: SISTEMA + ' ATENÇÃO: a busca na web está indisponível nesta correção; na seção de verificação de citações, classifique como SUSPEITA (sem zerar) o que não puder confirmar de memória, e recomende conferência pelo professor.', messages: [{ role: 'user', content: usuario }] })
         });
         const df = await rf.json().catch(() => null);
         const tf = rf.ok ? (df.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n').trim() : '';
@@ -379,7 +379,7 @@ async function gabaritoIA(req, res) {
       r = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
-        body: JSON.stringify({ model: process.env.MODELO || 'claude-sonnet-5', max_tokens: 4000, system: SISTEMA_GAB, tools, messages: mensagens })
+        body: JSON.stringify({ model: process.env.MODELO || 'claude-sonnet-5', max_tokens: 6000, system: SISTEMA_GAB, tools, messages: mensagens })
       });
       dd = await r.json().catch(() => null);
       if (!r.ok) break;
