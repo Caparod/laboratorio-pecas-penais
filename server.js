@@ -21,7 +21,7 @@ let db;
 function carregarDb() {
   try { db = JSON.parse(fs.readFileSync(DB_PATH, 'utf8')); }
   catch {
-    db = { turmaAtiva: 'Estágio I', alunos: {}, professor: { login: '500686', senha: hashSenha('rsp5204'), mudouSenha: false } };
+    db = { turmaAtiva: 'Estágio I', alunos: {}, professor: { login: (process.env.PROF_LOGIN || '500686'), senha: hashSenha(process.env.PROF_SENHA || 'trocar-no-primeiro-acesso'), mudouSenha: false } };
     salvarDb();
   }
 }
@@ -275,32 +275,51 @@ async function extrairPdf(req, res) {
   try {
     const buf = Buffer.from(String(d.pdf).replace(/^data:[^,]*,/, ''), 'base64');
     const doc = await pdfjsLib.getDocument({ data: new Uint8Array(buf), isEvalSupported: false, useSystemFonts: true }).promise;
-    let textoPdf = '';
+    // Reconstrói as LINHAS visuais do PDF (por coordenada vertical), preservando a
+    // associação nome↔matrícula de cada aluno na mesma linha, para dar contexto à IA.
+    const linhasPdf = [];
     for (let i = 1; i <= doc.numPages; i++) {
       const pg = await doc.getPage(i);
       const tc = await pg.getTextContent();
-      textoPdf += tc.items.map(it => it.str).join(' ') + '\n';
+      const porY = {};
+      for (const it of tc.items) {
+        if (!it.str || !it.str.trim()) continue;
+        const y = Math.round(it.transform[5] / 2) * 2;
+        (porY[y] = porY[y] || []).push({ x: it.transform[4], s: it.str });
+      }
+      const ys = Object.keys(porY).map(Number).sort((a, b) => b - a);
+      for (const y of ys) linhasPdf.push(porY[y].sort((a, b) => a.x - b.x).map(o => o.s).join(' '));
     }
-    const ms = [...textoPdf.matchAll(/\d{5,15}/g)];
-    if (!ms.length) return json(res, 422, { erro: 'Nenhuma matrícula encontrada. Se o PDF for escaneado (imagem), o texto não pode ser lido — cole as matrículas manualmente.' });
-    const limpa = t => String(t || '').replace(/[^A-Za-zÀ-ÖØ-öø-ÿ' .-]/g, ' ').replace(/\b[A-Za-z]\b/g, ' ').replace(/\s+/g, ' ').trim();
-    const valido = n => n.length >= 5 && n.indexOf(' ') > -1;
-    const antes = [], depois = [];
-    for (let i = 0; i < ms.length; i++) {
-      const ini = ms[i].index + ms[i][0].length;
-      const fim = (i + 1 < ms.length) ? ms[i + 1].index : textoPdf.length;
-      depois.push(limpa(textoPdf.slice(ini, fim)));
-      const iniA = (i === 0) ? 0 : ms[i - 1].index + ms[i - 1][0].length;
-      antes.push(limpa(textoPdf.slice(iniA, ms[i].index)));
+    const textoPdf = linhasPdf.join('\n').replace(/[ \t]{2,}/g, '  ').slice(0, 40000);
+    if (!/\d{5,}/.test(textoPdf)) return json(res, 422, { erro: 'Não encontrei matrículas no arquivo. Se o PDF for escaneado (imagem), o texto não pode ser lido — cole a lista manualmente.' });
+
+    // A IA identifica nome + matrícula, funcionando com qualquer layout (diário, lista da secretaria etc.)
+    if (!process.env.ANTHROPIC_API_KEY) return json(res, 500, { erro: 'Servidor sem chave configurada. Avise o desenvolvedor.' });
+    const sistemaExtrai = 'Você recebe o texto bruto de uma lista de alunos (diário de classe, lista de frequência, planilha etc.) e extrai APENAS os pares nome + matrícula de CADA aluno. A matrícula é o número de identificação do aluno (geralmente 7 a 15 dígitos); NÃO confunda com CPF, telefone, datas, notas, frequência, faltas, sala ou totais. Ignore cabeçalhos, rodapés, nome do professor, disciplina e qualquer texto que não seja um aluno. Descarte anotações após o nome como "- Aprovado", "- Cancelado", "- Trancado", "- Rep Nota". Responda SOMENTE com um JSON válido, sem texto antes ou depois, no formato: {"alunos":[{"matricula":"...","nome":"..."}]}. Se não houver alunos, responda {"alunos":[]}.';
+    let rIA;
+    try {
+      rIA = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+        body: JSON.stringify({ model: process.env.MODELO_CASO || 'claude-haiku-4-5-20251001', max_tokens: 8000, system: sistemaExtrai, messages: [{ role: 'user', content: 'Texto do arquivo:\n\n' + textoPdf }] })
+      });
+    } catch (e) { return json(res, 500, { erro: 'Falha ao contatar a IA: ' + e.message }); }
+    const dIA = await rIA.json().catch(() => null);
+    if (!rIA.ok) {
+      const em = ((dIA && dIA.error && dIA.error.message) || '').toLowerCase();
+      if (em.includes('credit') || em.includes('spend') || em.includes('billing')) return json(res, 402, { erro: 'LIMITE_CREDITOS' });
+      return json(res, 500, { erro: 'A IA não conseguiu ler a lista (' + rIA.status + '). Tente novamente.' });
     }
-    const usarDepois = depois.filter(valido).length >= antes.filter(valido).length;
+    const bruto = (dIA.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
+    let parsed; try { parsed = JSON.parse(bruto.slice(bruto.indexOf('{'), bruto.lastIndexOf('}') + 1)); } catch { return json(res, 500, { erro: 'A IA respondeu em formato inesperado. Tente novamente.' }); }
     const vistos = new Set(); const alunos = [];
-    for (let i = 0; i < ms.length; i++) {
-      const mat = ms[i][0];
-      if (vistos.has(mat)) continue; vistos.add(mat);
-      const nome = usarDepois ? depois[i] : antes[i];
-      alunos.push({ matricula: mat, nome: valido(nome) ? nome : '' });
+    for (const a of (parsed.alunos || [])) {
+      const mat = String(a.matricula || '').replace(/\D/g, '');
+      const nome = String(a.nome || '').replace(/\s+/g, ' ').trim();
+      if (mat.length < 4 || vistos.has(mat)) continue;
+      vistos.add(mat); alunos.push({ matricula: mat, nome });
     }
+    if (!alunos.length) return json(res, 422, { erro: 'A IA não identificou alunos na lista. Confira o arquivo ou cole as matrículas manualmente.' });
     json(res, 200, { alunos });
   } catch (e) { json(res, 500, { erro: 'Falha ao ler o PDF: ' + e.message }); }
 }
