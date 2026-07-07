@@ -76,6 +76,17 @@ textarea.redacao{width:100%;min-height:340px;margin-top:14px;padding:16px;font-f
 @keyframes gira{to{transform:rotate(360deg)}}
 .campo-chave{width:100%;padding:9px 12px;border:1px solid #cfc9b8;border-radius:6px;font-family:Arial,sans-serif;font-size:.85rem;margin-top:8px}
 .erro-ia{color:var(--vermelho);font-size:.88rem;margin-top:10px;font-family:Arial,sans-serif}
+.loginwrap{max-width:420px;margin:60px auto;background:#fff;border:1px solid #e3ded2;border-radius:12px;padding:30px 34px;box-shadow:0 2px 10px rgba(0,0,0,.06)}
+.loginwrap h2{color:var(--azul);margin-bottom:6px}
+.loginwrap p{font-size:.9rem;color:var(--cinza);margin-bottom:14px}
+.loginwrap input{width:100%;padding:11px 13px;border:1px solid #cfc9b8;border-radius:6px;font-family:Arial,sans-serif;font-size:.95rem;margin-bottom:10px}
+.loginwrap button{width:100%;padding:11px;border:none;border-radius:6px;background:var(--azul);color:#fff;font-size:.95rem;cursor:pointer;font-family:Arial,sans-serif}
+.loginwrap .erro-ia{margin-top:8px}
+.userbar{font-family:Arial,sans-serif;font-size:.8rem;color:var(--dourado-claro)}
+.userbar a{color:#fff;margin-left:10px;cursor:pointer;text-decoration:underline}
+.painel table{width:100%;border-collapse:collapse;font-size:.88rem;font-family:Arial,sans-serif;margin-top:10px}
+.painel th,.painel td{border-bottom:1px solid #eee;padding:7px 8px;text-align:left}
+.painel textarea{width:100%;min-height:140px;padding:10px;border:1px solid #cfc9b8;border-radius:6px;font-family:monospace}
 @media(max-width:820px){.layout{flex-direction:column}nav{width:100%;display:flex;flex-wrap:wrap}nav .grupo{width:100%}nav button.item{width:auto;border-left:none}main{padding:18px}}
 </style>
 </head>
@@ -530,10 +541,77 @@ function sset(k,v){try{localStorage.setItem(k,v)}catch(e){store[k]=v}}
 
 const menu=document.getElementById('menu'),conteudo=document.getElementById('conteudo');
 let atual=null,aba='aprender';
+let AUTH=null;
+try{AUTH=JSON.parse(sget('auth','null'))}catch(e){AUTH=null}
+async function apiPost(u,b){
+  const h={'content-type':'application/json'};
+  if(AUTH&&AUTH.token)h['authorization']='Bearer '+AUTH.token;
+  const r=await fetch(u,{method:'POST',headers:h,body:JSON.stringify(b)});
+  if(r.status===401){let d=null;try{d=await r.clone().json()}catch(e){}
+    if(d&&d.erro==='SESSAO'){sset('auth','');AUTH=null;renderLogin('Sua sessão expirou. Entre novamente.');throw new Error('sessao')}}
+  return r;
+}
+function sair(){sset('auth','');AUTH=null;renderLogin()}
+function barraUsuario(){
+  const el=document.getElementById('progresso');if(!el)return;
+  if(!AUTH){el.innerHTML='';return}
+  const uso=(AUTH.tipo==='aluno'&&AUTH.limiteSemana)?(' · correções da semana: '+(AUTH.usosSemana||0)+'/'+AUTH.limiteSemana):'';
+  el.innerHTML='<span class="userbar">'+(AUTH.tipo==='professor'?'Professor':'Matrícula '+AUTH.usuario)+uso+'<a onclick="sair()">sair</a></span>';
+}
+function renderLogin(msg){
+  menu.innerHTML='';
+  document.getElementById('progresso').innerHTML='';
+  conteudo.innerHTML='<div class="loginwrap"><h2>⚖️ Laboratório de Peças Penais</h2>'
+  +'<p>Entre com a sua matrícula. No primeiro acesso, a senha é a própria matrícula.</p>'
+  +'<input id="lg_user" placeholder="Matrícula" autocomplete="username">'
+  +'<input id="lg_pass" type="password" placeholder="Senha" autocomplete="current-password">'
+  +'<button onclick="fazerLogin()">Entrar</button>'
+  +(msg?'<p class="erro-ia">'+msg+'</p>':'')+'<div id="lg_erro"></div></div>';
+  const p=document.getElementById('lg_pass');if(p)p.addEventListener('keydown',e=>{if(e.key==='Enter')fazerLogin()});
+}
+async function fazerLogin(){
+  const u=document.getElementById('lg_user').value.trim(),p=document.getElementById('lg_pass').value;
+  const e=document.getElementById('lg_erro');
+  if(!u||!p){e.innerHTML='<p class="erro-ia">Preencha matrícula e senha.</p>';return}
+  e.innerHTML='<p style="font-family:Arial,sans-serif;font-size:.85rem"><span class="spinner"></span>Entrando... (o servidor pode levar até 1 min para acordar)</p>';
+  try{
+    const r=await fetch('/api/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({usuario:u,senha:p})});
+    const d=await r.json();
+    if(!r.ok){e.innerHTML='<p class="erro-ia">'+(d.erro||'Falha no login.')+'</p>';return}
+    AUTH={token:d.token,tipo:d.tipo,usuario:u,turmaAtiva:d.turmaAtiva,precisaTrocarSenha:d.precisaTrocarSenha,usosSemana:d.usosSemana||0,limiteSemana:d.limiteSemana||0};
+    sset('auth',JSON.stringify(AUTH));
+    iniciar();
+  }catch(err){e.innerHTML='<p class="erro-ia">Erro de conexão: '+err.message+'</p>'}
+}
+function renderTroca(){
+  menu.innerHTML='';
+  conteudo.innerHTML='<div class="loginwrap"><h2>Primeiro acesso</h2>'
+  +'<p>Por segurança, crie uma nova senha (mínimo 6 caracteres, diferente da matrícula).</p>'
+  +'<input id="ts_1" type="password" placeholder="Nova senha">'
+  +'<input id="ts_2" type="password" placeholder="Repita a nova senha">'
+  +'<button onclick="trocarSenha()">Salvar nova senha</button><div id="ts_erro"></div></div>';
+}
+async function trocarSenha(){
+  const a=document.getElementById('ts_1').value,b=document.getElementById('ts_2').value,e=document.getElementById('ts_erro');
+  if(a!==b){e.innerHTML='<p class="erro-ia">As senhas não conferem.</p>';return}
+  try{
+    const r=await apiPost('/api/trocar-senha',{novaSenha:a});
+    const d=await r.json();
+    if(!r.ok){e.innerHTML='<p class="erro-ia">'+(d.erro||'Falha.')+'</p>';return}
+    AUTH.precisaTrocarSenha=false;sset('auth',JSON.stringify(AUTH));iniciar();
+  }catch(err){}
+}
+function iniciar(){
+  if(!AUTH||!AUTH.token){renderLogin();return}
+  if(AUTH.precisaTrocarSenha){renderTroca();return}
+  barraUsuario();renderMenu();renderHome();
+}
 
 function renderMenu(){
   let html='<button class="item'+(atual===null?' ativo':'')+'" onclick="irHome()">🏠 Início</button>';
-  for(const disc of["Estágio I","Estágio II"]){
+  if(AUTH&&AUTH.tipo==='professor')html+='<button class="item'+(atual==='__painel'?' ativo':'')+'" onclick="abrirPainel()">🛠️ Painel do professor</button>';
+  const discs=(AUTH&&AUTH.tipo==='aluno')?[AUTH.turmaAtiva]:["Estágio I","Estágio II"];
+  for(const disc of discs){
     html+='<div class="grupo">'+disc+'</div>';
     for(const p of PECAS.filter(x=>x.disc===disc)){
       html+='<button class="item'+(atual===p.id?' ativo':'')+'" onclick="abrir(\''+p.id+'\')">'+p.nome+'</button>';
@@ -547,7 +625,8 @@ function trocarAba(a){aba=a;renderPeca()}
 
 function renderHome(){
   let cards='';
-  for(const p of PECAS){cards+='<div class="g" onclick="abrir(\''+p.id+'\')"><b>'+p.nome+'</b><br><small>'+p.disc+'</small></div>'}
+  const pecasVisiveis=(AUTH&&AUTH.tipo==='aluno')?PECAS.filter(x=>x.disc===AUTH.turmaAtiva):PECAS;
+  for(const p of pecasVisiveis){cards+='<div class="g" onclick="abrir(\''+p.id+'\')"><b>'+p.nome+'</b><br><small>'+p.disc+'</small></div>'}
   conteudo.innerHTML=`<div class="home">
   <h2>Bem-vindo(a) ao Laboratório de Peças Penais</h2>
   <p>Este sistema acompanha as disciplinas de <b>Estágio I</b> (práticas simuladas — peças da fase de conhecimento e peças de liberdade) e <b>Estágio II</b> (práticas reais — recursos e ações autônomas de impugnação) do curso de Direito do IESB.</p>
@@ -558,8 +637,58 @@ function renderHome(){
   </div>`;
 }
 
+function abrirPainel(){atual='__painel';renderMenu();renderPainel()}
+async function renderPainel(dadosPrev){
+  let dados=dadosPrev;
+  if(!dados){
+    conteudo.innerHTML='<div class="card"><p><span class="spinner"></span> Carregando painel...</p></div>';
+    try{const r=await apiPost('/api/admin',{});dados=await r.json();if(!r.ok){conteudo.innerHTML='<div class="card"><p class="erro-ia">'+(dados.erro||'Erro')+'</p></div>';return}}catch(e){return}
+  }
+  let linhas='';
+  for(const a of (dados.alunos||[])){
+    linhas+='<tr><td>'+a.matricula+'</td><td>'+(a.trocouSenha?'✓ trocou a senha':'senha inicial')+'</td><td>'+a.usosSemana+'/'+dados.limiteSemana+'</td>'
+    +'<td><a style="cursor:pointer;color:var(--azul)" onclick="resetarSenha(\''+a.matricula+'\')">resetar senha</a> · <a style="cursor:pointer;color:var(--vermelho)" onclick="excluirAluno(\''+a.matricula+'\')">excluir</a></td></tr>';
+  }
+  conteudo.innerHTML='<span class="badge">Painel do professor</span><h2 class="titulo-peca">Administração</h2>'
+  +'<div class="card"><h3>Turma ativa do semestre</h3><p style="font-size:.9rem;color:var(--cinza)">Os alunos só enxergam as peças da turma ativa.</p>'
+  +'<div class="botoes" style="margin-top:10px">'
+  +'<button class="'+(dados.turmaAtiva==='Estágio I'?'primario':'')+'" onclick="salvarTurma(\'Estágio I\')">Estágio I — Práticas Simuladas</button>'
+  +'<button class="'+(dados.turmaAtiva==='Estágio II'?'primario':'')+'" onclick="salvarTurma(\'Estágio II\')">Estágio II — Práticas Reais</button></div>'
+  +'<p class="aviso">Turma ativa atual: <b>'+dados.turmaAtiva+'</b></p></div>'
+  +'<div class="card painel"><h3>Alunos cadastrados ('+dados.totalAlunos+')</h3>'
+  +'<p style="font-size:.9rem;color:var(--cinza)">Cole as matrículas (uma por linha). O login e a senha inicial do aluno são a própria matrícula.</p>'
+  +'<textarea id="adm_mats" placeholder="500123\n500124\n500125"></textarea>'
+  +'<div class="botoes"><button class="primario" onclick="salvarAlunos(false)">Adicionar à lista</button>'
+  +'<button onclick="if(confirm(\'Substituir TODA a lista pelas matrículas coladas?\'))salvarAlunos(true)">Substituir lista inteira</button>'
+  +'<button style="border-color:var(--vermelho);color:var(--vermelho)" onclick="excluirTodos()">🗑 Excluir todos os alunos</button></div>'
+  +'<div id="adm_msg"></div>'
+  +'<table><tr><th>Matrícula</th><th>Senha</th><th>Correções na semana</th><th></th></tr>'+(linhas||'<tr><td colspan="4">Nenhum aluno cadastrado ainda.</td></tr>')+'</table></div>';
+  window.scrollTo(0,0);
+}
+async function salvarTurma(t){try{const r=await apiPost('/api/admin',{turma:t});const d=await r.json();if(r.ok){AUTH.turmaAtiva=t;sset('auth',JSON.stringify(AUTH));renderPainel(d)}}catch(e){}}
+async function salvarAlunos(sub){
+  const txt=document.getElementById('adm_mats').value;
+  const mats=txt.split(/[\s,;]+/).filter(x=>x.trim());
+  if(!mats.length){document.getElementById('adm_msg').innerHTML='<p class="erro-ia">Cole ao menos uma matrícula.</p>';return}
+  try{const r=await apiPost('/api/admin',{matriculas:mats,substituir:!!sub});const d=await r.json();
+  if(r.ok)renderPainel(d);else document.getElementById('adm_msg').innerHTML='<p class="erro-ia">'+(d.erro||'Erro')+'</p>';}catch(e){}
+}
+async function excluirAluno(m){
+  if(!confirm('Excluir o aluno '+m+'? Ele perderá o acesso e o histórico de uso.'))return;
+  try{const r=await apiPost('/api/admin',{excluirAluno:m});const d=await r.json();if(r.ok)renderPainel(d);}catch(e){}
+}
+async function excluirTodos(){
+  if(!confirm('EXCLUIR TODOS os alunos? Todos perderão o acesso. Esta ação não pode ser desfeita.'))return;
+  if(!confirm('Tem certeza mesmo? Digite OK para confirmar.'))return;
+  try{const r=await apiPost('/api/admin',{excluirTodos:true});const d=await r.json();if(r.ok)renderPainel(d);}catch(e){}
+}
+async function resetarSenha(m){
+  if(!confirm('Resetar a senha de '+m+' para a própria matrícula?'))return;
+  try{const r=await apiPost('/api/admin',{resetarSenha:m});const d=await r.json();if(r.ok)renderPainel(d);}catch(e){}
+}
 function renderPeca(){
   const p=PECAS.find(x=>x.id===atual);if(!p)return irHome();
+  if(AUTH&&AUTH.tipo==='aluno'&&p.disc!==AUTH.turmaAtiva)return irHome();
   let html='<span class="badge">'+p.disc+'</span><h2 class="titulo-peca">'+p.nome+'</h2>';
   html+='<div class="abas"><button class="'+(aba==='aprender'?'ativa':'')+'" onclick="trocarAba(\'aprender\')">📖 Aprender</button>';
   if(!p.soficha)html+='<button class="'+(aba==='praticar'?'ativa':'')+'" onclick="trocarAba(\'praticar\')">✍️ Praticar</button>';
@@ -677,7 +806,7 @@ async function gerarCaso(id){
   let ultimaNota=null;const uc=sget('ultimacorrecao_'+id,'');const mN=uc.match(/NOTA SUGERIDA:\s*(\d+(?:[\.,]\d+)?)/i);if(mN)ultimaNota=mN[1];
   fb.innerHTML='<p style="margin-top:10px;font-family:Arial,sans-serif;font-size:.9rem"><span class="spinner"></span>Criando um caso inédito para você...</p>';
   try{
-    const r=await fetch('/api/gerar-caso',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({peca:{nome:p.nome,disc:p.disc,ficha:p.ficha},nivel:nivel,ultimaNota:ultimaNota})});
+    const r=await apiPost('/api/gerar-caso',{peca:{nome:p.nome,disc:p.disc,ficha:p.ficha},nivel:nivel,ultimaNota:ultimaNota});
     const d=await r.json().catch(()=>null);
     if(!r.ok){let msg=(d&&d.erro)||('Erro '+r.status+'.');if(msg==='LIMITE_CREDITOS')msg='⚠️ LIMITE DE CRÉDITOS EXCEDIDO. Avise o professor (profe.rodrigosilva@gmail.com).';fb.innerHTML='<p class="erro-ia">'+msg+'</p>';return}
     sset('gcaso_'+id,d.caso);sset('ggab_'+id,d.gab);sset('txt_'+id,'');
@@ -685,7 +814,13 @@ async function gerarCaso(id){
   }catch(e){fb.innerHTML='<p class="erro-ia">Falha de conexão ('+e.message+'). Tente de novo.</p>';}
 }
 function voltarCasoOriginal(id){sset('gcaso_'+id,'');sset('ggab_'+id,'');renderPeca()}
-async function corrigirIA(id){
+async function corrigirComMinhaChave(id){
+  const v=(document.getElementById('minhachave')||{}).value||'';
+  if(!/^sk-ant-/.test(v.trim())){alert('Cole uma chave válida (começa com sk-ant-).');return}
+  sset('minhaChave',v.trim());
+  corrigirIA(id,true);
+}
+async function corrigirIA(id,usarMinhaChave){
   const p=PECAS.find(x=>x.id===id);
   const fb=document.getElementById('iafeedback');
   const texto=document.getElementById('red').value.trim();
@@ -693,13 +828,24 @@ async function corrigirIA(id){
   if(USAR_BACKEND){
     fb.innerHTML='<p style="margin-top:12px;font-family:Arial,sans-serif;font-size:.9rem"><span class="spinner"></span>Corrigindo sua peça... isso leva alguns segundos.</p>';
     try{
-      const r=await fetch('/api/corrigir',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({peca:{nome:p.nome,disc:p.disc,ficha:p.ficha,caso:(sget('gcaso_'+p.id,'')||p.caso),gab:(sget('ggab_'+p.id,'')||p.gab)},texto:texto})});
+      const corpo={peca:{nome:p.nome,disc:p.disc,ficha:p.ficha,caso:(sget('gcaso_'+p.id,'')||p.caso),gab:(sget('ggab_'+p.id,'')||p.gab)},texto:texto};
+      const minha=sget('minhaChave','');
+      if(usarMinhaChave&&minha)corpo.chavePropria=minha;
+      const r=await apiPost('/api/corrigir',corpo);
       const d=await r.json().catch(()=>null);
       if(!r.ok){
         let msg=(d&&d.erro)||('Erro '+r.status+'.');
         if(msg==='LIMITE_CREDITOS')msg='⚠️ LIMITE DE CRÉDITOS EXCEDIDO. O sistema atingiu o limite de uso deste mês. Avise o professor (profe.rodrigosilva@gmail.com) para renovar os créditos. Enquanto isso, use o checklist e o gabarito comentado.';
+        if(msg==='COTA'){
+          fb.innerHTML='<div class="resultado"><p><b>Você já usou as '+(d.limite||AUTH.limiteSemana)+' correções gratuitas desta semana.</b></p>'
+          +'<p>A cota renova na próxima semana. Se quiser continuar agora, use a sua própria chave de API da Anthropic (crie em console.anthropic.com):</p>'
+          +'<input type="password" class="campo-chave" id="minhachave" placeholder="sk-ant-..." value="'+sget('minhaChave','')+'">'
+          +'<div class="botoes" style="margin-top:8px"><button class="primario" onclick="corrigirComMinhaChave(\''+id+'\')">Corrigir com a minha chave</button></div></div>';
+          return;
+        }
         fb.innerHTML='<p class="erro-ia">'+msg+'</p>';return;
       }
+      if(d.usosSemana!=null&&!corpo.chavePropria){AUTH.usosSemana=d.usosSemana;sset('auth',JSON.stringify(AUTH));barraUsuario();}
       fb.innerHTML='<div class="resultado">'+md2html(d.texto||'Resposta vazia.')+'</div><p class="aviso">Correção gerada por IA a partir do gabarito do professor — use como orientação de estudo; a avaliação oficial é a do professor.</p>';
       sset('ultimacorrecao_'+id,d.texto||'');
     }catch(e){fb.innerHTML='<p class="erro-ia">Não foi possível conectar ao servidor ('+e.message+'). Verifique sua internet e tente de novo.</p>';}
@@ -737,7 +883,7 @@ async function corrigirIA(id){
   }
 }
 
-renderMenu();renderHome();
+iniciar();
 </script>
 </body>
 </html>

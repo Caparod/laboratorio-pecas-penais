@@ -3,6 +3,38 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
+
+// ===== Persistência (disco do Render em DATA_DIR) =====
+const DATA_DIR = process.env.DATA_DIR || __dirname;
+const DB_PATH = path.join(DATA_DIR, 'db.json');
+function hashSenha(senha, salt) {
+  salt = salt || crypto.randomBytes(8).toString('hex');
+  return salt + ':' + crypto.scryptSync(String(senha), salt, 32).toString('hex');
+}
+function confereSenha(senha, hash) {
+  if (!hash) return false;
+  const salt = hash.split(':')[0];
+  return hashSenha(senha, salt) === hash;
+}
+let db;
+function carregarDb() {
+  try { db = JSON.parse(fs.readFileSync(DB_PATH, 'utf8')); }
+  catch {
+    db = { turmaAtiva: 'Estágio I', alunos: {}, professor: { login: '500686', senha: hashSenha('rsp5204'), mudouSenha: false } };
+    salvarDb();
+  }
+}
+function salvarDb() { try { fs.writeFileSync(DB_PATH, JSON.stringify(db)); } catch (e) { console.error('Falha ao salvar db:', e.message); } }
+carregarDb();
+
+// ===== Sessões em memória (relogin após reinício) =====
+const sessoes = new Map();
+function novaSessao(usuario, tipo) { const t = crypto.randomBytes(24).toString('hex'); sessoes.set(t, { usuario, tipo }); return t; }
+function sessaoDe(req) { const a = req.headers['authorization'] || ''; const t = a.replace('Bearer ', '').trim(); return t ? sessoes.get(t) : null; }
+function semanaAtual() { const d = new Date(); const inicio = new Date(d.getFullYear(), 0, 1); const dias = Math.floor((d - inicio) / 86400000); return d.getFullYear() + '-S' + Math.ceil((dias + inicio.getDay() + 1) / 7); }
+const LIMITE_SEMANAL = parseInt(process.env.LIMITE_SEMANAL || '5', 10);
+async function lerJson(req, max) { let b = ''; for await (const c of req) { b += c; if (b.length > (max || 300000)) throw new Error('grande'); } return JSON.parse(b); }
 
 const PUBLIC = __dirname; // index.html na raiz do repositório
 const MIME = { '.html': 'text/html; charset=utf-8', '.txt': 'text/plain; charset=utf-8', '.png': 'image/png', '.ico': 'image/x-icon' };
@@ -49,16 +81,28 @@ function json(res, status, obj) {
 }
 
 async function corrigir(req, res) {
+  const sess = sessaoDe(req);
+  if (!sess) return json(res, 401, { erro: 'SESSAO' });
   const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
   if (limitado(ip)) return json(res, 429, { erro: 'Muitas correções seguidas. Aguarde um minuto e tente de novo.' });
 
   let body = '';
   for await (const c of req) { body += c; if (body.length > 300000) { return json(res, 413, { erro: 'Texto longo demais.' }); } }
   let dados; try { dados = JSON.parse(body); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
-  const { peca, texto } = dados || {};
+  const { peca, texto, chavePropria } = dados || {};
   if (!peca || !peca.nome || !texto || String(texto).trim().length < 80)
     return json(res, 400, { erro: 'Envie a peça e um texto com pelo menos 80 caracteres.' });
-  if (!process.env.ANTHROPIC_API_KEY) return json(res, 500, { erro: 'Servidor sem chave configurada. Avise o professor.' });
+  let usandoChavePropria = false;
+  let chaveUso = process.env.ANTHROPIC_API_KEY;
+  if (sess.tipo === 'aluno') {
+    const a = db.alunos[sess.usuario];
+    if (!a) return json(res, 401, { erro: 'SESSAO' });
+    a.usos = a.usos || {};
+    const usados = a.usos[semanaAtual()] || 0;
+    if (chavePropria && /^sk-ant-/.test(String(chavePropria))) { chaveUso = String(chavePropria).trim(); usandoChavePropria = true; }
+    else if (usados >= LIMITE_SEMANAL) return json(res, 402, { erro: 'COTA', usados: usados, limite: LIMITE_SEMANAL });
+  }
+  if (!chaveUso) return json(res, 500, { erro: 'Servidor sem chave configurada. Avise o professor.' });
 
   const f = peca.ficha || {};
   const usuario = 'PEÇA ESPERADA: ' + peca.nome + ' (' + (peca.disc || '') + ')\n\nFICHA TÉCNICA:\nCabimento: ' + (f.cabimento || '') + '\nPrazo: ' + (f.prazo || '') + '\nBase legal: ' + (f.base || '') + '\nEndereçamento: ' + (f.end || '') + '\nLegitimidade: ' + (f.leg || '') + '\n\nCASO SIMULADO DADO AO ALUNO:\n' + (peca.caso || '') + '\n\nGABARITO DO PROFESSOR:\n' + (peca.gab || '') + '\n\nPEÇA ESCRITA PELO ALUNO (corrija-a):\n' + String(texto).slice(0, 60000);
@@ -77,7 +121,7 @@ async function corrigir(req, res) {
       const estourou = (Date.now() - inicioLoop) > 150000;
       r = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+        headers: { 'content-type': 'application/json', 'x-api-key': chaveUso, 'anthropic-version': '2023-06-01' },
         body: JSON.stringify({ model: process.env.MODELO || 'claude-sonnet-5', max_tokens: 4000, system: SISTEMA, tools, messages: mensagens })
       });
       d = await r.json().catch(() => null);
@@ -114,7 +158,12 @@ async function corrigir(req, res) {
       if (r.status === 429) return json(res, 429, { erro: 'Muitas correções ao mesmo tempo. Tente novamente em instantes.' });
       return json(res, 500, { erro: 'Erro na correção (' + r.status + '). Tente novamente.' });
     }
-    json(res, 200, { texto: textos.join('\n') || '' });
+    if (sess.tipo === 'aluno' && !usandoChavePropria) {
+      const aU = db.alunos[sess.usuario]; const sem = semanaAtual();
+      aU.usos[sem] = (aU.usos[sem] || 0) + 1; salvarDb();
+    }
+    const aInfo = sess.tipo === 'aluno' ? db.alunos[sess.usuario] : null;
+    json(res, 200, { texto: textos.join('\n') || '', usosSemana: aInfo ? (aInfo.usos[semanaAtual()] || 0) : null, limiteSemana: LIMITE_SEMANAL });
   } catch (e) {
     json(res, 500, { erro: 'Erro interno: ' + e.message });
   }
@@ -125,6 +174,8 @@ const SISTEMA_CASO = 'Você é o Professor Me. Rodrigo Silva Pereira (IESB) e el
 
 
 async function gerarCaso(req, res) {
+  const sess = sessaoDe(req);
+  if (!sess) return json(res, 401, { erro: 'SESSAO' });
   const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
   if (limitado(ip)) return json(res, 429, { erro: 'Muitas solicitações seguidas. Aguarde um minuto.' });
   let body = '';
@@ -139,7 +190,7 @@ async function gerarCaso(req, res) {
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: process.env.MODELO || 'claude-sonnet-5', max_tokens: 3500, system: SISTEMA_CASO, messages: [{ role: 'user', content: usuario }] })
+      body: JSON.stringify({ model: process.env.MODELO_CASO || 'claude-haiku-4-5-20251001', max_tokens: 3500, system: SISTEMA_CASO, messages: [{ role: 'user', content: usuario }] })
     });
     const d = await r.json().catch(() => null);
     if (!r.ok) {
@@ -154,7 +205,52 @@ async function gerarCaso(req, res) {
   } catch (e) { json(res, 500, { erro: 'Erro interno: ' + e.message }); }
 }
 
+
+// ===== Autenticação e administração =====
+async function apiLogin(req, res) {
+  let d; try { d = await lerJson(req, 5000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
+  const usuario = String(d.usuario || '').trim(), senha = String(d.senha || '');
+  if (!usuario || !senha) return json(res, 400, { erro: 'Informe matrícula e senha.' });
+  if (usuario === db.professor.login) {
+    if (!confereSenha(senha, db.professor.senha)) return json(res, 401, { erro: 'Matrícula ou senha incorreta.' });
+    return json(res, 200, { token: novaSessao(usuario, 'professor'), tipo: 'professor', precisaTrocarSenha: false, turmaAtiva: db.turmaAtiva });
+  }
+  const a = db.alunos[usuario];
+  if (!a) return json(res, 401, { erro: 'Matrícula não cadastrada. Fale com o professor.' });
+  if (!confereSenha(senha, a.senha)) return json(res, 401, { erro: 'Matrícula ou senha incorreta.' });
+  return json(res, 200, { token: novaSessao(usuario, 'aluno'), tipo: 'aluno', precisaTrocarSenha: !a.mudouSenha, turmaAtiva: db.turmaAtiva, usosSemana: (a.usos && a.usos[semanaAtual()]) || 0, limiteSemana: LIMITE_SEMANAL });
+}
+async function apiTrocarSenha(req, res) {
+  const sess = sessaoDe(req); if (!sess) return json(res, 401, { erro: 'Sessão expirada. Entre novamente.' });
+  let d; try { d = await lerJson(req, 5000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
+  const nova = String(d.novaSenha || '');
+  if (nova.length < 6) return json(res, 400, { erro: 'A nova senha deve ter pelo menos 6 caracteres.' });
+  if (sess.tipo === 'professor') { db.professor.senha = hashSenha(nova); db.professor.mudouSenha = true; }
+  else { const a = db.alunos[sess.usuario]; if (!a) return json(res, 401, { erro: 'Aluno não encontrado.' }); if (nova === sess.usuario) return json(res, 400, { erro: 'A nova senha não pode ser igual à matrícula.' }); a.senha = hashSenha(nova); a.mudouSenha = true; }
+  salvarDb(); json(res, 200, { ok: true });
+}
+async function apiAdmin(req, res) {
+  const sess = sessaoDe(req); if (!sess || sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito ao professor.' });
+  let d; try { d = await lerJson(req, 200000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
+  if (d.turma && (d.turma === 'Estágio I' || d.turma === 'Estágio II')) { db.turmaAtiva = d.turma; }
+  if (Array.isArray(d.matriculas)) {
+    const novas = d.matriculas.map(m => String(m).trim()).filter(m => /^[0-9]{4,15}$/.test(m));
+    if (d.substituir) { const antigos = db.alunos; db.alunos = {}; for (const m of novas) db.alunos[m] = antigos[m] || { senha: hashSenha(m), mudouSenha: false, usos: {} }; }
+    else { for (const m of novas) if (!db.alunos[m]) db.alunos[m] = { senha: hashSenha(m), mudouSenha: false, usos: {} }; }
+  }
+  if (d.excluirTodos === true) { db.alunos = {}; }
+  if (d.excluirAluno) { delete db.alunos[String(d.excluirAluno).trim()]; }
+  if (d.resetarSenha) { const a = db.alunos[String(d.resetarSenha).trim()]; if (a) { a.senha = hashSenha(String(d.resetarSenha).trim()); a.mudouSenha = false; } }
+  salvarDb();
+  const sem = semanaAtual();
+  const resumo = Object.keys(db.alunos).sort().map(m => ({ matricula: m, trocouSenha: !!db.alunos[m].mudouSenha, usosSemana: (db.alunos[m].usos && db.alunos[m].usos[sem]) || 0 }));
+  json(res, 200, { ok: true, turmaAtiva: db.turmaAtiva, totalAlunos: resumo.length, alunos: resumo, limiteSemana: LIMITE_SEMANAL });
+}
+
 const server = http.createServer((req, res) => {
+  if (req.method === 'POST' && req.url === '/api/login') return apiLogin(req, res);
+  if (req.method === 'POST' && req.url === '/api/trocar-senha') return apiTrocarSenha(req, res);
+  if (req.method === 'POST' && req.url === '/api/admin') return apiAdmin(req, res);
   if (req.method === 'POST' && req.url === '/api/corrigir') return corrigir(req, res);
   if (req.method === 'POST' && req.url === '/api/gerar-caso') return gerarCaso(req, res);
   // página única: qualquer GET serve o index.html
