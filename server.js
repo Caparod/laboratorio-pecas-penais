@@ -125,7 +125,7 @@ async function corrigir(req, res) {
     const inicioLoop = Date.now();
     const APRESSAR = 'Encerre imediatamente as buscas e produza AGORA a correção final completa, na estrutura exigida, com o que já foi verificado.';
     for (let volta = 0; volta < 20; volta++) {
-      const estourou = (Date.now() - inicioLoop) > 150000;
+      const estourou = (Date.now() - inicioLoop) > 110000;
       r = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-api-key': chaveUso, 'anthropic-version': '2023-06-01' },
@@ -136,7 +136,7 @@ async function corrigir(req, res) {
       for (const b of (d.content || [])) if (b.type === 'text' && b.text) textos.push(b.text);
       if (d.stop_reason === 'pause_turn') {
         mensagens.push({ role: 'assistant', content: d.content });
-        if (estourou || volta >= 12) mensagens.push({ role: 'user', content: APRESSAR });
+        if (estourou || volta >= 6) mensagens.push({ role: 'user', content: APRESSAR });
         continue;
       }
       if (d.stop_reason !== 'tool_use') break;
@@ -150,12 +150,30 @@ async function corrigir(req, res) {
           resultados.push({ type: 'tool_result', tool_use_id: b.id, content: JSON.stringify(resultado) });
         }
       }
-      if (!resultados.length) break;
-      if (estourou || volta >= 12) resultados.push({ type: 'text', text: APRESSAR });
+      if (!resultados.length) {
+        // busca do servidor (web_search) ainda em execução: continuar como pausa
+        const temServerTool = (d.content || []).some(b => b.type === 'server_tool_use' || b.type === 'web_search_tool_result');
+        if (temServerTool) { if (estourou || volta >= 6) mensagens.push({ role: 'user', content: APRESSAR }); continue; }
+        break;
+      }
+      if (estourou || volta >= 6) resultados.push({ type: 'text', text: APRESSAR });
       mensagens.push({ role: 'user', content: resultados });
     }
     if (r && r.ok && !textos.join('').trim()) {
-      return json(res, 500, { erro: 'A correção demorou além do limite e não foi concluída. Clique em "Corrigir minha peça" novamente — normalmente funciona na segunda tentativa.' });
+      // Rede de segurança: uma última chamada SEM ferramentas, que sempre produz texto
+      try {
+        const rf = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-api-key': chaveUso, 'anthropic-version': '2023-06-01' },
+          body: JSON.stringify({ model: process.env.MODELO || 'claude-sonnet-5', max_tokens: 4000, system: SISTEMA + ' ATENÇÃO: a busca na web está indisponível nesta correção; na seção de verificação de citações, classifique como SUSPEITA (sem zerar) o que não puder confirmar de memória, e recomende conferência pelo professor.', messages: [{ role: 'user', content: usuario }] })
+        });
+        const df = await rf.json().catch(() => null);
+        const tf = rf.ok ? (df.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n').trim() : '';
+        if (tf) { textos.push(tf); }
+        else return json(res, 500, { erro: 'A correção não foi concluída. Clique em "Corrigir minha peça" novamente.' });
+      } catch (e) {
+        return json(res, 500, { erro: 'A correção não foi concluída. Clique em "Corrigir minha peça" novamente.' });
+      }
     }
     if (!r.ok) {
       const em = ((d && d.error && d.error.message) || '').toLowerCase();
@@ -366,9 +384,9 @@ async function gabaritoIA(req, res) {
       dd = await r.json().catch(() => null);
       if (!r.ok) break;
       for (const b of (dd.content || [])) if (b.type === 'text' && b.text) textos.push(b.text);
-      if (dd.stop_reason === 'pause_turn') {
+      if (dd.stop_reason === 'pause_turn' || (dd.stop_reason === 'tool_use' && (dd.content || []).some(b => b.type === 'server_tool_use' || b.type === 'web_search_tool_result'))) {
         mensagens.push({ role: 'assistant', content: dd.content });
-        if (estourou || volta >= 8) mensagens.push({ role: 'user', content: APRESSAR });
+        if (estourou || volta >= 5) mensagens.push({ role: 'user', content: APRESSAR });
         continue;
       }
       break;
