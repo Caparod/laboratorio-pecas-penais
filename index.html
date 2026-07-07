@@ -657,6 +657,7 @@ async function renderPainel(dadosPrev){
   +'<p class="aviso">Turma ativa atual: <b>'+dados.turmaAtiva+'</b></p></div>'
   +'<div class="card painel"><h3>Alunos cadastrados ('+dados.totalAlunos+')</h3>'
   +'<p style="font-size:.9rem;color:var(--cinza)">Cole as matrículas (uma por linha). O login e a senha inicial do aluno são a própria matrícula.</p>'
+  +'<div class="botoes" style="margin-bottom:8px"><label class="primario" style="padding:9px 18px;border-radius:6px;background:var(--azul);color:#fff;cursor:pointer;font-size:.85rem;font-family:Arial,sans-serif">📄 Importar lista de PDF<input type="file" accept="application/pdf" style="display:none" onchange="importarPdf(this)"></label></div>'
   +'<textarea id="adm_mats" placeholder="500123\n500124\n500125"></textarea>'
   +'<div class="botoes"><button class="primario" onclick="salvarAlunos(false)">Adicionar à lista</button>'
   +'<button onclick="if(confirm(\'Substituir TODA a lista pelas matrículas coladas?\'))salvarAlunos(true)">Substituir lista inteira</button>'
@@ -664,6 +665,24 @@ async function renderPainel(dadosPrev){
   +'<div id="adm_msg"></div>'
   +'<table><tr><th>Matrícula</th><th>Senha</th><th>Correções na semana</th><th></th></tr>'+(linhas||'<tr><td colspan="4">Nenhum aluno cadastrado ainda.</td></tr>')+'</table></div>';
   window.scrollTo(0,0);
+}
+function importarPdf(inp){
+  const f=inp.files&&inp.files[0];if(!f)return;
+  if(f.size>15000000){alert('PDF muito grande (máx 15 MB).');return}
+  const msg=document.getElementById('adm_msg');
+  msg.innerHTML='<p style="font-family:Arial,sans-serif;font-size:.85rem"><span class="spinner"></span>Lendo o PDF...</p>';
+  const fr=new FileReader();
+  fr.onload=async function(){
+    try{
+      const r=await apiPost('/api/extrair-pdf',{pdf:fr.result});
+      const d=await r.json();
+      if(!r.ok){msg.innerHTML='<p class="erro-ia">'+(d.erro||'Erro ao ler o PDF.')+'</p>';return}
+      document.getElementById('adm_mats').value=d.matriculas.join('\n');
+      msg.innerHTML='<p style="font-family:Arial,sans-serif;font-size:.88rem;color:var(--verde)"><b>'+d.matriculas.length+' matrículas encontradas.</b> Revise a lista acima (remova números que não sejam matrículas, como CPFs ou datas) e clique em Adicionar ou Substituir.</p>';
+    }catch(e){msg.innerHTML='<p class="erro-ia">Falha: '+e.message+'</p>'}
+  };
+  fr.readAsDataURL(f);
+  inp.value='';
 }
 async function salvarTurma(t){try{const r=await apiPost('/api/admin',{turma:t});const d=await r.json();if(r.ok){AUTH.turmaAtiva=t;sset('auth',JSON.stringify(AUTH));renderPainel(d)}}catch(e){}}
 async function salvarAlunos(sub){

@@ -247,10 +247,28 @@ async function apiAdmin(req, res) {
   json(res, 200, { ok: true, turmaAtiva: db.turmaAtiva, totalAlunos: resumo.length, alunos: resumo, limiteSemana: LIMITE_SEMANAL });
 }
 
+// ===== Extração de matrículas de PDF (painel do professor) =====
+async function extrairPdf(req, res) {
+  const sess = sessaoDe(req);
+  if (!sess || sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito ao professor.' });
+  let d; try { d = await lerJson(req, 20000000); } catch { return json(res, 400, { erro: 'Arquivo grande demais (máx ~15 MB) ou inválido.' }); }
+  if (!d.pdf) return json(res, 400, { erro: 'Envie o PDF.' });
+  let pdfParse; try { pdfParse = require('pdf-parse'); } catch { return json(res, 500, { erro: 'Leitor de PDF indisponível no servidor. Avise o desenvolvedor.' }); }
+  try {
+    const buf = Buffer.from(String(d.pdf).replace(/^data:[^,]*,/, ''), 'base64');
+    const dados = await pdfParse(buf);
+    const brutas = dados.text.match(/\d{5,15}/g) || [];
+    const matriculas = [...new Set(brutas)];
+    if (!matriculas.length) return json(res, 422, { erro: 'Nenhuma matrícula encontrada. Se o PDF for escaneado (imagem), o texto não pode ser lido — cole as matrículas manualmente.' });
+    json(res, 200, { matriculas });
+  } catch (e) { json(res, 500, { erro: 'Falha ao ler o PDF: ' + e.message }); }
+}
+
 const server = http.createServer((req, res) => {
   if (req.method === 'POST' && req.url === '/api/login') return apiLogin(req, res);
   if (req.method === 'POST' && req.url === '/api/trocar-senha') return apiTrocarSenha(req, res);
   if (req.method === 'POST' && req.url === '/api/admin') return apiAdmin(req, res);
+  if (req.method === 'POST' && req.url === '/api/extrair-pdf') return extrairPdf(req, res);
   if (req.method === 'POST' && req.url === '/api/corrigir') return corrigir(req, res);
   if (req.method === 'POST' && req.url === '/api/gerar-caso') return gerarCaso(req, res);
   // página única: qualquer GET serve o index.html
