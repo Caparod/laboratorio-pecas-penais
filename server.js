@@ -46,6 +46,12 @@ function migrarDb() {
     db.professores['Karine'] = { login: 'Karine', senha: hashSenha('123456'), mudouSenha: false, nome: 'Karine Morais', papel: 'Coordenadora do NPJ' };
     db.karineCriada = true;
   }
+  // Reset único (jul/2026, a pedido do professor): senha da Karine volta a ser 123456
+  if (db.professores['Karine'] && !db.karineReset202607) {
+    db.professores['Karine'].senha = hashSenha('123456');
+    db.professores['Karine'].mudouSenha = false;
+    db.karineReset202607 = true;
+  }
 }
 function carregarDb() {
   try { db = JSON.parse(fs.readFileSync(DB_PATH, 'utf8')); }

@@ -87,8 +87,10 @@ textarea.redacao{width:100%;min-height:340px;margin-top:14px;padding:16px;font-f
 .loginwrap input{width:100%;padding:11px 13px;border:1px solid #cfc9b8;border-radius:6px;font-family:Arial,sans-serif;font-size:.95rem;margin-bottom:10px}
 .loginwrap button{width:100%;padding:11px;border:none;border-radius:6px;background:var(--azul);color:#fff;font-size:.95rem;cursor:pointer;font-family:Arial,sans-serif}
 .loginwrap .erro-ia{margin-top:8px}
-.userbar{font-family:Arial,sans-serif;font-size:.8rem;color:var(--dourado-claro)}
-.userbar a{color:#fff;margin-left:10px;cursor:pointer;text-decoration:underline}
+.userbar{font-family:Arial,sans-serif;font-size:.8rem;color:var(--dourado-claro);display:flex;align-items:center;gap:10px}
+.userbar a{color:#fff;cursor:pointer;text-decoration:underline}
+.btn-sair{background:#a33;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:.8rem;cursor:pointer;font-family:Arial,sans-serif;white-space:nowrap}
+.btn-sair:hover{background:#c44}
 .painel table{width:100%;border-collapse:collapse;font-size:.88rem;font-family:Arial,sans-serif;margin-top:10px}
 .painel th,.painel td{border-bottom:1px solid #eee;padding:7px 8px;text-align:left}
 .md-tab{width:100%;border-collapse:collapse;font-size:.86rem;font-family:Arial,sans-serif;margin:10px 0;background:#fff}
@@ -102,7 +104,7 @@ textarea.redacao{width:100%;min-height:340px;margin-top:14px;padding:16px;font-f
 <body>
 <header>
   <div>
-    <h1>⚖️ Laboratório de Peças Penais</h1>
+    <h1 onclick="irInicio()" style="cursor:pointer" title="Voltar ao início">⚖️ Laboratório de Peças Penais</h1>
     <div class="sub">Estágio I e II · NPJ/IESB · Prof. Me. Rodrigo Silva Pereira</div>
   </div>
   <div class="sub" id="progresso"></div>
@@ -182,7 +184,13 @@ function barra(){
   if(!AUTH){el.innerHTML='';return}
   const nome=AUTH.nome?AUTH.nome.split(' ')[0]:'';
   const quem=AUTH.tipo==='professor'?(esc(AUTH.papel||'Professor')+' · '+esc(AUTH.nome||'')):('Olá, '+esc(nome||('Matrícula '+AUTH.usuario)));
-  el.innerHTML='<span class="userbar">'+quem+'<a onclick="trocarMinhaSenha()">trocar senha</a><a onclick="sair()">sair</a></span>';
+  el.innerHTML='<span class="userbar">'+quem+'<a onclick="trocarMinhaSenha()">trocar senha</a><button class="btn-sair" onclick="sair()">🚪 Sair</button></span>';
+}
+// Volta à tela inicial do painel (título clicável) — sempre há um caminho de volta.
+function irInicio(){
+  if(!AUTH||!AUTH.token){renderLogin();return}
+  if(AUTH.tipo==='professor'){ABA_PROF='pecas';telaProfessor();}
+  else telaAluno();
 }
 function renderLogin(msg){
   menu.innerHTML='';document.getElementById('progresso').innerHTML='';
@@ -209,7 +217,7 @@ async function fazerLogin(){
 }
 // Troca de senha (professor: só senha; aluno no 1º acesso: senha + e-mail)
 function renderTroca(){
-  menu.innerHTML='';
+  menu.innerHTML='';barra();
   const ehAluno=AUTH.tipo==='aluno';
   conteudo.innerHTML='<div class="loginwrap"><h2>Primeiro acesso</h2>'
   +'<p>Crie uma nova senha (mín. 6 caracteres'+(ehAluno?', diferente da matrícula':'')+').'+(ehAluno?' E cadastre seu e-mail para receber as correções.':' Cadastre seu e-mail para receber avisos de novas entregas.')+'</p>'
@@ -235,7 +243,7 @@ async function salvarTroca(){
   }catch(err){}
 }
 function renderVerificarEmail(enviado){
-  menu.innerHTML='';
+  menu.innerHTML='';barra();
   conteudo.innerHTML='<div class="loginwrap"><h2>Confirme seu e-mail</h2>'
   +'<p>Enviamos um código para <b>'+esc(AUTH.email)+'</b>. Digite-o abaixo para confirmar que o e-mail é seu.'+(enviado===false?' <span style="color:var(--vermelho)">(O envio pode estar indisponível — avise o professor.)</span>':'')+'</p>'
   +'<input id="vc" placeholder="Código de 6 dígitos" inputmode="numeric">'
