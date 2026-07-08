@@ -621,19 +621,26 @@ async function pecaGerarIA(req, res) {
   const nivel = String(d.nivel || 'INTERMEDIÁRIO');
   if (!nomePeca) return json(res, 400, { erro: 'Informe a peça-alvo.' });
   const usuario = 'PEÇA-ALVO: ' + nomePeca + ' (' + disc + ')\nNÍVEL: ' + nivel + '\nData atual: ' + new Date().toLocaleDateString('pt-BR') + '\nGere um caso INÉDITO no padrão OAB e o gabarito.';
-  const r = await iaTexto(SISTEMA_CASO, usuario, 3800, false);
+  const r = await iaTexto(SISTEMA_CASO, usuario, 6000, false);
   if (!r.ok) return erroIA(res, r);
+  try { console.error('[CASO IA] len=' + (r.texto || '').length + ' | inicio=' + JSON.stringify((r.texto || '').slice(0, 400))); } catch (e) {}
   // Separa CASO e GABARITO de forma tolerante a variações de formatação (markdown, dois-pontos, etc.)
-  const txt = (r.texto || '').replace(/\*\*/g, '').replace(/^#{1,6}\s*/gm, '').replace(/\r/g, '');
+  // Rótulos CASO/GABARITO só valem no INÍCIO de uma linha (evita confundir com a palavra "caso" no meio do texto).
+  const txt = (r.texto || '').replace(/\*\*/g, '').replace(/\r/g, '');
+  const reCaso = /^[ \t#>*\-]*CASO\b[ \t]*:?[ \t]*/im;
+  const reGab = /^[ \t#>*\-]*GABARITO\b[ \t]*:?[ \t]*/im;
   let caso = '', gab = '';
-  let m = txt.match(/CASO\s*:?\s*([\s\S]*?)\n\s*GABARITO\s*:?\s*([\s\S]*)/i);
-  if (m) { caso = m[1].trim(); gab = m[2].trim(); }
-  else {
-    const idx = txt.search(/\bGABARITO\b/i);
-    if (idx > 30) { caso = txt.slice(0, idx).replace(/^[\s\S]*?CASO\s*:?\s*/i, '').trim(); gab = txt.slice(idx).replace(/^GABARITO\s*:?\s*/i, '').trim(); }
-    else { caso = txt.replace(/^[\s\S]*?CASO\s*:?\s*/i, '').trim(); gab = ''; }
+  const gm = txt.match(reGab);
+  if (gm) {
+    gab = txt.slice(gm.index + gm[0].length).trim();
+    const antes = txt.slice(0, gm.index);
+    const cm = antes.match(reCaso);
+    caso = (cm ? antes.slice(cm.index + cm[0].length) : antes).trim();
+  } else {
+    const cm = txt.match(reCaso);
+    caso = (cm ? txt.slice(cm.index + cm[0].length) : txt).trim();
   }
-  if (!caso || caso.length < 30) return json(res, 502, { erro: 'A IA respondeu num formato inesperado. Clique em gerar novamente.' });
+  if (!caso || caso.length < 30) return json(res, 502, { erro: 'A IA não retornou o enunciado esperado. Tente novamente.', bruto: (r.texto || '').slice(0, 300) });
   json(res, 200, { caso, gab, nomePeca, disc });
 }
 // Professor: gerar gabarito para um enunciado que ele mesmo escreveu/subiu
