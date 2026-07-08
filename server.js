@@ -415,7 +415,7 @@ const server = http.createServer((req, res) => {
   if (req.method !== 'GET') { res.writeHead(405); return res.end(); }
   fs.readFile(path.join(PUBLIC, 'index.html'), (err, buf) => {
     if (err) { res.writeHead(404, { 'content-type': 'text/plain' }); return res.end('Não encontrado'); }
-    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store, must-revalidate' });
     res.end(buf);
   });
 });
