@@ -513,25 +513,26 @@ async function abrirGabarito(id){
   const p=PECAS.find(x=>x.id===id);
   const gab=sget('ggab_'+id,'')||p.gab;
   const caso=sget('gcaso_'+id,'')||p.caso;
-  const prog=iniciarProgresso(bloco,ETAPAS_GABARITO,80);
+  // 1) INSTANTÂNEO: gabarito com links de busca oficial em CADA citação (impossível alucinar — são pesquisas na fonte)
+  bloco.innerHTML=linkCitacoesHtml(md2html(gab))
+    +'<p style="font-family:Arial,sans-serif;font-size:.82rem;color:var(--cinza);margin-top:8px">🔗 Cada súmula, julgado e lei acima é um link que abre a pesquisa no site oficial (STF, STJ, TJDFT ou Planalto) — clique para conferir a citação na fonte.</p>'
+    +'<div id="gabIA"></div>';
+  bloco.dataset.pronto='1';
+  // 2) EM SEGUNDO PLANO: a IA verifica e acrescenta comentário/precedentes (não bloqueia; se falhar, os links acima continuam valendo)
+  const alvo=document.getElementById('gabIA');
+  const prog=iniciarProgresso(alvo,ETAPAS_GABARITO,80);
   try{
     const r=await apiPost('/api/gabarito',{peca:{nome:p.nome,disc:p.disc,ficha:p.ficha,caso:caso,gab:gab}});
     const d=await r.json().catch(()=>null);
     prog.fim();
-    if(!r.ok){
-      let msg=(d&&d.erro)||('Erro '+r.status);
-      if(msg==='LIMITE_CREDITOS')msg='Limite de créditos do mês atingido — avise o professor.';
-      bloco.innerHTML=md2html(linkCitacoes(gab))+'<p class="erro-ia" style="margin-top:10px">(Verificação por IA indisponível agora: '+msg+'. Exibindo a versão base.)</p>';
-      bloco.dataset.pronto='1';return;
+    if(r.ok&&d.texto){
+      alvo.innerHTML='<hr style="border:none;border-top:1px solid #cfe3cf;margin:14px 0"><h4 style="color:var(--azul)">Análise da IA (jurisprudência verificada em tempo real)</h4>'+linkCitacoesHtml(md2html(d.texto));
+    }else{
+      alvo.innerHTML='';
     }
-    bloco.innerHTML=md2html(d.texto);
-    bloco.dataset.pronto='1';
-  }catch(e){
-    prog.fim();
-    bloco.innerHTML=md2html(linkCitacoes(gab))+'<p class="erro-ia" style="margin-top:10px">(Sem conexão com a IA: '+e.message+'. Exibindo a versão base.)</p>';
-    bloco.dataset.pronto='1';
-  }
+  }catch(e){prog.fim();alvo.innerHTML='';}
 }
+
 function fontesGabarito(p){
   const temas=TEMAS[p.id]||[];
   if(!temas.length)return '';
@@ -860,6 +861,22 @@ function linkCitacoes(t){
     [/\bLei\s+(?:n[ºo°]?\s*)?12\.?850\/?(?:20)?13\b/, 'https://www.planalto.gov.br/ccivil_03/_ato2011-2014/2013/lei/l12850.htm']];
   for(const par of leis){t=t.replace(par[0],function(m){return '['+m+']('+par[1]+')'});}
   return t;
+}
+function urlSTF(q){return 'https://jurisprudencia.stf.jus.br/pages/search?queryString='+encodeURIComponent(q)}
+function urlSTJ(q){return 'https://scon.stj.jus.br/SCON/pesquisar.jsp?b=ACOR&livre='+encodeURIComponent(q)}
+function linkCitacoesHtml(html){
+  return html.split(/(<a\b[^>]*>[\s\S]*?<\/a>)/g).map(function(seg){
+    if(/^<a\b/.test(seg))return seg;
+    seg=seg.replace(/S[úu]mula\s+(?:n[ºo°]?\s*)?(\d+)(\s*(?:do|da|\/)\s*)(STF|STJ)/gi,function(m,n,sep,trib){
+      const u=trib.toUpperCase()==='STF'?urlSTF('Súmula '+n):urlSTJ('Súmula '+n);
+      return '<a href="'+u+'" target="_blank" rel="noopener">'+m+'</a>';});
+    seg=seg.replace(/\b(RE|ADI|ADPF|ARE)\s+(?:n[ºo°]?\s*)?([\d\.]+)\b/g,function(m,cl,n){return '<a href="'+urlSTF(cl+' '+n)+'" target="_blank" rel="noopener">'+m+'</a>'});
+    seg=seg.replace(/\b(REsp|AREsp|EREsp)\s+(?:n[ºo°]?\s*)?([\d\.]+)\b/g,function(m,cl,n){return '<a href="'+urlSTJ(cl+' '+n)+'" target="_blank" rel="noopener">'+m+'</a>'});
+    seg=seg.replace(/\bHC\s+(?:coletivo\s+)?(?:n[ºo°]?\s*)?([\d\.]+)(\s*(?:do|da|\/)\s*(STF|STJ))?/gi,function(m,n,sep,trib){
+      const u=(trib&&trib.toUpperCase()==='STJ')?urlSTJ('HC '+n):urlSTF('HC '+n);
+      return '<a href="'+u+'" target="_blank" rel="noopener">'+m+'</a>';});
+    return seg;
+  }).join('');
 }
 function md2html(t){
   t=t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
