@@ -72,6 +72,11 @@ textarea.redacao{width:100%;min-height:340px;margin-top:14px;padding:16px;font-f
 .iabox .resultado li{margin-bottom:4px}
 .iabox .resultado a{color:var(--azul);word-break:break-all}
 .iabox .resultado .nota{display:inline-block;background:var(--azul);color:#fff;border-radius:8px;padding:6px 16px;font-family:Arial,sans-serif;font-weight:bold;margin:6px 0}
+.pbar{margin-top:12px;font-family:Arial,sans-serif}
+.pbar .trilho{height:12px;background:#e8e4d8;border-radius:7px;overflow:hidden;box-shadow:inset 0 1px 2px rgba(0,0,0,.08)}
+.pbar .fill{height:100%;width:2%;background:linear-gradient(90deg,var(--azul),#4a7ab5);border-radius:7px;transition:width .6s ease}
+.pbar .etapa{font-size:.86rem;color:var(--azul);margin-top:7px}
+.pbar .tempo{float:right;color:var(--cinza);font-size:.8rem}
 .spinner{display:inline-block;width:16px;height:16px;border:3px solid #d4dce8;border-top-color:var(--azul);border-radius:50%;animation:gira .8s linear infinite;vertical-align:middle;margin-right:8px}
 @keyframes gira{to{transform:rotate(360deg)}}
 .campo-chave{width:100%;padding:9px 12px;border:1px solid #cfc9b8;border-radius:6px;font-family:Arial,sans-serif;font-size:.85rem;margin-top:8px}
@@ -508,10 +513,11 @@ async function abrirGabarito(id){
   const p=PECAS.find(x=>x.id===id);
   const gab=sget('ggab_'+id,'')||p.gab;
   const caso=sget('gcaso_'+id,'')||p.caso;
-  bloco.innerHTML='<p style="font-family:Arial,sans-serif;font-size:.9rem"><span class="spinner"></span>A IA está verificando a jurisprudência deste gabarito em tempo real (sites oficiais)... pode levar até 1 minuto na primeira vez.</p>';
+  const prog=iniciarProgresso(bloco,ETAPAS_GABARITO,80);
   try{
     const r=await apiPost('/api/gabarito',{peca:{nome:p.nome,disc:p.disc,ficha:p.ficha,caso:caso,gab:gab}});
     const d=await r.json().catch(()=>null);
+    prog.fim();
     if(!r.ok){
       let msg=(d&&d.erro)||('Erro '+r.status);
       if(msg==='LIMITE_CREDITOS')msg='Limite de créditos do mês atingido — avise o professor.';
@@ -521,6 +527,7 @@ async function abrirGabarito(id){
     bloco.innerHTML=md2html(d.texto);
     bloco.dataset.pronto='1';
   }catch(e){
+    prog.fim();
     bloco.innerHTML=md2html(linkCitacoes(gab))+'<p class="erro-ia" style="margin-top:10px">(Sem conexão com a IA: '+e.message+'. Exibindo a versão base.)</p>';
     bloco.dataset.pronto='1';
   }
@@ -590,7 +597,17 @@ async function apiPost(u,b){
     if(d&&d.erro==='SESSAO'){sset('auth','');AUTH=null;renderLogin('Sua sessão expirou. Entre novamente.');throw new Error('sessao')}}
   return r;
 }
-function sair(){sset('auth','');AUTH=null;renderLogin()}
+function limparDadosPecas(){
+  try{
+    const rem=[];
+    for(let i=0;i<localStorage.length;i++){
+      const k=localStorage.key(i);
+      if(/^(txt_|gcaso_|ggab_|ck_|ultimacorrecao_|minhaChave)/.test(k))rem.push(k);
+    }
+    rem.forEach(k=>localStorage.removeItem(k));
+  }catch(e){store={}}
+}
+function sair(){limparDadosPecas();sset('auth','');AUTH=null;renderLogin()}
 function barraUsuario(){
   const el=document.getElementById('progresso');if(!el)return;
   if(!AUTH){el.innerHTML='';return}
@@ -619,6 +636,7 @@ async function fazerLogin(){
     const r=await fetch('/api/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({usuario:u,senha:p})});
     const d=await r.json();
     if(!r.ok){e.innerHTML='<p class="erro-ia">'+(d.erro||'Falha no login.')+'</p>';return}
+    limparDadosPecas();
     AUTH={token:d.token,tipo:d.tipo,usuario:u,nome:d.nome||'',turmaAtiva:d.turmaAtiva,precisaTrocarSenha:d.precisaTrocarSenha,usosSemana:d.usosSemana||0,limiteSemana:d.limiteSemana||0};
     sset('auth',JSON.stringify(AUTH));
     iniciar();
@@ -779,7 +797,7 @@ function renderPeca(){
     +'<button class="primario" onclick="gerarCaso(\''+p.id+'\')">🎲 Gerar novo caso com IA</button>'
     +(ehGerado?'<button onclick="voltarCasoOriginal(\''+p.id+'\')">↩ Voltar ao caso original</button>':'')
     +'</div><div id="gerafeedback"></div></div>';
-    html+='<div class="card"><h3>Sua peça</h3><p style="font-size:.88rem;color:var(--cinza)">Redija a peça completa, como se fosse protocolar. Consulte apenas a legislação seca. O texto fica salvo neste navegador.</p>'
+    html+='<div class="card"><h3>Sua peça</h3><p style="font-size:.88rem;color:var(--cinza)">Redija a peça completa, como se fosse protocolar. Consulte apenas a legislação seca. Atenção: o texto vale só para esta sessão — baixe o arquivo antes de sair.</p>'
     +'<textarea class="redacao" id="red" placeholder="EXCELENTÍSSIMO SENHOR...">'+rascunho.replace(/</g,'&lt;')+'</textarea>'
     +'<div class="botoes"><button onclick="salvarTxt(\''+p.id+'\')">💾 Salvar rascunho</button><button onclick="baixarTxt(\''+p.id+'\')">⬇️ Baixar como arquivo (.txt)</button></div></div>';
     html+='<div class="card"><h3>Autoavaliação</h3><div class="check">';
@@ -866,16 +884,38 @@ async function gerarCaso(id){
   const fb=document.getElementById('gerafeedback');
   const nivel=document.getElementById('nivel')?document.getElementById('nivel').value:'INTERMEDIÁRIO';
   let ultimaNota=null;const uc=sget('ultimacorrecao_'+id,'');const mN=uc.match(/NOTA SUGERIDA:\s*(\d+(?:[\.,]\d+)?)/i);if(mN)ultimaNota=mN[1];
-  fb.innerHTML='<p style="margin-top:10px;font-family:Arial,sans-serif;font-size:.9rem"><span class="spinner"></span>Criando um caso inédito para você...</p>';
+  const prog=iniciarProgresso(fb,ETAPAS_CASO,25);
   try{
     const r=await apiPost('/api/gerar-caso',{peca:{nome:p.nome,disc:p.disc,ficha:p.ficha},nivel:nivel,ultimaNota:ultimaNota});
     const d=await r.json().catch(()=>null);
+    prog.fim();
     if(!r.ok){let msg=(d&&d.erro)||('Erro '+r.status+'.');if(msg==='LIMITE_CREDITOS')msg='⚠️ LIMITE DE CRÉDITOS EXCEDIDO. Avise o professor (profe.rodrigosilva@gmail.com).';fb.innerHTML='<p class="erro-ia">'+msg+'</p>';return}
     sset('gcaso_'+id,d.caso);sset('ggab_'+id,d.gab);sset('txt_'+id,'');
     renderPeca();
-  }catch(e){fb.innerHTML='<p class="erro-ia">Falha de conexão ('+e.message+'). Tente de novo.</p>';}
+  }catch(e){prog.fim();fb.innerHTML='<p class="erro-ia">Falha de conexão ('+e.message+'). Tente de novo.</p>';}
 }
 function voltarCasoOriginal(id){sset('gcaso_'+id,'');sset('ggab_'+id,'');renderPeca()}
+const ETAPAS_CORRECAO=[[0,'📖 Lendo sua peça e o caso...'],[8,'🔎 Analisando cabimento, estrutura e teses...'],[20,'⚖️ Verificando jurisprudência nos sites do STF e do STJ...'],[45,'🏛️ Consultando acórdãos do TJDFT...'],[70,'🧐 Conferindo cada citação da sua peça...'],[95,'✍️ Redigindo a correção e a nota...'],[130,'⏳ Quase lá — peças mais longas levam um pouco mais...']];
+const ETAPAS_GABARITO=[[0,'📖 Lendo o gabarito-base...'],[8,'⚖️ Verificando súmulas e precedentes nos sites oficiais...'],[35,'🔗 Confirmando os links das fontes...'],[60,'✍️ Redigindo o gabarito comentado...'],[100,'⏳ Finalizando...']];
+const ETAPAS_CASO=[[0,'🎲 Sorteando os fatos do seu caso...'],[8,'🧮 Calibrando o nível de dificuldade...'],[18,'✍️ Escrevendo o enunciado no padrão OAB...']];
+function iniciarProgresso(container,etapas,duracaoEst){
+  container.innerHTML='<div class="pbar"><div class="trilho"><div class="fill"></div></div><div class="etapa"><span class="et"></span><span class="tempo"></span></div></div>';
+  const fill=container.querySelector('.fill'),et=container.querySelector('.et'),tempo=container.querySelector('.tempo');
+  const ini=Date.now();
+  function tick(){
+    const seg=(Date.now()-ini)/1000;
+    const p=Math.min(95,95*(1-Math.exp(-seg/(duracaoEst/2.5))));
+    fill.style.width=p.toFixed(1)+'%';
+    let atual=etapas[0][1];
+    for(const par of etapas){if(seg>=par[0])atual=par[1];}
+    et.textContent=atual;
+    const mm=Math.floor(seg/60),ss=Math.floor(seg%60);
+    tempo.textContent='⏱ '+(mm?mm+'min ':'')+ss+'s';
+  }
+  tick();
+  const iv=setInterval(tick,600);
+  return {fim(){clearInterval(iv);try{fill.style.width='100%'}catch(e){}}};
+}
 async function corrigirComMinhaChave(id){
   const v=(document.getElementById('minhachave')||{}).value||'';
   if(!/^sk-ant-/.test(v.trim())){alert('Cole uma chave válida (começa com sk-ant-).');return}
@@ -888,13 +928,14 @@ async function corrigirIA(id,usarMinhaChave){
   const texto=document.getElementById('red').value.trim();
   if(texto.length<80){fb.innerHTML='<p class="erro-ia">Escreva sua peça no editor acima antes de pedir a correção.</p>';return}
   if(USAR_BACKEND){
-    fb.innerHTML='<p style="margin-top:12px;font-family:Arial,sans-serif;font-size:.9rem"><span class="spinner"></span>Corrigindo sua peça... isso leva alguns segundos.</p>';
+    const prog=iniciarProgresso(fb,ETAPAS_CORRECAO,110);
     try{
       const corpo={peca:{nome:p.nome,disc:p.disc,ficha:p.ficha,caso:(sget('gcaso_'+p.id,'')||p.caso),gab:(sget('ggab_'+p.id,'')||p.gab)},texto:texto};
       const minha=sget('minhaChave','');
       if(usarMinhaChave&&minha)corpo.chavePropria=minha;
       const r=await apiPost('/api/corrigir',corpo);
       const d=await r.json().catch(()=>null);
+      prog.fim();
       if(!r.ok){
         let msg=(d&&d.erro)||('Erro '+r.status+'.');
         if(msg==='LIMITE_CREDITOS')msg='⚠️ LIMITE DE CRÉDITOS EXCEDIDO. O sistema atingiu o limite de uso deste mês. Avise o professor (profe.rodrigosilva@gmail.com) para renovar os créditos. Enquanto isso, use o checklist e o gabarito comentado.';
@@ -910,7 +951,7 @@ async function corrigirIA(id,usarMinhaChave){
       if(d.usosSemana!=null&&!corpo.chavePropria){AUTH.usosSemana=d.usosSemana;sset('auth',JSON.stringify(AUTH));barraUsuario();}
       fb.innerHTML='<div class="resultado">'+md2html(d.texto||'Resposta vazia.')+'</div><p class="aviso">Correção gerada por IA a partir do gabarito do professor — use como orientação de estudo; a avaliação oficial é a do professor.</p>';
       sset('ultimacorrecao_'+id,d.texto||'');
-    }catch(e){fb.innerHTML='<p class="erro-ia">Não foi possível conectar ao servidor ('+e.message+'). Verifique sua internet e tente de novo.</p>';}
+    }catch(e){prog.fim();fb.innerHTML='<p class="erro-ia">Não foi possível conectar ao servidor ('+e.message+'). Verifique sua internet e tente de novo.</p>';}
     return;
   }
   const key=getKey();
