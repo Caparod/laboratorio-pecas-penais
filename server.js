@@ -64,6 +64,7 @@ try {
 } catch (e) { console.log('[PERSIST] ERRO ao escrever em ' + DATA_DIR + ': ' + e.message); }
 
 // ===== Sessões em memória (relogin após reinício) =====
+const APP_URL = process.env.APP_URL || 'https://laboratorio-pecas-penais.onrender.com';
 const sessoes = new Map();
 function novaSessao(usuario, tipo) { const t = crypto.randomBytes(24).toString('hex'); sessoes.set(t, { usuario, tipo }); return t; }
 function sessaoDe(req) { const a = req.headers['authorization'] || ''; const t = a.replace('Bearer ', '').trim(); return t ? sessoes.get(t) : null; }
@@ -597,7 +598,19 @@ async function pecaSalvar(req, res) {
     db.entregas[id] = db.entregas[id] || {};
   }
   salvarDb();
-  json(res, 200, { ok: true, id, num: db.pecas[id].num });
+  // Avisa os alunos por e-mail quando a peça é publicada (apenas uma vez por peça)
+  const pp = db.pecas[id];
+  if (pp.publicada && !pp.avisadoAlunos && pp.disc === db.turmaAtiva) {
+    pp.avisadoAlunos = Date.now(); salvarDb();
+    const prazoTxt = pp.prazo ? new Date(pp.prazo + (/\d{2}:\d{2}/.test(pp.prazo) ? '' : 'T23:59')).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'sem prazo definido';
+    const alvo = Object.entries(db.alunos).filter(([m, a]) => a && a.email && a.emailVerificado);
+    const html = '<p>Olá!</p><p>O(a) Professor(a) publicou uma nova peça no <b>Laboratório de Peças Penais</b>:</p>'
+      + '<p><b>Peça ' + pp.num + ' — ' + escHtml(pp.nomePeca) + '</b> (' + escHtml(pp.disc) + ')</p>'
+      + '<p><b>Prazo de entrega:</b> ' + prazoTxt + '</p>'
+      + '<p>Acesse o sistema para redigir e enviar sua peça: <a href="' + APP_URL + '">' + APP_URL + '</a></p>';
+    for (const [m, a] of alvo) enviarEmail(a.email, 'Nova peça publicada — Peça ' + pp.num + ' (' + pp.nomePeca + ')', html);
+  }
+  json(res, 200, { ok: true, id, num: db.pecas[id].num, avisados: !!pp.avisadoAlunos });
 }
 function resumoPeca(p) {
   const ents = db.entregas[p.id] || {};
@@ -668,6 +681,21 @@ async function entregar(req, res) {
   for (const dest of destinos) enviarEmail(dest, 'Nova entrega — ' + (a.nome || sess.usuario) + ' enviou a Peça ' + p.num,
     '<p>O aluno <b>' + escHtml(a.nome || '') + '</b> (matrícula ' + sess.usuario + ') enviou a <b>Peça ' + p.num + ' — ' + escHtml(p.nomePeca) + '</b>.</p><p>Em ' + quando + '. Acesse o painel para corrigir.</p>');
   json(res, 200, { ok: true, reenvio: jaTinha });
+}
+// Aluno: descadastro — sai do sistema e apaga o próprio nome da lista da turma
+async function descadastrarAluno(req, res) {
+  const sess = sessaoDe(req); if (!sess || sess.tipo !== 'aluno') return json(res, 401, { erro: 'SESSAO' });
+  const mat = sess.usuario;
+  if (!db.alunos[mat]) return json(res, 404, { erro: 'Aluno não encontrado.' });
+  // apaga o cadastro
+  delete db.alunos[mat];
+  // remove entregas e liberações do aluno em todas as peças
+  for (const pid of Object.keys(db.entregas || {})) { if (db.entregas[pid] && db.entregas[pid][mat]) delete db.entregas[pid][mat]; }
+  for (const pid of Object.keys(db.pecas || {})) { const p = db.pecas[pid]; if (p && p.liberados && p.liberados[mat]) delete p.liberados[mat]; }
+  salvarDb();
+  // invalida todas as sessões desse aluno
+  for (const [t, s] of sessoes) { if (s.tipo === 'aluno' && s.usuario === mat) sessoes.delete(t); }
+  json(res, 200, { ok: true });
 }
 // Professor: ver o texto de uma entrega
 async function entregaGet(req, res, id, mat) {
@@ -775,6 +803,7 @@ const server = http.createServer((req, res) => {
   if (req.method === 'GET' && req.url.startsWith('/api/peca/get?')) { const id = new URLSearchParams(req.url.split('?')[1]).get('id'); return pecaGet(req, res, id); }
   if (req.method === 'GET' && req.url === '/api/pecas-aluno') return pecasAluno(req, res);
   if (req.method === 'POST' && req.url === '/api/entregar') return entregar(req, res);
+  if (req.method === 'POST' && req.url === '/api/descadastrar') return descadastrarAluno(req, res);
   if (req.method === 'GET' && req.url.startsWith('/api/entrega?')) { const q = new URLSearchParams(req.url.split('?')[1]); return entregaGet(req, res, q.get('id'), q.get('matricula')); }
   if (req.method === 'POST' && req.url === '/api/entrega/corrigir') return entregaCorrigirIA(req, res);
   if (req.method === 'POST' && req.url === '/api/entrega/validar') return entregaValidar(req, res);
