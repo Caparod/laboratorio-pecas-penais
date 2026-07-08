@@ -623,9 +623,18 @@ async function pecaGerarIA(req, res) {
   const usuario = 'PEÇA-ALVO: ' + nomePeca + ' (' + disc + ')\nNÍVEL: ' + nivel + '\nData atual: ' + new Date().toLocaleDateString('pt-BR') + '\nGere um caso INÉDITO no padrão OAB e o gabarito.';
   const r = await iaTexto(SISTEMA_CASO, usuario, 3800, false);
   if (!r.ok) return erroIA(res, r);
-  const m = r.texto.match(/CASO:\s*([\s\S]*?)\nGABARITO:\s*([\s\S]*)/);
-  if (!m) return json(res, 500, { erro: 'Formato inesperado. Tente de novo.' });
-  json(res, 200, { caso: m[1].trim(), gab: m[2].trim(), nomePeca, disc });
+  // Separa CASO e GABARITO de forma tolerante a variações de formatação (markdown, dois-pontos, etc.)
+  const txt = (r.texto || '').replace(/\*\*/g, '').replace(/^#{1,6}\s*/gm, '').replace(/\r/g, '');
+  let caso = '', gab = '';
+  let m = txt.match(/CASO\s*:?\s*([\s\S]*?)\n\s*GABARITO\s*:?\s*([\s\S]*)/i);
+  if (m) { caso = m[1].trim(); gab = m[2].trim(); }
+  else {
+    const idx = txt.search(/\bGABARITO\b/i);
+    if (idx > 30) { caso = txt.slice(0, idx).replace(/^[\s\S]*?CASO\s*:?\s*/i, '').trim(); gab = txt.slice(idx).replace(/^GABARITO\s*:?\s*/i, '').trim(); }
+    else { caso = txt.replace(/^[\s\S]*?CASO\s*:?\s*/i, '').trim(); gab = ''; }
+  }
+  if (!caso || caso.length < 30) return json(res, 502, { erro: 'A IA respondeu num formato inesperado. Clique em gerar novamente.' });
+  json(res, 200, { caso, gab, nomePeca, disc });
 }
 // Professor: gerar gabarito para um enunciado que ele mesmo escreveu/subiu
 async function pecaGerarGabarito(req, res) {
