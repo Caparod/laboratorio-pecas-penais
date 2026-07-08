@@ -290,7 +290,7 @@ async function gerarCaso(req, res) {
     const texto = (d.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n');
     const m = texto.match(/CASO:\s*([\s\S]*?)\nGABARITO:\s*([\s\S]*)/);
     if (!m) return json(res, 500, { erro: 'Formato inesperado. Tente novamente.' });
-    json(res, 200, { caso: m[1].trim(), gab: garantirLinksFontes(m[2].trim()) });
+    json(res, 200, { caso: m[1].trim(), gab: garantirLinksFontes(m[2].trim(), false) });
   } catch (e) { json(res, 500, { erro: 'Erro interno: ' + e.message }); }
 }
 
@@ -583,7 +583,7 @@ async function gabaritoIA(req, res) {
 }
 
 // ================= PEÇAS, ENTREGAS, NOTAS (fluxo professor↔aluno) =================
-const SISTEMA_GABPECA = 'Você é o Professor Me. Rodrigo Silva Pereira (IESB), prática penal. Receberá o ENUNCIADO de uma peça (caso simulado). Elabore o GABARITO DEFINITIVO no PADRÃO DA 2ª FASE DA OAB (FGV) para o professor conferir, com estas seções em markdown (##), nesta ordem: 1. Peça cabível (e por que NÃO cabem as peças que com ela se confundem); 2. Endereçamento; 3. Prazo; 4. Teses principais e subsidiárias — TODAS, cada uma com os dispositivos legais e o INCISO exato quando a norma for casuística; 5. Pedidos; 6. ESPELHO DE CORREÇÃO (padrão OAB/FGV): tabela markdown com colunas Item | Pontuação distribuindo EXATAMENTE 5,00 pontos como a FGV — itens formais (endereçamento, estrutura, síntese dos fatos) valendo pouco (0,10 a 0,30) e cada tese com a pontuação decomposta em "tese desenvolvida" (≈60% do item) e "indicação do dispositivo legal com inciso" (≈40%); a última linha da tabela deve ser "**Total**" com a soma fechando EXATAMENTE em 5,00; logo após a tabela, as regras fixas: peça diversa da cabível = 0,00; dispositivo citado sem tese desenvolvida não pontua; tese sem dispositivo pontua a metade; nota da disciplina = pontuação × 2 (escala 0–10); 7. Erros frequentes esperados; 8. FONTES. REGRA ANTI-ALUCINAÇÃO (INEGOCIÁVEL): cite APENAS súmulas, julgados e dispositivos de cuja existência e teor você tem CERTEZA; na dúvida, NÃO cite — sustente a tese na lei seca. NUNCA invente número de súmula, de julgado ou teor. Na seção FONTES, liste CADA súmula/julgado/lei citada no gabarito com link oficial: legislação SEMPRE no Planalto (CP https://www.planalto.gov.br/ccivil_03/decreto-lei/del2848compilado.htm , CPP https://www.planalto.gov.br/ccivil_03/decreto-lei/del3689compilado.htm , CF https://www.planalto.gov.br/ccivil_03/constituicao/constituicao.htm , LEP https://www.planalto.gov.br/ccivil_03/leis/l7210.htm , Lei 9.099/95 https://www.planalto.gov.br/ccivil_03/leis/l9099.htm , Lei 11.343/06 https://www.planalto.gov.br/ccivil_03/_ato2004-2006/2006/lei/l11343.htm); súmulas e julgados SEMPRE pelo buscador oficial no formato https://jurisprudencia.stf.jus.br/pages/search?queryString=TERMO (STF) ou https://scon.stj.jus.br/SCON/pesquisar.jsp?b=ACOR&livre=TERMO (STJ), com o número/nome como TERMO e espaços como %20 — NUNCA link direto "adivinhado" de acórdão. Nenhuma citação pode ficar fora da seção FONTES. NÃO redija a peça pronta nem trechos-modelo — o gabarito orienta a correção do professor, não substitui a redação do aluno. Responda apenas com o gabarito, em markdown com títulos ##.';
+const SISTEMA_GABPECA = 'Você é o Professor Me. Rodrigo Silva Pereira (IESB), prática penal. Receberá o ENUNCIADO de uma peça (caso simulado). Elabore o GABARITO DEFINITIVO no PADRÃO DA 2ª FASE DA OAB (FGV) para o professor conferir, com estas seções em markdown (##), nesta ordem: 1. Peça cabível (seja direto: indique APENAS a peça correta e seu fundamento legal — NÃO justifique por que outras peças não cabem, sem listas de peças descartadas); 2. Endereçamento; 3. Prazo; 4. Teses principais e subsidiárias — TODAS, cada uma com os dispositivos legais e o INCISO exato quando a norma for casuística; 5. Pedidos; 6. ESPELHO DE CORREÇÃO (padrão OAB/FGV): tabela markdown com colunas Item | Pontuação distribuindo EXATAMENTE 5,00 pontos como a FGV — itens formais (endereçamento, estrutura, síntese dos fatos) valendo pouco (0,10 a 0,30) e cada tese com a pontuação decomposta em "tese desenvolvida" (≈60% do item) e "indicação do dispositivo legal com inciso" (≈40%); a última linha da tabela deve ser "**Total**" com a soma fechando EXATAMENTE em 5,00; logo após a tabela, as regras fixas: peça diversa da cabível = 0,00; dispositivo citado sem tese desenvolvida não pontua; tese sem dispositivo pontua a metade; nota da disciplina = pontuação × 2 (escala 0–10); 7. Erros frequentes esperados; 8. FONTES. REGRA ANTI-ALUCINAÇÃO (INEGOCIÁVEL): cite APENAS súmulas, julgados e dispositivos de cuja existência e teor você tem CERTEZA; na dúvida, NÃO cite — sustente a tese na lei seca. NUNCA invente número de súmula, de julgado ou teor. Na seção FONTES, liste CADA súmula/julgado/lei citada no gabarito com link oficial: legislação SEMPRE no Planalto (CP https://www.planalto.gov.br/ccivil_03/decreto-lei/del2848compilado.htm , CPP https://www.planalto.gov.br/ccivil_03/decreto-lei/del3689compilado.htm , CF https://www.planalto.gov.br/ccivil_03/constituicao/constituicao.htm , LEP https://www.planalto.gov.br/ccivil_03/leis/l7210.htm , Lei 9.099/95 https://www.planalto.gov.br/ccivil_03/leis/l9099.htm , Lei 11.343/06 https://www.planalto.gov.br/ccivil_03/_ato2004-2006/2006/lei/l11343.htm); súmulas e julgados SEMPRE pelo buscador oficial no formato https://jurisprudencia.stf.jus.br/pages/search?queryString=TERMO (STF) ou https://scon.stj.jus.br/SCON/pesquisar.jsp?b=ACOR&livre=TERMO (STJ), com o número/nome como TERMO e espaços como %20 — NUNCA link direto "adivinhado" de acórdão. Nenhuma citação pode ficar fora da seção FONTES. NÃO redija a peça pronta nem trechos-modelo — o gabarito orienta a correção do professor, não substitui a redação do aluno. Responda apenas com o gabarito, em markdown com títulos ##.';
 
 async function iaTexto(system, usuario, maxTokens, comBusca) {
   const body = { model: process.env.MODELO || 'claude-sonnet-5', max_tokens: maxTokens || 4000, system, messages: [{ role: 'user', content: usuario }] };
@@ -644,21 +644,42 @@ const LEIS_PLANALTO = [
 ];
 function urlBuscaSTF(t) { return 'https://jurisprudencia.stf.jus.br/pages/search?queryString=' + encodeURIComponent(t); }
 function urlBuscaSTJ(t) { return 'https://scon.stj.jus.br/SCON/pesquisar.jsp?b=ACOR&livre=' + encodeURIComponent(t); }
-function garantirLinksFontes(gab) {
+function garantirLinksFontes(gab, auditou) {
   try {
     const itens = new Map();
     let m;
-    // Aceita singular/plural e enumerações: "Súmula 52 do STJ", "Súmulas 718 e 719 do STF", "Súmulas 282, 356 e 279/STF"
+    // Aceita singular/plural e enumerações: "Súmula 52 do STJ", "Súmulas 718 e 719 do STF", "Súmulas 282, 356 e 279/STF".
+    // Duas passadas: primeiro resolve o tribunal de cada súmula; menção sem tribunal só vira
+    // busca dupla (STF+STJ) se NENHUMA outra menção da mesma súmula indicou o tribunal.
+    const sumTrib = new Map(); const sumSemTrib = [];
     const reSum = /S[úu]mulas?\s+(Vinculantes?\s+)?((?:n[ºo°.]*\s*)?\d+(?:\s*(?:,\s*|\s+e\s+)\s*\d+)*)\s*(?:do|da|\/|—|–|-)?\s*(STF|STJ)?/gi;
     while ((m = reSum.exec(gab))) {
       const vinc = !!m[1]; const trib = (m[3] || (vinc ? 'STF' : '')).toUpperCase();
       for (const n of (m[2].match(/\d+/g) || [])) {
-        const rot = 'Súmula ' + (vinc ? 'Vinculante ' : '') + n + (trib ? '/' + trib : '');
-        const termo = 'Súmula ' + (vinc ? 'Vinculante ' : '') + n;
-        if (trib === 'STJ') itens.set(rot, urlBuscaSTJ(termo));
-        else if (trib === 'STF' || vinc) itens.set(rot, urlBuscaSTF(termo));
-        else { itens.set(rot + ' (STF)', urlBuscaSTF(termo)); itens.set(rot + ' (STJ)', urlBuscaSTJ(termo)); }
+        const k = (vinc ? 'V' : '') + n;
+        if (trib) { if (!sumTrib.has(k)) sumTrib.set(k, new Set()); sumTrib.get(k).add(trib); }
+        else sumSemTrib.push(k);
       }
+    }
+    // Faixas reais de numeração (existência): STF editou súmulas comuns até a 736;
+    // Súmulas Vinculantes até ~70 (margem); STJ até ~700 (margem). Número acima da faixa = inexistente.
+    const MAX_STF = 736, MAX_SV = 70, MAX_STJ = 700;
+    const foraDaFaixa = (k, trib) => {
+      const vinc = k[0] === 'V'; const n = parseInt(vinc ? k.slice(1) : k, 10);
+      if (vinc) return n > MAX_SV;
+      return trib === 'STJ' ? n > MAX_STJ : n > MAX_STF;
+    };
+    const addSum = (k, trib) => {
+      const vinc = k[0] === 'V'; const n = vinc ? k.slice(1) : k;
+      const termo = 'Súmula ' + (vinc ? 'Vinculante ' : '') + n;
+      if (foraDaFaixa(k, trib)) { itens.set(termo + '/' + trib, '__INEXISTENTE__'); return; }
+      itens.set(termo + '/' + trib, trib === 'STJ' ? urlBuscaSTJ(termo) : urlBuscaSTF(termo));
+    };
+    for (const [k, tribs] of sumTrib) for (const trib of tribs) addSum(k, trib);
+    for (const k of sumSemTrib) if (!sumTrib.has(k)) {
+      const vinc = k[0] === 'V'; const n = vinc ? k.slice(1) : k;
+      const termo = 'Súmula ' + (vinc ? 'Vinculante ' : '') + n;
+      itens.set(termo + ' ⚠️', '__SEM_TRIBUNAL__');
     }
     const reSTJ = /\b(REsp|AREsp|EREsp|AgRg no REsp)\s+(?:n[ºo°.]*\s*)?([\d\.]{3,})\b/g;
     while ((m = reSTJ.exec(gab))) itens.set(m[1] + ' ' + m[2] + ' (STJ)', urlBuscaSTJ(m[1] + ' ' + m[2]));
@@ -673,12 +694,18 @@ function garantirLinksFontes(gab) {
     }
     for (const [re, rotulo, url] of LEIS_PLANALTO) { re.lastIndex = 0; if (re.test(gab)) itens.set(rotulo, url); }
     if (!itens.size) return gab;
-    let sec = '\n\n## Conferência de fontes (links oficiais gerados automaticamente)\n\nTodo item abaixo abre a fonte oficial (Planalto) ou a busca oficial do tribunal já preenchida com a citação — confira o teor antes de usar em aula:\n\n';
-    for (const [rot, url] of itens) sec += '- ' + rot + ': ' + url + '\n';
+    let sec = '\n\n## Conferência de fontes\n\n' + (auditou === false
+      ? '⚠️ **A auditoria automática de citações NÃO pôde ser executada nesta geração** — confira manualmente o teor de CADA citação pelos links abaixo antes de usar.\n\n'
+      : 'O teor das citações foi verificado pela auditoria com busca nos sites oficiais (seção "Verificação de citações", acima). ') + 'Os links abaixo abrem a fonte oficial (Planalto) ou a busca oficial do tribunal já preenchida com a citação:\n\n';
+    for (const [rot, url] of itens) {
+      if (url === '__INEXISTENTE__') sec += '- ❌ ' + rot + ' — número acima da faixa de súmulas desse tribunal: citação provavelmente INEXISTENTE, remova ou corrija.\n';
+      else if (url === '__SEM_TRIBUNAL__') { const termo = rot.replace(' ⚠️', ''); sec += '- ⚠️ ' + rot + ' — o texto não indica o tribunal; a auditoria deveria ter normalizado. Confira em [STF](' + urlBuscaSTF(termo) + ') ou [STJ](' + urlBuscaSTJ(termo) + ') e corrija o texto.\n'; }
+      else sec += '- [' + rot + '](' + url + ')\n';
+    }
     return gab + sec;
   } catch (e) { return gab; }
 }
-const SISTEMA_AUDITOR = 'Você é auditor de citações jurídicas. Receberá um GABARITO de peça penal. Usando a busca na web APENAS em sites oficiais (stf.jus.br, stj.jus.br, planalto.gov.br), verifique CADA súmula e julgado citados: número e teor. Devolva o gabarito COMPLETO e INALTERADO na estrutura (mesmas seções, mesmo espelho de correção com a mesma soma), corrigindo apenas: (a) súmula/julgado com número ou teor errado — corrija; (b) súmula/julgado que você NÃO conseguiu confirmar — REMOVA a citação e sustente a tese apenas na lei seca, sem apagar a tese. NÃO acrescente novas citações não verificadas. Responda somente com o gabarito final em markdown.';
+const SISTEMA_AUDITOR = 'Você é auditor de citações jurídicas. Receberá um GABARITO de peça penal. Usando a busca na web APENAS em sites oficiais (stf.jus.br, stj.jus.br, planalto.gov.br), verifique CADA súmula e julgado citados: TRIBUNAL, número e teor. Devolva o gabarito COMPLETO e INALTERADO na estrutura (mesmas seções, mesmo espelho de correção com a mesma soma), corrigindo apenas: (a) súmula/julgado com tribunal, número ou teor errado — corrija; (b) súmula/julgado que você NÃO conseguiu confirmar na busca — REMOVA a citação e sustente a tese apenas na lei seca, sem apagar a tese. NORMALIZAÇÃO OBRIGATÓRIA: reescreva TODA menção de súmula no formato completo "Súmula N do STF" ou "Súmula N do STJ" — nenhuma súmula pode aparecer sem o tribunal, nem atribuída ao tribunal errado. NÃO acrescente novas citações não verificadas. Ao final, acrescente a seção "## Verificação de citações (auditoria com busca nos sites oficiais)" com uma linha por citação no formato: Súmula/julgado — tribunal — CONFIRMADA (teor resumido em até 15 palavras) ou REMOVIDA (motivo). Responda somente com o gabarito final em markdown.';
 // Professor: gerar gabarito para um enunciado que ele mesmo escreveu/subiu
 async function pecaGerarGabarito(req, res) {
   const sess = sessaoDe(req); if (!sess) return json(res, 401, { erro: 'SESSAO' }); if (sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
@@ -713,16 +740,18 @@ async function pecaGerarGabarito(req, res) {
   // Etapa 2 — auditoria anti-alucinação: verifica cada súmula/julgado na web (sites oficiais).
   // Se a auditoria falhar ou voltar vazia/curta, mantém o gabarito original (que já segue a regra
   // "na dúvida, não cite") — nunca degrada o resultado.
+  let auditou = null; // null = não havia jurisprudência a auditar
   if (/S[úu]mula|REsp|AREsp|EREsp|\bHC\s+\d|\bRHC\s+\d|\bRE\s+\d|\bARE\s+\d|\bADI\s+\d|\bADPF\s+\d/i.test(gab)) {
+    auditou = false;
     try {
       const ra = await iaTexto(SISTEMA_AUDITOR, 'GABARITO A AUDITAR:\n\n' + gab.slice(0, 20000), 8000, true);
       const audit = ra.ok ? (ra.texto || '').trim() : '';
-      if (audit.length > gab.length * 0.6 && /##/.test(audit) && temEspelho(audit)) gab = audit;
+      if (audit.length > gab.length * 0.6 && /##/.test(audit) && temEspelho(audit)) { gab = audit; auditou = true; }
       else try { console.error('[GABARITO IA] auditoria descartada (len=' + audit.length + ')'); } catch (e) {}
     } catch (e) { try { console.error('[GABARITO IA] auditoria falhou: ' + e.message); } catch (e2) {} }
   }
   // Etapa 3 — garantia determinística: toda citação detectada ganha link oficial de conferência.
-  gab = garantirLinksFontes(gab);
+  gab = garantirLinksFontes(gab, auditou);
   json(res, 200, { gab });
 }
 // Professor: extrair texto de um PDF de peça (enunciado)
