@@ -91,6 +91,10 @@ textarea.redacao{width:100%;min-height:340px;margin-top:14px;padding:16px;font-f
 .userbar a{color:#fff;margin-left:10px;cursor:pointer;text-decoration:underline}
 .painel table{width:100%;border-collapse:collapse;font-size:.88rem;font-family:Arial,sans-serif;margin-top:10px}
 .painel th,.painel td{border-bottom:1px solid #eee;padding:7px 8px;text-align:left}
+.md-tab{width:100%;border-collapse:collapse;font-size:.86rem;font-family:Arial,sans-serif;margin:10px 0;background:#fff}
+.md-tab td,.md-tab th{border:1px solid #d8d2c0;padding:6px 9px;text-align:left;vertical-align:top}
+.md-tab tr:first-child td{background:#f2eee0;font-weight:bold}
+.md-tab tr:last-child td{background:#eef5ee;font-weight:bold}
 .painel textarea{width:100%;min-height:140px;padding:10px;border:1px solid #cfc9b8;border-radius:6px;font-family:monospace}
 @media(max-width:820px){.layout{flex-direction:column}nav{width:100%;display:flex;flex-wrap:wrap}nav .grupo{width:100%}nav button.item{width:auto;border-left:none}main{padding:18px}}
 </style>
@@ -133,16 +137,23 @@ function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'
 function md2html(t){
   t=esc(t);
   t=t.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');
+  t=t.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g,'$1<i>$2</i>');
   t=t.replace(/\[([^\]]+)\]\((https?:[^\s)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
   t=t.replace(/(^|[^"=>])(https?:\/\/[^\s<)]+)/g,'$1<a href="$2" target="_blank" rel="noopener">$2</a>');
-  const linhas=t.split('\n');let out='',lista=false;
+  const linhas=t.split('\n');let out='',lista=false,tabela=false;
   for(let l of linhas){const s2=l.trim();
+    if(/^\|.*\|$/.test(s2)){
+      if(lista){out+='</ul>';lista=false}
+      if(/^\|[\s:|\-]+\|$/.test(s2))continue; // linha separadora |---|---|
+      if(!tabela){out+='<table class="md-tab">';tabela=true}
+      out+='<tr>'+s2.slice(1,-1).split('|').map(function(c){return '<td>'+c.trim()+'</td>'}).join('')+'</tr>';continue}
+    if(tabela){out+='</table>';tabela=false}
     if(/^#{1,4}\s/.test(s2)){if(lista){out+='</ul>';lista=false}out+='<h4>'+s2.replace(/^#{1,4}\s*/,'')+'</h4>';continue}
     if(/^NOTA SUGERIDA/i.test(s2)){if(lista){out+='</ul>';lista=false}out+='<div class="nota">'+s2+'</div>';continue}
     if(/^[-•*]\s/.test(s2)){if(!lista){out+='<ul>';lista=true}out+='<li>'+s2.replace(/^[-•*]\s*/,'')+'</li>';continue}
     if(s2===''){if(lista){out+='</ul>';lista=false}continue}
     if(lista){out+='</ul>';lista=false}out+='<p>'+s2+'</p>';}
-  if(lista)out+='</ul>';return out;
+  if(lista)out+='</ul>';if(tabela)out+='</table>';return out;
 }
 function urlSTF(q){return 'https://jurisprudencia.stf.jus.br/pages/search?queryString='+encodeURIComponent(q)}
 function urlSTJ(q){return 'https://scon.stj.jus.br/SCON/pesquisar.jsp?b=ACOR&livre='+encodeURIComponent(q)}
@@ -265,7 +276,7 @@ function telaProfessor(){
   else if(ABA_PROF==='config')profConfig();
 }
 function botaoMenu(id,txt){return '<button class="item'+(ABA_PROF===id?' ativo':'')+'" onclick="irAba(\''+id+'\')">'+txt+'</button>'}
-function irAba(id){ABA_PROF=id;telaProfessor();}
+function irAba(id){if(id==='nova')RASCUNHO={nomePeca:'',disc:'',caso:'',gab:''};ABA_PROF=id;telaProfessor();}
 
 // ---- Lista de peças + entregas ----
 async function profPecas(){
@@ -369,7 +380,7 @@ function profNova(){
   const opts=(disc==='Estágio II'?PECAS_ESTAGIO_II:PECAS_ESTAGIO_I).map(x=>'<option>'+x+'</option>').join('');
   conteudo.innerHTML='<h2 class="titulo-peca">Nova peça</h2>'
    +'<div class="card"><h3>1) Crie o enunciado</h3>'
-   +'<p style="font-size:.88rem;color:var(--cinza)">Turma ativa: <b>'+esc(disc)+'</b> (mude em Sistema, se preciso). Gere por IA, suba um PDF ou escreva/cole você mesmo.</p>'
+   +'<p style="font-size:.88rem;color:var(--cinza)">Turma ativa: <b>'+esc(disc)+'</b> (mude em Alunos, se preciso). Gere por IA, suba um PDF ou escreva/cole você mesmo.</p>'
    +'<div style="font-family:Arial,sans-serif;margin:8px 0">Tipo de peça: <select id="np_nome">'+opts+'</select> '
    +'<select id="np_nivel"><option value="BÁSICO">Básico</option><option value="INTERMEDIÁRIO" selected>Intermediário</option><option value="AVANÇADO">Avançado (OAB raiz)</option></select></div>'
    +'<div class="botoes"><button class="primario" onclick="gerarPecaIA()">🎲 1) Gerar enunciado por IA</button>'
