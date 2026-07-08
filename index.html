@@ -276,7 +276,8 @@ async function profPecas(){
     h+='</table>';document.getElementById('lp').innerHTML='<div class="card painel">'+h+'</div>';
   }catch(e){}
 }
-function dataBR(iso){if(!iso)return '';const p=iso.split('-');return p.length===3?(p[2]+'/'+p[1]+'/'+p[0]):iso;}
+function dataBR(iso){if(!iso)return '';const p=iso.split('T')[0].split('-');return p.length===3?(p[2]+'/'+p[1]+'/'+p[0]):iso;}
+function dataHoraBR(iso){if(!iso)return '';const t=iso.split('T');const dd=dataBR(t[0]);const hh=t[1]?(' às '+t[1].slice(0,5)):'';return dd+hh;}
 async function abrirPeca(id){
   conteudo.innerHTML='<p><span class="spinner"></span>Abrindo...</p>';
   const r=await apiGet('/api/peca/get?id='+id);const d=await r.json();
@@ -287,15 +288,29 @@ async function abrirPeca(id){
   else{ent='<table class="painel"><tr><th>Aluno</th><th>Matrícula</th><th>Enviado</th><th>Nota</th><th>Status</th><th></th></tr>';
     for(const e of d.entregas)ent+='<tr><td>'+esc(e.nome)+'</td><td>'+e.matricula+'</td><td>'+dataHora(e.enviadoEm)+'</td><td>'+(e.nota!=null?String(e.nota).replace('.',','):'—')+'</td><td>'+(e.validado?'✅ validada':(e.temRelatorio?'📝 corrigida (não validada)':'⏳ pendente'))+'</td><td><a style="cursor:pointer;color:var(--azul)" onclick="abrirEntrega(\''+id+'\',\''+e.matricula+'\')">corrigir</a></td></tr>';
     ent+='</table>';}
+  window.__peca=p;
+  const liberadosCount=Object.keys(d.liberados||{}).length;
   conteudo.innerHTML='<div class="botoes" style="margin-bottom:10px"><button onclick="irAba(\'pecas\')">← Voltar</button>'
-   +'<button onclick="editarPeca(\''+id+'\')">✏️ Editar peça/gabarito/prazo</button>'
+   +'<button onclick="editarPeca(\''+id+'\')">✏️ Editar peça/gabarito</button>'
    +'<button style="border-color:var(--vermelho);color:var(--vermelho)" onclick="excluirPeca(\''+id+'\')">🗑 Excluir peça</button></div>'
    +'<span class="badge">Peça '+p.num+' · '+esc(p.disc)+'</span><h2 class="titulo-peca">'+esc(p.nomePeca)+'</h2>'
-   +'<p style="color:var(--cinza);font-family:Arial,sans-serif;font-size:.85rem">Prazo: '+(p.prazo?dataBR(p.prazo):'sem prazo')+' · '+(p.publicada?'publicada para os alunos':'rascunho (não visível)')+'</p>'
+   +'<p style="color:var(--cinza);font-family:Arial,sans-serif;font-size:.85rem">Prazo: '+(p.prazo?dataHoraBR(p.prazo):'sem prazo')+' · '+(p.publicada?'publicada':'rascunho')+'</p>'
+   +'<div class="card"><h3>Prazo de entrega</h3>'
+   +'<div style="font-family:Arial,sans-serif;font-size:.9rem">Novo prazo (dia e hora): <input type="datetime-local" id="pz_novo" value="'+esc(p.prazo||'')+'" style="padding:7px;border:1px solid #cfc9b8;border-radius:6px"> <button onclick="renovarPrazo(\''+id+'\')">🔄 Renovar prazo</button></div>'
+   +'<div style="margin-top:10px;font-family:Arial,sans-serif;font-size:.9rem"><label><input type="checkbox" id="pz_geral" '+(d.foraDoPrazoGeral?'checked':'')+' onchange="liberarGeral(\''+id+'\',this.checked)"> Aceitar entregas <b>fora do prazo</b> para TODA a turma nesta peça</label>'+(liberadosCount?(' <span style="color:var(--cinza)">· '+liberadosCount+' aluno(s) liberado(s) individualmente</span>'):'')+'</div>'
+   +'<div id="pz_fb"></div></div>'
    +'<div class="card"><h3>Enunciado</h3><div class="caso">'+esc(p.caso)+'</div></div>'
    +'<div class="card"><h3>Gabarito</h3><div class="bloco" style="background:#eef5ee;border:1px solid #cfe3cf;border-radius:8px;padding:14px">'+linkCitacoesHtml(md2html(p.gab||'(sem gabarito)'))+'</div></div>'
-   +'<div class="card painel"><h3>Entregas dos alunos</h3>'+ent+'</div>';
+   +'<div class="card painel"><h3>Entregas dos alunos</h3>'+ent+'</div>'
+   +'<div class="card"><h3>Liberar entrega fora do prazo para um aluno</h3>'
+   +'<p style="font-size:.85rem;color:var(--cinza)">Digite a matrícula do aluno que poderá enviar mesmo após o prazo.</p>'
+   +'<div style="font-family:Arial,sans-serif"><input id="pz_mat" placeholder="Matrícula" style="padding:8px;border:1px solid #cfc9b8;border-radius:6px"> <button onclick="liberarAluno(\''+id+'\')">✅ Liberar este aluno</button></div>'
+   +(liberadosCount?('<p class="aviso">Liberados: '+Object.keys(d.liberados).map(m=>m+' <a style=\'cursor:pointer;color:var(--vermelho)\' onclick=\'liberarAluno("'+id+'","'+m+'",false)\'>×</a>').join(' · ')+'</p>'):'')
+   +'<div id="pz_fb2"></div></div>';
 }
+async function renovarPrazo(id){const v=document.getElementById('pz_novo').value;if(!v){alert('Escolha o novo prazo.');return}const r=await apiPost('/api/peca/renovar-prazo',{id,prazo:v});const d=await r.json();document.getElementById('pz_fb').innerHTML=r.ok?'<p style="color:var(--verde);font-family:Arial,sans-serif;font-size:.85rem">Prazo renovado para '+dataHoraBR(v)+'.</p>':'<p class="erro-ia">'+(d.erro||'Erro')+'</p>';}
+async function liberarGeral(id,val){const r=await apiPost('/api/peca/liberar-prazo',{id,liberar:val});const d=await r.json();document.getElementById('pz_fb').innerHTML=r.ok?'<p style="color:var(--verde);font-family:Arial,sans-serif;font-size:.85rem">'+(val?'Entregas fora do prazo LIBERADAS para a turma.':'Bloqueio de prazo reativado.')+'</p>':'<p class="erro-ia">'+(d.erro||'Erro')+'</p>';}
+async function liberarAluno(id,mat,val){const m=mat||document.getElementById('pz_mat').value.trim();if(!m){alert('Informe a matrícula.');return}const r=await apiPost('/api/peca/liberar-prazo',{id,matricula:m,liberar:val!==false});if(r.ok)abrirPeca(id);}
 function dataHora(ts){if(!ts)return '—';const d=new Date(ts);return d.toLocaleString('pt-BR')}
 async function excluirPeca(id){if(!confirm('Excluir esta peça e todas as suas entregas? Não há retorno.'))return;await apiPost('/api/peca/excluir',{id});irAba('pecas');}
 
@@ -357,7 +372,7 @@ function profNova(){
    +'<div class="botoes"><button onclick="gerarGabarito()">⚖️ Gerar gabarito para este enunciado</button></div><div id="np_gabfb"></div></div>'
    +'<div class="card"><h3>3) Gabarito (confira e edite)</h3><textarea id="np_gab" class="redacao" style="min-height:220px" placeholder="Gabarito...">'+esc(RASCUNHO.gab)+'</textarea></div>'
    +'<div class="card"><h3>4) Publicar</h3>'
-   +'<div style="font-family:Arial,sans-serif">Prazo de entrega: <input type="date" id="np_prazo" style="padding:8px;border:1px solid #cfc9b8;border-radius:6px"></div>'
+   +'<div style="font-family:Arial,sans-serif">Prazo de entrega (dia e hora): <input type="datetime-local" id="np_prazo" style="padding:8px;border:1px solid #cfc9b8;border-radius:6px"></div>'
    +'<div class="botoes" style="margin-top:12px"><button onclick="salvarPeca(false)">💾 Salvar rascunho</button>'
    +'<button class="primario" onclick="salvarPeca(true)">🚀 Publicar para a turma</button></div><div id="np_salvarfb"></div></div>';
   const s=document.getElementById('np_nome');if(s&&RASCUNHO.nomePeca)s.value=RASCUNHO.nomePeca;
@@ -468,13 +483,14 @@ async function telaAluno(){
   conteudo.innerHTML='<h2 class="titulo-peca">Peças para entregar</h2><div id="la"><p><span class="spinner"></span>Carregando...</p></div>';
   try{const r=await apiGet('/api/pecas-aluno');const d=await r.json();
     if(!r.ok){document.getElementById('la').innerHTML='<p class="erro-ia">'+(d.erro||'Erro')+'</p>';return}
-    if(!d.pecas.length){document.getElementById('la').innerHTML='<div class="card"><p>Nenhuma peça publicada ainda para a sua turma. Volte quando o professor liberar uma.</p></div>';return}
+    if(!d.pecas.length){document.getElementById('la').innerHTML='<div class="card" style="text-align:center;padding:40px"><h3 style="color:var(--azul)">⏳ Aguarde o envio do(a) Professor(a)</h3><p style="color:var(--cinza)">Nenhuma peça foi publicada ainda para a sua turma. Assim que o(a) professor(a) enviar uma peça, ela aparecerá aqui com o prazo de entrega.</p></div>';return}
     let cards='';
     for(const p of d.pecas){
-      const st=p.validado?('✅ Corrigida — nota '+(p.nota!=null?String(p.nota).replace('.',','):'—')):(p.enviado?'📤 Enviada — aguardando correção':'⏳ A fazer');
+      const st=p.validado?('✅ Corrigida — nota '+(p.nota!=null?String(p.nota).replace('.',','):'—')):(p.enviado?'📤 Enviada — aguardando correção':(p.noPrazo?'⏳ A fazer':'🔴 Prazo encerrado'));
+      const fechado=!p.enviado&&!p.noPrazo;
       cards+='<div class="card"><span class="badge">Peça '+p.num+'</span> <b>'+esc(p.nomePeca)+'</b>'
-       +'<p style="font-family:Arial,sans-serif;font-size:.85rem;color:var(--cinza)">Prazo: '+(p.prazo?dataBR(p.prazo):'sem prazo')+' · '+st+'</p>'
-       +'<div class="botoes"><button class="primario" onclick="abrirPecaAluno(\''+p.id+'\')">'+(p.enviado?'Ver / reenviar':'Fazer esta peça')+'</button>'
+       +'<p style="font-family:Arial,sans-serif;font-size:.85rem;color:'+(fechado?'var(--vermelho)':'var(--cinza)')+'">Prazo: '+(p.prazo?dataHoraBR(p.prazo):'sem prazo')+' · '+st+'</p>'
+       +'<div class="botoes"><button class="primario" onclick="abrirPecaAluno(\''+p.id+'\')">'+(p.enviado?'Ver / reenviar':(fechado?'Ver enunciado':'Fazer esta peça'))+'</button>'
        +(p.temRelatorio?'<button onclick="verMinhaCorrecao(\''+p.id+'\')">Ver correção</button>':'')+'</div></div>';
     }
     document.getElementById('la').innerHTML=cards;
@@ -484,16 +500,18 @@ async function telaAluno(){
 function abrirPecaAluno(id){
   const p=(window.__pecasAluno||[]).find(x=>x.id===id);if(!p)return;
   const rasc=sget('peca_'+id,'');
+  const fechado=!p.enviado&&!p.noPrazo;
   conteudo.innerHTML='<div class="botoes" style="margin-bottom:10px"><button onclick="telaAluno()">← Voltar</button></div>'
    +'<span class="badge">Peça '+p.num+' · '+esc(p.disc)+'</span><h2 class="titulo-peca">'+esc(p.nomePeca)+'</h2>'
-   +'<p style="font-family:Arial,sans-serif;font-size:.85rem;color:var(--cinza)">Prazo: '+(p.prazo?dataBR(p.prazo):'sem prazo')+'</p>'
+   +'<p style="font-family:Arial,sans-serif;font-size:.85rem;color:'+(fechado?'var(--vermelho)':'var(--cinza)')+'">Prazo: '+(p.prazo?dataHoraBR(p.prazo):'sem prazo')+(fechado?' — PRAZO ENCERRADO':'')+'</p>'
    +'<div class="card"><h3>Enunciado</h3><div class="caso">'+esc(p.caso)+'</div></div>'
-   +'<div class="card"><h3>Sua peça</h3><p style="font-size:.85rem;color:var(--cinza)">Redija a peça completa. Se citar jurisprudência, inclua no FINAL um anexo com as fontes e seus links. O texto fica salvo neste navegador até você enviar.</p>'
+   +(fechado?'<div class="card"><p class="erro-ia">O prazo desta peça já encerrou. Não é possível enviar. Se precisar, fale com o(a) professor(a) para renovar o prazo ou liberar sua entrega.</p></div>'
+     :('<div class="card"><h3>Sua peça</h3><p style="font-size:.85rem;color:var(--cinza)">Redija a peça completa. Se citar jurisprudência, inclua no FINAL um anexo com as fontes e seus links. O texto fica salvo neste navegador até você enviar.</p>'
    +'<textarea id="al_texto" class="redacao" placeholder="EXCELENTÍSSIMO SENHOR...">'+esc(rasc)+'</textarea>'
    +'<div class="botoes"><button onclick="salvarRascunhoAluno(\''+id+'\')">💾 Salvar rascunho</button>'
    +'<button class="primario" onclick="enviarPeca(\''+id+'\')">📨 Enviar ao professor</button></div>'
    +(p.enviado?'<p class="aviso">Você já enviou esta peça. Reenviar substitui a anterior e cancela a correção pendente.</p>':'')
-   +'<div id="al_fb"></div></div>';
+   +'<div id="al_fb"></div></div>'));
   const t=document.getElementById('al_texto');if(t)t.addEventListener('input',()=>sset('peca_'+id,t.value));
 }
 function salvarRascunhoAluno(id){sset('peca_'+id,document.getElementById('al_texto').value);document.getElementById('al_fb').innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif;font-size:.85rem">Rascunho salvo.</p>';}
@@ -502,7 +520,7 @@ async function enviarPeca(id){
   if(texto.length<80){fb.innerHTML='<p class="erro-ia">Escreva sua peça antes de enviar.</p>';return}
   if(!confirm('Enviar sua peça ao professor? Após o prazo pode não ser possível reenviar.'))return;
   try{const r=await apiPost('/api/entregar',{id,texto});const d=await r.json();
-  if(!r.ok){fb.innerHTML='<p class="erro-ia">'+(d.erro||'Erro')+'</p>';return}
+  if(!r.ok){let m=(d.erro||'Erro');if(m==='PRAZO')m='⏰ O prazo desta peça encerrou ('+dataHoraBR(d.prazo)+'). Fale com o(a) professor(a) para renovar ou liberar sua entrega.';fb.innerHTML='<p class="erro-ia">'+m+'</p>';return}
   sset('peca_'+id,'');
   fb.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif">📨 Peça enviada! O professor foi avisado. Você receberá a correção por e-mail.</p>';
   setTimeout(telaAluno,1200);

@@ -590,6 +590,7 @@ async function pecaSalvar(req, res) {
   let id = d.id && db.pecas[d.id] ? d.id : null;
   if (id) {
     const p = db.pecas[id]; p.nomePeca = nomePeca; p.disc = disc; p.caso = caso; p.gab = gab; p.prazo = prazo; p.publicada = d.publicar !== false;
+    if (typeof d.foraDoPrazoGeral === 'boolean') p.foraDoPrazoGeral = d.foraDoPrazoGeral;
   } else {
     const num = db.proximoNum++; id = 'p' + num;
     db.pecas[id] = { id, num, nomePeca, disc, caso, gab, prazo, criadoEm: Date.now(), publicada: d.publicar !== false, autor: sess.usuario };
@@ -614,7 +615,7 @@ async function pecaGet(req, res, id) {
   const p = db.pecas[id]; if (!p) return json(res, 404, { erro: 'Peça não encontrada.' });
   const ents = db.entregas[id] || {};
   const entregas = Object.keys(ents).map(mat => ({ matricula: mat, nome: (db.alunos[mat] && db.alunos[mat].nome) || '', enviadoEm: ents[mat].enviadoEm, temRelatorio: !!ents[mat].relatorio, nota: ents[mat].nota, validado: !!ents[mat].validado }));
-  json(res, 200, { ok: true, peca: p, entregas });
+  json(res, 200, { ok: true, peca: p, entregas, liberados: p.liberados || {}, foraDoPrazoGeral: !!p.foraDoPrazoGeral });
 }
 async function pecaExcluir(req, res) {
   const sess = sessaoDe(req); if (!sess || sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
@@ -628,7 +629,9 @@ async function pecasAluno(req, res) {
   const a = db.alunos[sess.usuario]; if (!a) return json(res, 401, { erro: 'SESSAO' });
   const lista = Object.values(db.pecas).filter(p => p.publicada && p.disc === db.turmaAtiva).sort((a2, b2) => b2.num - a2.num).map(p => {
     const e = (db.entregas[p.id] || {})[sess.usuario];
-    return { id: p.id, num: p.num, nomePeca: p.nomePeca, disc: p.disc, prazo: p.prazo, caso: p.caso, enviado: !!e, enviadoEm: e ? e.enviadoEm : null, validado: e ? !!e.validado : false, nota: e ? e.nota : null, temRelatorio: e ? !!(e.validado && e.relatorio) : false };
+    let noPrazo = true;
+    if (p.prazo && !p.foraDoPrazoGeral) { const limite = new Date(p.prazo + (/\d{2}:\d{2}/.test(p.prazo) ? '' : 'T23:59')).getTime(); noPrazo = Date.now() <= limite || !!(p.liberados && p.liberados[sess.usuario]); }
+    return { id: p.id, num: p.num, nomePeca: p.nomePeca, disc: p.disc, prazo: p.prazo, caso: p.caso, enviado: !!e, enviadoEm: e ? e.enviadoEm : null, validado: e ? !!e.validado : false, nota: e ? e.nota : null, temRelatorio: e ? !!(e.validado && e.relatorio) : false, noPrazo: noPrazo };
   });
   json(res, 200, { ok: true, pecas: lista });
 }
@@ -641,6 +644,14 @@ async function entregar(req, res) {
   const p = db.pecas[String(d.id || '')]; if (!p || !p.publicada) return json(res, 404, { erro: 'Peça não encontrada.' });
   const texto = String(d.texto || '').trim();
   if (texto.length < 80) return json(res, 400, { erro: 'Escreva sua peça antes de enviar.' });
+  // Controle de prazo (dia e hora)
+  if (p.prazo && !p.foraDoPrazoGeral) {
+    const limite = new Date(p.prazo + (/\d{2}:\d{2}/.test(p.prazo) ? '' : 'T23:59')).getTime();
+    const liberados = p.liberados || {};
+    if (Date.now() > limite && !liberados[sess.usuario]) {
+      return json(res, 403, { erro: 'PRAZO', prazo: p.prazo });
+    }
+  }
   db.entregas[p.id] = db.entregas[p.id] || {};
   const jaTinha = !!db.entregas[p.id][sess.usuario];
   db.entregas[p.id][sess.usuario] = Object.assign(db.entregas[p.id][sess.usuario] || {}, { texto, enviadoEm: Date.now() });
@@ -701,6 +712,23 @@ async function entregaValidar(req, res) {
   salvarDb();
   json(res, 200, { ok: true, validado: !!e.validado });
 }
+// Professor: renovar prazo de uma peça
+async function pecaRenovarPrazo(req, res) {
+  const sess = sessaoDe(req); if (!sess || sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
+  let d; try { d = await lerJson(req, 5000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
+  const p = db.pecas[String(d.id || '')]; if (!p) return json(res, 404, { erro: 'Peça não encontrada.' });
+  p.prazo = String(d.prazo || '').trim(); salvarDb(); json(res, 200, { ok: true, prazo: p.prazo });
+}
+// Professor: liberar entrega fora do prazo (geral para a peça, ou para um aluno)
+async function pecaLiberarPrazo(req, res) {
+  const sess = sessaoDe(req); if (!sess || sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
+  let d; try { d = await lerJson(req, 5000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
+  const p = db.pecas[String(d.id || '')]; if (!p) return json(res, 404, { erro: 'Peça não encontrada.' });
+  if (d.matricula) { p.liberados = p.liberados || {}; if (d.liberar === false) delete p.liberados[String(d.matricula)]; else p.liberados[String(d.matricula)] = true; }
+  else { p.foraDoPrazoGeral = d.liberar !== false; }
+  salvarDb(); json(res, 200, { ok: true, foraDoPrazoGeral: !!p.foraDoPrazoGeral, liberados: p.liberados || {} });
+}
+
 // Professor: planilha CSV de notas
 async function notasPlanilha(req, res) {
   const sess = sessaoDe(req); if (!sess || sess.tipo !== 'professor') { res.writeHead(403); return res.end('restrito'); }
@@ -750,6 +778,8 @@ const server = http.createServer((req, res) => {
   if (req.method === 'GET' && req.url.startsWith('/api/entrega?')) { const q = new URLSearchParams(req.url.split('?')[1]); return entregaGet(req, res, q.get('id'), q.get('matricula')); }
   if (req.method === 'POST' && req.url === '/api/entrega/corrigir') return entregaCorrigirIA(req, res);
   if (req.method === 'POST' && req.url === '/api/entrega/validar') return entregaValidar(req, res);
+  if (req.method === 'POST' && req.url === '/api/peca/renovar-prazo') return pecaRenovarPrazo(req, res);
+  if (req.method === 'POST' && req.url === '/api/peca/liberar-prazo') return pecaLiberarPrazo(req, res);
   if (req.method === 'GET' && req.url === '/api/notas.csv') return notasPlanilha(req, res);
   if (req.method === 'POST' && req.url === '/api/zerar') return zerarSistema(req, res);
   if (req.method === 'POST' && req.url === '/api/gerar-caso') return gerarCaso(req, res);
