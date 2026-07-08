@@ -611,7 +611,8 @@ function erroIA(res, r) {
   return json(res, 500, { erro: 'A IA não respondeu (' + (r.status || '') + '): ' + (r.erro || 'sem detalhe do servidor') + '.' });
 }
 
-// Professor: gerar peça por IA (caso + gabarito) para revisão
+const SISTEMA_ENUNCIADO = 'Você é o Professor Me. Rodrigo Silva Pereira (IESB) e elabora APENAS o ENUNCIADO de um caso simulado de prática penal no PADRÃO DA 2ª FASE DA OAB: narrativa densa e realista, com qualificação completa das partes (nomes fictícios), datas precisas e coerentes com a data atual, contexto do Distrito Federal (TJDFT, MPDFT, circunscrições reais), fase processual bem definida, número fictício de autos no padrão CNJ, descrição das provas produzidas, transcrição essencial de decisões quando houver, e comando final iniciado por "Na condição de advogado(a) de..." com as vedações típicas (ex.: vedado habeas corpus) e "(Valor: 5,00)". O caso deve exigir EXATAMENTE a peça indicada e ter a dificuldade do nível pedido (BÁSICO = teses evidentes; INTERMEDIÁRIO = duas ou três teses e um detalhe que exige atenção; AVANÇADO = armadilhas típicas de OAB). NUNCA repita casos famosos nem exemplos da disciplina; crie fatos inéditos. IMPORTANTE: responda SOMENTE com o texto corrido do enunciado — sem título, sem a palavra CASO, sem gabarito, sem comentários e sem observações finais.';
+// Professor: gerar SÓ o enunciado por IA (o gabarito é gerado depois, em etapa separada)
 async function pecaGerarIA(req, res) {
   const sess = sessaoDe(req); if (!sess) return json(res, 401, { erro: 'SESSAO' }); if (sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
   if (limitado((req.headers['x-forwarded-for']||'').split(',')[0])) return json(res, 429, { erro: 'Aguarde um minuto.' });
@@ -620,28 +621,13 @@ async function pecaGerarIA(req, res) {
   const nomePeca = String(d.nomePeca || '').trim(); const disc = String(d.disc || db.turmaAtiva);
   const nivel = String(d.nivel || 'INTERMEDIÁRIO');
   if (!nomePeca) return json(res, 400, { erro: 'Informe a peça-alvo.' });
-  const usuario = 'PEÇA-ALVO: ' + nomePeca + ' (' + disc + ')\nNÍVEL: ' + nivel + '\nData atual: ' + new Date().toLocaleDateString('pt-BR') + '\nGere um caso INÉDITO no padrão OAB e o gabarito.';
-  const r = await iaTexto(SISTEMA_CASO, usuario, 6000, false);
+  const usuario = 'PEÇA-ALVO: ' + nomePeca + ' (' + disc + ')\nNÍVEL: ' + nivel + '\nData atual: ' + new Date().toLocaleDateString('pt-BR') + '\nGere APENAS o enunciado do caso, inédito, no padrão OAB.';
+  const r = await iaTexto(SISTEMA_ENUNCIADO, usuario, 4000, false);
   if (!r.ok) return erroIA(res, r);
-  try { console.error('[CASO IA] len=' + (r.texto || '').length + ' | inicio=' + JSON.stringify((r.texto || '').slice(0, 400))); } catch (e) {}
-  // Separa CASO e GABARITO de forma tolerante a variações de formatação (markdown, dois-pontos, etc.)
-  // Rótulos CASO/GABARITO só valem no INÍCIO de uma linha (evita confundir com a palavra "caso" no meio do texto).
-  const txt = (r.texto || '').replace(/\*\*/g, '').replace(/\r/g, '');
-  const reCaso = /^[ \t#>*\-]*CASO\b[ \t]*:?[ \t]*/im;
-  const reGab = /^[ \t#>*\-]*GABARITO\b[ \t]*:?[ \t]*/im;
-  let caso = '', gab = '';
-  const gm = txt.match(reGab);
-  if (gm) {
-    gab = txt.slice(gm.index + gm[0].length).trim();
-    const antes = txt.slice(0, gm.index);
-    const cm = antes.match(reCaso);
-    caso = (cm ? antes.slice(cm.index + cm[0].length) : antes).trim();
-  } else {
-    const cm = txt.match(reCaso);
-    caso = (cm ? txt.slice(cm.index + cm[0].length) : txt).trim();
-  }
-  if (!caso || caso.length < 30) return json(res, 502, { erro: 'A IA não retornou o enunciado esperado. Tente novamente.', bruto: (r.texto || '').slice(0, 300) });
-  json(res, 200, { caso, gab, nomePeca, disc });
+  // O texto inteiro é o enunciado (só limpamos um eventual rótulo "CASO:" ou markdown no início).
+  const caso = (r.texto || '').replace(/\*\*/g, '').replace(/^\s*#*\s*CASO\b\s*:?\s*/i, '').trim();
+  if (caso.length < 40) return json(res, 502, { erro: 'A IA não retornou o enunciado. Tente novamente.', bruto: (r.texto || '').slice(0, 300) });
+  json(res, 200, { caso, gab: '', nomePeca, disc });
 }
 // Professor: gerar gabarito para um enunciado que ele mesmo escreveu/subiu
 async function pecaGerarGabarito(req, res) {

@@ -372,7 +372,7 @@ function profNova(){
    +'<p style="font-size:.88rem;color:var(--cinza)">Turma ativa: <b>'+esc(disc)+'</b> (mude em Sistema, se preciso). Gere por IA, suba um PDF ou escreva/cole você mesmo.</p>'
    +'<div style="font-family:Arial,sans-serif;margin:8px 0">Tipo de peça: <select id="np_nome">'+opts+'</select> '
    +'<select id="np_nivel"><option value="BÁSICO">Básico</option><option value="INTERMEDIÁRIO" selected>Intermediário</option><option value="AVANÇADO">Avançado (OAB raiz)</option></select></div>'
-   +'<div class="botoes"><button class="primario" onclick="gerarPecaIA()">🎲 Gerar enunciado + gabarito por IA</button>'
+   +'<div class="botoes"><button class="primario" onclick="gerarPecaIA()">🎲 1) Gerar enunciado por IA</button>'
    +'<label class="primario" style="padding:9px 18px;border-radius:6px;background:var(--azul);color:#fff;cursor:pointer;font-size:.85rem;font-family:Arial,sans-serif">📄 Subir peça em PDF<input type="file" accept="application/pdf" style="display:none" onchange="subirPecaPdf(this)"></label></div>'
    +'<div id="np_fb"></div></div>'
    +'<div class="card"><h3>2) Enunciado da peça</h3><textarea id="np_caso" class="redacao" style="min-height:200px" oninput="atualizarBotaoGabarito()" placeholder="Enunciado do caso (gerado pela IA, extraído do PDF ou digitado por você)...">'+esc(RASCUNHO.caso)+'</textarea>'
@@ -392,7 +392,7 @@ function atualizarBotaoGabarito(){
   if(!c||!b)return;
   b.style.display=(c.value.trim().length>=40 && !(g&&g.value.trim()))?'block':'none';
 }
-const ETAPAS_CASO=[[0,'🎲 Sorteando os fatos...'],[8,'✍️ Escrevendo o enunciado no padrão OAB...'],[20,'⚖️ Elaborando o gabarito...']];
+const ETAPAS_CASO=[[0,'🎲 Sorteando os fatos...'],[8,'✍️ Escrevendo o enunciado no padrão OAB...'],[18,'📝 Finalizando o enunciado...']];
 async function gerarPecaIA(){
   const fb=document.getElementById('np_fb');const nome=document.getElementById('np_nome').value;const nivel=document.getElementById('np_nivel').value;
   const prog=progresso(fb,ETAPAS_CASO,30);
@@ -400,7 +400,7 @@ async function gerarPecaIA(){
     if(!r.ok){let m=(d&&d.erro)||'Erro';if(m==='LIMITE_CREDITOS')m='⛔ Limite mensal de uso da IA atingido. '+((d&&d.detalhe)?('('+d.detalhe+') '):'')+'A IA volta quando o limite for renovado ou aumentado no painel da Anthropic.';fb.innerHTML='<p class="erro-ia">'+m+'</p>'+((d&&d.bruto)?('<pre style="white-space:pre-wrap;font-size:.72rem;color:var(--cinza);background:#faf8f2;border:1px solid #eee4c8;border-radius:6px;padding:8px;margin-top:6px">Resposta recebida da IA: '+esc(d.bruto)+'</pre>'):'');return}
     document.getElementById('np_caso').value=d.caso;document.getElementById('np_gab').value=d.gab||'';atualizarBotaoGabarito();
     RASCUNHO={nomePeca:nome,disc:AUTH.turmaAtiva,caso:d.caso,gab:d.gab||''};
-    fb.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif;font-size:.85rem">Enunciado e gabarito gerados. Revise abaixo, ajuste o que quiser e publique.</p>';
+    fb.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif;font-size:.85rem">✅ Enunciado gerado. Revise abaixo e clique em <b>“⚖️ Gerar gabarito para este enunciado”</b> (passo 2).</p>';
   }catch(e){prog.fim();fb.innerHTML='<p class="erro-ia">Falha: '+e.message+'</p>';}
 }
 function subirPecaPdf(inp){
