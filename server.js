@@ -607,7 +607,7 @@ async function iaTexto(system, usuario, maxTokens, comBusca) {
 function erroIA(res, r) {
   const em = (r.erro || '').toLowerCase();
   try { console.error('[IA erro] status=' + (r.status || '') + ' | ' + (r.erro || '')); } catch (e) {}
-  if (em.includes('credit') || em.includes('spend') || em.includes('billing') || em.includes('quota')) return json(res, 402, { erro: 'LIMITE_CREDITOS' });
+  if (em.includes('credit') || em.includes('spend') || em.includes('billing') || em.includes('quota') || em.includes('usage limit') || em.includes('reached your') || em.includes('rate limit')) return json(res, 402, { erro: 'LIMITE_CREDITOS', detalhe: r.erro || '' });
   return json(res, 500, { erro: 'A IA não respondeu (' + (r.status || '') + '): ' + (r.erro || 'sem detalhe do servidor') + '.' });
 }
 

@@ -346,7 +346,7 @@ async function corrigirEntregaIA(){
   try{
     const r=await apiPost('/api/entrega/corrigir',{id:window.__ent.id,matricula:window.__ent.mat});
     const d=await r.json();prog.fim();
-    if(!r.ok){let m=(d&&d.erro)||'Erro';if(m==='LIMITE_CREDITOS')m='Limite de créditos do mês atingido.';fb.innerHTML='<p class="erro-ia">'+m+'</p>';return}
+    if(!r.ok){let m=(d&&d.erro)||'Erro';if(m==='LIMITE_CREDITOS')m='⛔ Limite mensal de uso da IA atingido. '+((d&&d.detalhe)?('('+d.detalhe+') '):'')+'A IA volta quando o limite for renovado ou aumentado no painel da Anthropic.';fb.innerHTML='<p class="erro-ia">'+m+'</p>';return}
     document.getElementById('relatorio').value=d.relatorio;
     if(d.notaSugerida)document.getElementById('nota').value=String(d.notaSugerida).replace('.',',');
     fb.innerHTML='<p style="font-family:Arial,sans-serif;font-size:.85rem;color:var(--verde)">Relatório gerado pela IA. Revise, ajuste a nota e valide.</p>';
@@ -389,7 +389,7 @@ async function gerarPecaIA(){
   const fb=document.getElementById('np_fb');const nome=document.getElementById('np_nome').value;const nivel=document.getElementById('np_nivel').value;
   const prog=progresso(fb,ETAPAS_CASO,30);
   try{const r=await apiPost('/api/peca/gerar-ia',{nomePeca:nome,disc:AUTH.turmaAtiva,nivel});const d=await r.json();prog.fim();
-    if(!r.ok){let m=(d&&d.erro)||'Erro';if(m==='LIMITE_CREDITOS')m='Limite de créditos do mês atingido.';fb.innerHTML='<p class="erro-ia">'+m+'</p>';return}
+    if(!r.ok){let m=(d&&d.erro)||'Erro';if(m==='LIMITE_CREDITOS')m='⛔ Limite mensal de uso da IA atingido. '+((d&&d.detalhe)?('('+d.detalhe+') '):'')+'A IA volta quando o limite for renovado ou aumentado no painel da Anthropic.';fb.innerHTML='<p class="erro-ia">'+m+'</p>';return}
     document.getElementById('np_caso').value=d.caso;document.getElementById('np_gab').value=d.gab;
     RASCUNHO={nomePeca:nome,disc:AUTH.turmaAtiva,caso:d.caso,gab:d.gab};
     fb.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif;font-size:.85rem">Enunciado e gabarito gerados. Revise abaixo, ajuste o que quiser e publique.</p>';
@@ -411,7 +411,7 @@ async function gerarGabarito(){
   if(caso.length<40){fb.innerHTML='<p class="erro-ia">Escreva/gere o enunciado primeiro.</p>';return}
   const prog=progresso(fb,ETAPAS_GAB,70);
   try{const r=await apiPost('/api/peca/gerar-gabarito',{caso});const d=await r.json();prog.fim();
-    if(!r.ok){let m=(d&&d.erro)||'Erro';if(m==='LIMITE_CREDITOS')m='Limite de créditos do mês atingido.';fb.innerHTML='<p class="erro-ia">'+m+'</p>';return}
+    if(!r.ok){let m=(d&&d.erro)||'Erro';if(m==='LIMITE_CREDITOS')m='⛔ Limite mensal de uso da IA atingido. '+((d&&d.detalhe)?('('+d.detalhe+') '):'')+'A IA volta quando o limite for renovado ou aumentado no painel da Anthropic.';fb.innerHTML='<p class="erro-ia">'+m+'</p>';return}
     document.getElementById('np_gab').value=d.gab;fb.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif;font-size:.85rem">Gabarito gerado — confira e edite à vontade.</p>';
   }catch(e){prog.fim();fb.innerHTML='<p class="erro-ia">Falha: '+e.message+'</p>';}
 }
