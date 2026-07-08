@@ -514,7 +514,7 @@ async function extrairPdf(req, res) {
 }
 
 // ===== Gabarito comentado enriquecido pela IA em tempo real (com cache) =====
-const SISTEMA_GAB = 'Você é o Professor Me. Rodrigo Silva Pereira (IESB), na área de prática penal. Receberá um CASO e o GABARITO-BASE de uma peça processual penal. Sua tarefa: usando a ferramenta de busca na web (web_search) nos sites oficiais (stf.jus.br, stj.jus.br, tjdft.jus.br, planalto.gov.br), VERIFICAR e ENRIQUECER o gabarito: mantenha todo o conteúdo correto do gabarito-base, preserve INTEGRALMENTE o Espelho de correção com pontuação quando existir (ajustando-o somente se corrigir alguma tese, e mantendo a soma exata), acrescente a cada tese a jurisprudência REAL pertinente (súmulas, leading cases, precedentes qualificados) que você CONFIRMOU na busca, com o número correto e um resumo fiel do teor, marcando cada citação com nota [1], [2]...; corrija qualquer citação do gabarito-base que não se confirme. Finalize com a seção "## Fontes e links" listando cada nota com link oficial: legislação no Planalto; súmulas e julgados pelo buscador oficial (https://jurisprudencia.stf.jus.br/pages/search?queryString=TERMO ou https://scon.stj.jus.br/SCON/pesquisar.jsp?b=ACOR&livre=TERMO, espaços como %20) ou o link real encontrado na busca — NUNCA invente link. NÃO redija a peça para o aluno; o gabarito orienta, não substitui a redação. REGRA ABSOLUTA: NENHUMA súmula, julgado, precedente ou lei pode aparecer no texto sem nota numerada [n], e NENHUMA nota pode faltar na seção \"## Fontes e links\" com sua URL oficial clicável — o aluno precisa conseguir conferir CADA citação direto na fonte. Antes de finalizar, revise o próprio texto e confirme que não existe citação sem link. Responda apenas com o gabarito comentado final, em markdown com títulos ##.';
+const SISTEMA_GAB = 'Você é o Professor Me. Rodrigo Silva Pereira (IESB), na área de prática penal. Receberá um CASO e o GABARITO-BASE de uma peça processual penal. Sua tarefa: usando a ferramenta de busca na web (web_search) nos sites oficiais (stf.jus.br, stj.jus.br, tjdft.jus.br, planalto.gov.br) — podendo usar o jusbrasil.com.br como fonte complementar de localização de julgados, confirmando na fonte oficial —, VERIFICAR e ENRIQUECER o gabarito: mantenha todo o conteúdo correto do gabarito-base, preserve INTEGRALMENTE o Espelho de correção com pontuação quando existir (ajustando-o somente se corrigir alguma tese, e mantendo a soma exata), acrescente a cada tese a jurisprudência REAL pertinente (súmulas, leading cases, precedentes qualificados) que você CONFIRMOU na busca, com o número correto e um resumo fiel do teor, marcando cada citação com nota [1], [2]...; corrija qualquer citação do gabarito-base que não se confirme. Finalize com a seção "## Fontes e links" listando cada nota com link oficial: legislação no Planalto; súmulas e julgados pelo buscador oficial (https://jurisprudencia.stf.jus.br/pages/search?queryString=TERMO ou https://scon.stj.jus.br/SCON/pesquisar.jsp?b=ACOR&livre=TERMO, espaços como %20) ou o link real encontrado na busca — NUNCA invente link. NÃO redija a peça para o aluno; o gabarito orienta, não substitui a redação. REGRA ABSOLUTA: NENHUMA súmula, julgado, precedente ou lei pode aparecer no texto sem nota numerada [n], e NENHUMA nota pode faltar na seção \"## Fontes e links\" com sua URL oficial clicável — o aluno precisa conseguir conferir CADA citação direto na fonte. Antes de finalizar, revise o próprio texto e confirme que não existe citação sem link. Responda apenas com o gabarito comentado final, em markdown com títulos ##.';
 
 async function gabaritoIA(req, res) {
   const sess = sessaoDe(req);
@@ -531,7 +531,7 @@ async function gabaritoIA(req, res) {
   if (db.gabCache[chave]) return json(res, 200, { texto: db.gabCache[chave], cache: true });
 
   const usuario = 'PEÇA: ' + peca.nome + ' (' + (peca.disc || '') + ')\n\nCASO:\n' + String(peca.caso || '').slice(0, 8000) + '\n\nGABARITO-BASE (verifique e enriqueça):\n' + String(peca.gab).slice(0, 8000);
-  const tools = [{ type: 'web_search_20250305', name: 'web_search', max_uses: 4, allowed_domains: ['jus.br', 'planalto.gov.br'] }];
+  const tools = [{ type: 'web_search_20250305', name: 'web_search', max_uses: 4, allowed_domains: ['jus.br', 'planalto.gov.br', 'jusbrasil.com.br'] }];
   const mensagens = [{ role: 'user', content: usuario }];
   const textos = [];
   const inicioLoop = Date.now();
@@ -585,20 +585,42 @@ async function gabaritoIA(req, res) {
 // ================= PEÇAS, ENTREGAS, NOTAS (fluxo professor↔aluno) =================
 const SISTEMA_GABPECA = 'Você é o Professor Me. Rodrigo Silva Pereira (IESB), prática penal. Receberá o ENUNCIADO de uma peça (caso simulado). Elabore o GABARITO DEFINITIVO no PADRÃO DA 2ª FASE DA OAB (FGV) para o professor conferir, com estas seções em markdown (##), nesta ordem: 1. Peça cabível (seja direto: indique APENAS a peça correta e seu fundamento legal — NÃO justifique por que outras peças não cabem, sem listas de peças descartadas); 2. Endereçamento; 3. Prazo; 4. Teses principais e subsidiárias — TODAS, cada uma com os dispositivos legais e o INCISO exato quando a norma for casuística; 5. Pedidos; 6. ESPELHO DE CORREÇÃO (padrão OAB/FGV): tabela markdown com colunas Item | Pontuação distribuindo EXATAMENTE 5,00 pontos como a FGV — itens formais (endereçamento, estrutura, síntese dos fatos) valendo pouco (0,10 a 0,30) e cada tese com a pontuação decomposta em "tese desenvolvida" (≈60% do item) e "indicação do dispositivo legal com inciso" (≈40%); a última linha da tabela deve ser "**Total**" com a soma fechando EXATAMENTE em 5,00; logo após a tabela, as regras fixas: peça diversa da cabível = 0,00; dispositivo citado sem tese desenvolvida não pontua; tese sem dispositivo pontua a metade; nota da disciplina = pontuação × 2 (escala 0–10); 7. Erros frequentes esperados; 8. FONTES. REGRA ANTI-ALUCINAÇÃO (INEGOCIÁVEL): cite APENAS súmulas, julgados e dispositivos de cuja existência e teor você tem CERTEZA; na dúvida, NÃO cite — sustente a tese na lei seca. NUNCA invente número de súmula, de julgado ou teor. Na seção FONTES, liste CADA súmula/julgado/lei citada no gabarito com link oficial: legislação SEMPRE no Planalto (CP https://www.planalto.gov.br/ccivil_03/decreto-lei/del2848compilado.htm , CPP https://www.planalto.gov.br/ccivil_03/decreto-lei/del3689compilado.htm , CF https://www.planalto.gov.br/ccivil_03/constituicao/constituicao.htm , LEP https://www.planalto.gov.br/ccivil_03/leis/l7210.htm , Lei 9.099/95 https://www.planalto.gov.br/ccivil_03/leis/l9099.htm , Lei 11.343/06 https://www.planalto.gov.br/ccivil_03/_ato2004-2006/2006/lei/l11343.htm); súmulas e julgados SEMPRE pelo buscador oficial no formato https://jurisprudencia.stf.jus.br/pages/search?queryString=TERMO (STF) ou https://scon.stj.jus.br/SCON/pesquisar.jsp?b=ACOR&livre=TERMO (STJ), com o número/nome como TERMO e espaços como %20 — NUNCA link direto "adivinhado" de acórdão. Nenhuma citação pode ficar fora da seção FONTES. NÃO redija a peça pronta nem trechos-modelo — o gabarito orienta a correção do professor, não substitui a redação do aluno. Responda apenas com o gabarito, em markdown com títulos ##.';
 
+const TOOL_TJDFT = { name: 'consultar_tjdft', description: 'Pesquisa acórdãos na API pública oficial de jurisprudência do TJDFT (jurisdf.tjdft.jus.br). Use para verificar ou localizar acórdãos do TJDFT: pesquise por número do acórdão, número do processo ou termos da ementa. Retorna número, processo, órgão julgador, relator, datas, decisão e ementa.', input_schema: { type: 'object', properties: { consulta: { type: 'string', description: 'Termos da pesquisa (número do acórdão, processo ou palavras da ementa)' }, tamanho: { type: 'number', description: 'Quantidade de resultados (máx 5)' } }, required: ['consulta'] } };
 async function iaTexto(system, usuario, maxTokens, comBusca) {
   const body = { model: process.env.MODELO || 'claude-sonnet-5', max_tokens: maxTokens || 4000, system, messages: [{ role: 'user', content: usuario }] };
-  if (comBusca) body.tools = [{ type: 'web_search_20250305', name: 'web_search', max_uses: 4, allowed_domains: ['jus.br', 'planalto.gov.br'] }];
+  if (comBusca) body.tools = [{ type: 'web_search_20250305', name: 'web_search', max_uses: 4, allowed_domains: ['jus.br', 'planalto.gov.br', 'jusbrasil.com.br'] }, TOOL_TJDFT];
   const mensagens = body.messages; const textos = []; let r = null, d = null; const ini = Date.now();
+  const APRESSAR_TXT = 'Encerre as buscas e produza AGORA a resposta final completa.';
   for (let volta = 0; volta < 12; volta++) {
     const estourou = (Date.now() - ini) > 110000;
     r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' }, body: JSON.stringify(Object.assign({}, body, { messages: mensagens })) });
     d = await r.json().catch(() => null);
     if (!r.ok) return { ok: false, status: r.status, erro: (d && d.error && d.error.message) || '' };
     for (const b of (d.content || [])) if (b.type === 'text' && b.text) textos.push(b.text);
-    if (d.stop_reason === 'pause_turn' || (d.stop_reason === 'tool_use' && (d.content || []).some(b => b.type === 'server_tool_use' || b.type === 'web_search_tool_result'))) {
+    if (d.stop_reason === 'pause_turn') {
       mensagens.push({ role: 'assistant', content: d.content });
-      if (estourou || volta >= 6) mensagens.push({ role: 'user', content: 'Encerre as buscas e produza AGORA a resposta final completa.' });
+      if (estourou || volta >= 6) mensagens.push({ role: 'user', content: APRESSAR_TXT });
       continue;
+    }
+    if (d.stop_reason === 'tool_use') {
+      mensagens.push({ role: 'assistant', content: d.content });
+      const resultados = [];
+      for (const b of (d.content || [])) {
+        if (b.type === 'tool_use' && b.name === 'consultar_tjdft') {
+          let resultado;
+          try { resultado = await consultarTJDFT(b.input.consulta, b.input.tamanho); }
+          catch (e) { resultado = { erro: 'Falha na consulta ao TJDFT: ' + e.message }; }
+          resultados.push({ type: 'tool_result', tool_use_id: b.id, content: JSON.stringify(resultado) });
+        }
+      }
+      if (resultados.length) {
+        if (estourou || volta >= 6) resultados.push({ type: 'text', text: APRESSAR_TXT });
+        mensagens.push({ role: 'user', content: resultados });
+        continue;
+      }
+      const temServer = (d.content || []).some(b => b.type === 'server_tool_use' || b.type === 'web_search_tool_result');
+      if (temServer) { if (estourou || volta >= 6) mensagens.push({ role: 'user', content: APRESSAR_TXT }); continue; }
+      break;
     }
     break;
   }
@@ -705,7 +727,7 @@ function garantirLinksFontes(gab, auditou) {
     return gab + sec;
   } catch (e) { return gab; }
 }
-const SISTEMA_AUDITOR = 'Você é auditor de citações jurídicas. Receberá um GABARITO de peça penal. Usando a busca na web APENAS em sites oficiais (stf.jus.br, stj.jus.br, planalto.gov.br), verifique CADA súmula e julgado citados: TRIBUNAL, número e teor. Devolva o gabarito COMPLETO e INALTERADO na estrutura (mesmas seções, mesmo espelho de correção com a mesma soma), corrigindo apenas: (a) súmula/julgado com tribunal, número ou teor errado — corrija; (b) súmula/julgado que você NÃO conseguiu confirmar na busca — REMOVA a citação e sustente a tese apenas na lei seca, sem apagar a tese. NORMALIZAÇÃO OBRIGATÓRIA: reescreva TODA menção de súmula no formato completo "Súmula N do STF" ou "Súmula N do STJ" — nenhuma súmula pode aparecer sem o tribunal, nem atribuída ao tribunal errado. NÃO acrescente novas citações não verificadas. Ao final, acrescente a seção "## Verificação de citações (auditoria com busca nos sites oficiais)" com uma linha por citação no formato: Súmula/julgado — tribunal — CONFIRMADA (teor resumido em até 15 palavras) ou REMOVIDA (motivo). Responda somente com o gabarito final em markdown.';
+const SISTEMA_AUDITOR = 'Você é auditor de citações jurídicas. Receberá um GABARITO de peça penal. Usando a busca na web em sites oficiais (stf.jus.br, stj.jus.br, tjdft.jus.br, planalto.gov.br) — podendo usar o jusbrasil.com.br como fonte COMPLEMENTAR de localização, mas confirmando sempre que possível na fonte oficial — e a ferramenta consultar_tjdft (API oficial do TJDFT) para acórdãos do TJDFT, verifique CADA súmula e julgado citados: TRIBUNAL, número e teor. Devolva o gabarito COMPLETO e INALTERADO na estrutura (mesmas seções, mesmo espelho de correção com a mesma soma), corrigindo apenas: (a) súmula/julgado com tribunal, número ou teor errado — corrija; (b) súmula/julgado que você NÃO conseguiu confirmar na busca — REMOVA a citação e sustente a tese apenas na lei seca, sem apagar a tese. NORMALIZAÇÃO OBRIGATÓRIA: reescreva TODA menção de súmula no formato completo "Súmula N do STF" ou "Súmula N do STJ" — nenhuma súmula pode aparecer sem o tribunal, nem atribuída ao tribunal errado. NÃO acrescente novas citações não verificadas. Ao final, acrescente a seção "## Verificação de citações (auditoria com busca nos sites oficiais)" com uma linha por citação no formato: Súmula/julgado — tribunal — CONFIRMADA (teor resumido em até 15 palavras) ou REMOVIDA (motivo). Responda somente com o gabarito final em markdown.';
 // Professor: gerar gabarito para um enunciado que ele mesmo escreveu/subiu
 async function pecaGerarGabarito(req, res) {
   const sess = sessaoDe(req); if (!sess) return json(res, 401, { erro: 'SESSAO' }); if (sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
