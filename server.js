@@ -606,8 +606,9 @@ async function iaTexto(system, usuario, maxTokens, comBusca) {
 }
 function erroIA(res, r) {
   const em = (r.erro || '').toLowerCase();
-  if (em.includes('credit') || em.includes('spend') || em.includes('billing')) return json(res, 402, { erro: 'LIMITE_CREDITOS' });
-  return json(res, 500, { erro: 'A IA não respondeu agora (' + (r.status || '') + '). Tente novamente.' });
+  try { console.error('[IA erro] status=' + (r.status || '') + ' | ' + (r.erro || '')); } catch (e) {}
+  if (em.includes('credit') || em.includes('spend') || em.includes('billing') || em.includes('quota')) return json(res, 402, { erro: 'LIMITE_CREDITOS' });
+  return json(res, 500, { erro: 'A IA não respondeu (' + (r.status || '') + '): ' + (r.erro || 'sem detalhe do servidor') + '.' });
 }
 
 // Professor: gerar peça por IA (caso + gabarito) para revisão
