@@ -124,7 +124,10 @@ async function apiPost(u,b){
 }
 async function apiGet(u){
   const h={};if(AUTH&&AUTH.token)h['authorization']='Bearer '+AUTH.token;
-  return fetch(u,{headers:h});
+  const r=await fetch(u,{headers:h});
+  if(r.status===401){let d=null;try{d=await r.clone().json()}catch(e){}
+    if(d&&d.erro==='SESSAO'){sair('Sua sessão expirou. Entre novamente.');throw new Error('sessao')}}
+  return r;
 }
 function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 function md2html(t){
@@ -438,7 +441,7 @@ async function profAlunos(dadosPrev){
    +'<button class="'+(dados.turmaAtiva==='Estágio I'?'primario':'')+'" onclick="setTurma(\'Estágio I\')">Estágio I</button>'
    +'<button class="'+(dados.turmaAtiva==='Estágio II'?'primario':'')+'" onclick="setTurma(\'Estágio II\')">Estágio II</button></div>'
    +'<p class="aviso">Alunos só veem as peças da turma ativa. Atual: <b>'+esc(dados.turmaAtiva)+'</b></p></div>'
-   +'<div class="card painel"><h3>Matrículas ('+dados.totalAlunos+')</h3>'
+   +'<div class="card painel"><h3>Matrículas ('+(dados.totalAlunos||0)+')</h3>'
    +'<p style="font-size:.88rem;color:var(--cinza)">Cole matrículas (uma por linha; pode ser "matrícula - nome") ou importe do PDF do diário.</p>'
    +'<div class="botoes" style="margin-bottom:8px"><label class="primario" style="padding:9px 18px;border-radius:6px;background:var(--azul);color:#fff;cursor:pointer;font-size:.85rem;font-family:Arial,sans-serif">📄 Importar PDF<input type="file" accept="application/pdf" style="display:none" onchange="importarPdfAlunos(this)"></label></div>'
    +'<textarea id="adm_mats" placeholder="500123 - Fulano"></textarea>'

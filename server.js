@@ -35,6 +35,7 @@ function migrarDb() {
   if (!db.pecas) db.pecas = {};
   if (typeof db.proximoNum !== 'number') db.proximoNum = 1 + Object.keys(db.pecas).length;
   if (!db.entregas) db.entregas = {};
+  if (!db.sessoes) db.sessoes = {}; // sessões persistidas (sobrevivem a reinícios/deploys)
   // professor principal (Rodrigo) — mantém o registro legado db.professor
   if (!db.professor) db.professor = { login: (process.env.PROF_LOGIN || '500686'), senha: hashSenha(process.env.PROF_SENHA || 'trocar-no-primeiro-acesso'), mudouSenha: false };
   db.professores[db.professor.login] = db.professor; // espelha o principal na coleção
@@ -66,7 +67,15 @@ try {
 // ===== Sessões em memória (relogin após reinício) =====
 const APP_URL = process.env.APP_URL || 'https://laboratorio-pecas-penais.onrender.com';
 const sessoes = new Map();
-function novaSessao(usuario, tipo) { const t = crypto.randomBytes(24).toString('hex'); sessoes.set(t, { usuario, tipo }); return t; }
+// Rehidrata sessões salvas em disco (para não deslogar todos a cada deploy/reinício)
+try { for (const [t, v] of Object.entries(db.sessoes || {})) sessoes.set(t, v); } catch (e) {}
+function novaSessao(usuario, tipo) {
+  const t = crypto.randomBytes(24).toString('hex');
+  sessoes.set(t, { usuario, tipo });
+  db.sessoes = db.sessoes || {}; db.sessoes[t] = { usuario, tipo }; salvarDb();
+  return t;
+}
+function encerrarSessao(t) { if (!t) return; sessoes.delete(t); if (db.sessoes) { delete db.sessoes[t]; salvarDb(); } }
 function sessaoDe(req) { const a = req.headers['authorization'] || ''; const t = a.replace('Bearer ', '').trim(); return t ? sessoes.get(t) : null; }
 function semanaAtual() { const d = new Date(); const inicio = new Date(d.getFullYear(), 0, 1); const dias = Math.floor((d - inicio) / 86400000); return d.getFullYear() + '-S' + Math.ceil((dias + inicio.getDay() + 1) / 7); }
 const LIMITE_SEMANAL = parseInt(process.env.LIMITE_SEMANAL || '5', 10);
@@ -319,7 +328,7 @@ async function apiTrocarSenha(req, res) {
   json(res, 200, { ok: true, precisaVerificarEmail: true, emailEnviado: r.ok });
 }
 async function apiEmailProfessor(req, res) {
-  const sess = sessaoDe(req); if (!sess || sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
+  const sess = sessaoDe(req); if (!sess) return json(res, 401, { erro: 'SESSAO' }); if (sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
   const prof = professorDe(sess.usuario); if (!prof) return json(res, 401, { erro: 'Sessão inválida.' });
   let d; try { d = await lerJson(req, 5000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
   const em = String(d.email || '').trim().toLowerCase();
@@ -345,7 +354,7 @@ async function apiReenviarCodigo(req, res) {
   json(res, 200, { ok: true, emailEnviado: r.ok });
 }
 async function apiAdmin(req, res) {
-  const sess = sessaoDe(req); if (!sess || sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito ao professor.' });
+  const sess = sessaoDe(req); if (!sess) return json(res, 401, { erro: 'SESSAO' }); if (sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito ao professor.' });
   let d; try { d = await lerJson(req, 200000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
   if (d.turma && (d.turma === 'Estágio I' || d.turma === 'Estágio II')) { db.turmaAtiva = d.turma; }
   let contNovas = 0, contExistentes = 0;
@@ -383,7 +392,7 @@ async function apiAdmin(req, res) {
 // ===== Extração de matrículas de PDF (painel do professor) =====
 async function extrairPdf(req, res) {
   const sess = sessaoDe(req);
-  if (!sess || sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito ao professor.' });
+  if (!sess) return json(res, 401, { erro: 'SESSAO' }); if (sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito ao professor.' });
   let d; try { d = await lerJson(req, 20000000); } catch { return json(res, 400, { erro: 'Arquivo grande demais (máx ~15 MB) ou inválido.' }); }
   if (!d.pdf) return json(res, 400, { erro: 'Envie o PDF.' });
   let pdfjsLib; try { pdfjsLib = require('pdfjs-dist/legacy/build/pdf.js'); } catch { return json(res, 500, { erro: 'Leitor de PDF indisponível no servidor. Avise o desenvolvedor.' }); }
@@ -538,7 +547,7 @@ function erroIA(res, r) {
 
 // Professor: gerar peça por IA (caso + gabarito) para revisão
 async function pecaGerarIA(req, res) {
-  const sess = sessaoDe(req); if (!sess || sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
+  const sess = sessaoDe(req); if (!sess) return json(res, 401, { erro: 'SESSAO' }); if (sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
   if (limitado((req.headers['x-forwarded-for']||'').split(',')[0])) return json(res, 429, { erro: 'Aguarde um minuto.' });
   let d; try { d = await lerJson(req, 20000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
   if (!process.env.ANTHROPIC_API_KEY) return json(res, 500, { erro: 'Servidor sem chave configurada.' });
@@ -554,7 +563,7 @@ async function pecaGerarIA(req, res) {
 }
 // Professor: gerar gabarito para um enunciado que ele mesmo escreveu/subiu
 async function pecaGerarGabarito(req, res) {
-  const sess = sessaoDe(req); if (!sess || sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
+  const sess = sessaoDe(req); if (!sess) return json(res, 401, { erro: 'SESSAO' }); if (sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
   if (limitado((req.headers['x-forwarded-for']||'').split(',')[0])) return json(res, 429, { erro: 'Aguarde um minuto.' });
   let d; try { d = await lerJson(req, 200000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
   const caso = String(d.caso || '').trim();
@@ -566,7 +575,7 @@ async function pecaGerarGabarito(req, res) {
 }
 // Professor: extrair texto de um PDF de peça (enunciado)
 async function pecaExtrairPdf(req, res) {
-  const sess = sessaoDe(req); if (!sess || sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
+  const sess = sessaoDe(req); if (!sess) return json(res, 401, { erro: 'SESSAO' }); if (sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
   let d; try { d = await lerJson(req, 20000000); } catch { return json(res, 400, { erro: 'Arquivo grande demais.' }); }
   if (!d.pdf) return json(res, 400, { erro: 'Envie o PDF.' });
   let pdfjsLib; try { pdfjsLib = require('pdfjs-dist/legacy/build/pdf.js'); } catch { return json(res, 500, { erro: 'Leitor de PDF indisponível.' }); }
@@ -582,7 +591,7 @@ async function pecaExtrairPdf(req, res) {
 }
 // Professor: salvar/publicar peça
 async function pecaSalvar(req, res) {
-  const sess = sessaoDe(req); if (!sess || sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
+  const sess = sessaoDe(req); if (!sess) return json(res, 401, { erro: 'SESSAO' }); if (sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
   let d; try { d = await lerJson(req, 300000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
   const caso = String(d.caso || '').trim(); const gab = String(d.gab || '').trim();
   const nomePeca = String(d.nomePeca || 'Peça').trim(); const disc = (d.disc === 'Estágio II') ? 'Estágio II' : 'Estágio I';
@@ -619,19 +628,19 @@ function resumoPeca(p) {
   return { id: p.id, num: p.num, nomePeca: p.nomePeca, disc: p.disc, prazo: p.prazo, publicada: p.publicada, criadoEm: p.criadoEm, entregas: total, validadas: corrigidas };
 }
 async function pecasListar(req, res) {
-  const sess = sessaoDe(req); if (!sess || sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
+  const sess = sessaoDe(req); if (!sess) return json(res, 401, { erro: 'SESSAO' }); if (sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
   const lista = Object.values(db.pecas).sort((a, b) => b.num - a.num).map(resumoPeca);
   json(res, 200, { ok: true, pecas: lista, turmaAtiva: db.turmaAtiva });
 }
 async function pecaGet(req, res, id) {
-  const sess = sessaoDe(req); if (!sess || sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
+  const sess = sessaoDe(req); if (!sess) return json(res, 401, { erro: 'SESSAO' }); if (sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
   const p = db.pecas[id]; if (!p) return json(res, 404, { erro: 'Peça não encontrada.' });
   const ents = db.entregas[id] || {};
   const entregas = Object.keys(ents).map(mat => ({ matricula: mat, nome: (db.alunos[mat] && db.alunos[mat].nome) || '', enviadoEm: ents[mat].enviadoEm, temRelatorio: !!ents[mat].relatorio, nota: ents[mat].nota, validado: !!ents[mat].validado }));
   json(res, 200, { ok: true, peca: p, entregas, liberados: p.liberados || {}, foraDoPrazoGeral: !!p.foraDoPrazoGeral });
 }
 async function pecaExcluir(req, res) {
-  const sess = sessaoDe(req); if (!sess || sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
+  const sess = sessaoDe(req); if (!sess) return json(res, 401, { erro: 'SESSAO' }); if (sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
   let d; try { d = await lerJson(req, 5000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
   const id = String(d.id || ''); if (db.pecas[id]) { delete db.pecas[id]; delete db.entregas[id]; salvarDb(); }
   json(res, 200, { ok: true });
@@ -694,19 +703,19 @@ async function descadastrarAluno(req, res) {
   for (const pid of Object.keys(db.pecas || {})) { const p = db.pecas[pid]; if (p && p.liberados && p.liberados[mat]) delete p.liberados[mat]; }
   salvarDb();
   // invalida todas as sessões desse aluno
-  for (const [t, s] of sessoes) { if (s.tipo === 'aluno' && s.usuario === mat) sessoes.delete(t); }
+  for (const [t, s] of Array.from(sessoes)) { if (s.tipo === 'aluno' && s.usuario === mat) encerrarSessao(t); }
   json(res, 200, { ok: true });
 }
 // Professor: ver o texto de uma entrega
 async function entregaGet(req, res, id, mat) {
-  const sess = sessaoDe(req); if (!sess || sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
+  const sess = sessaoDe(req); if (!sess) return json(res, 401, { erro: 'SESSAO' }); if (sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
   const e = (db.entregas[id] || {})[mat]; if (!e) return json(res, 404, { erro: 'Entrega não encontrada.' });
   const p = db.pecas[id] || {};
   json(res, 200, { ok: true, peca: { num: p.num, nomePeca: p.nomePeca, caso: p.caso, gab: p.gab }, aluno: { matricula: mat, nome: (db.alunos[mat] && db.alunos[mat].nome) || '' }, texto: e.texto, relatorio: e.relatorio || '', nota: (e.nota != null ? e.nota : ''), validado: !!e.validado });
 }
 // Professor: pedir à IA um relatório com nota para uma entrega
 async function entregaCorrigirIA(req, res) {
-  const sess = sessaoDe(req); if (!sess || sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
+  const sess = sessaoDe(req); if (!sess) return json(res, 401, { erro: 'SESSAO' }); if (sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
   if (limitado((req.headers['x-forwarded-for']||'').split(',')[0])) return json(res, 429, { erro: 'Aguarde um minuto.' });
   let d; try { d = await lerJson(req, 5000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
   const p = db.pecas[String(d.id || '')]; const e = p && (db.entregas[p.id] || {})[String(d.matricula || '')];
@@ -721,7 +730,7 @@ async function entregaCorrigirIA(req, res) {
 }
 // Professor: salvar (editar) relatório+nota e VALIDAR (envia ao aluno por e-mail)
 async function entregaValidar(req, res) {
-  const sess = sessaoDe(req); if (!sess || sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
+  const sess = sessaoDe(req); if (!sess) return json(res, 401, { erro: 'SESSAO' }); if (sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
   let d; try { d = await lerJson(req, 300000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
   const p = db.pecas[String(d.id || '')]; const e = p && (db.entregas[p.id] || {})[String(d.matricula || '')];
   if (!e) return json(res, 404, { erro: 'Entrega não encontrada.' });
@@ -742,14 +751,14 @@ async function entregaValidar(req, res) {
 }
 // Professor: renovar prazo de uma peça
 async function pecaRenovarPrazo(req, res) {
-  const sess = sessaoDe(req); if (!sess || sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
+  const sess = sessaoDe(req); if (!sess) return json(res, 401, { erro: 'SESSAO' }); if (sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
   let d; try { d = await lerJson(req, 5000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
   const p = db.pecas[String(d.id || '')]; if (!p) return json(res, 404, { erro: 'Peça não encontrada.' });
   p.prazo = String(d.prazo || '').trim(); salvarDb(); json(res, 200, { ok: true, prazo: p.prazo });
 }
 // Professor: liberar entrega fora do prazo (geral para a peça, ou para um aluno)
 async function pecaLiberarPrazo(req, res) {
-  const sess = sessaoDe(req); if (!sess || sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
+  const sess = sessaoDe(req); if (!sess) return json(res, 401, { erro: 'SESSAO' }); if (sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
   let d; try { d = await lerJson(req, 5000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
   const p = db.pecas[String(d.id || '')]; if (!p) return json(res, 404, { erro: 'Peça não encontrada.' });
   if (d.matricula) { p.liberados = p.liberados || {}; if (d.liberar === false) delete p.liberados[String(d.matricula)]; else p.liberados[String(d.matricula)] = true; }
@@ -759,7 +768,7 @@ async function pecaLiberarPrazo(req, res) {
 
 // Professor: planilha CSV de notas
 async function notasPlanilha(req, res) {
-  const sess = sessaoDe(req); if (!sess || sess.tipo !== 'professor') { res.writeHead(403); return res.end('restrito'); }
+  const sess = sessaoDe(req); if (!sess) { res.writeHead(401); return res.end('SESSAO'); } if (sess.tipo !== 'professor') { res.writeHead(403); return res.end('restrito'); }
   const pecas = Object.values(db.pecas).sort((a, b) => a.num - b.num);
   const linhas = [];
   const cab = ['Aluno', 'Matrícula'].concat(pecas.map(p => 'Peça ' + p.num + ' (' + p.nomePeca.replace(/;/g, ' ') + ')'));
@@ -777,7 +786,7 @@ async function notasPlanilha(req, res) {
 }
 // Professor: ZERAR todo o sistema (mantém contas de professores)
 async function zerarSistema(req, res) {
-  const sess = sessaoDe(req); if (!sess || sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
+  const sess = sessaoDe(req); if (!sess) return json(res, 401, { erro: 'SESSAO' }); if (sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
   let d; try { d = await lerJson(req, 5000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
   if (d.confirmacao !== 'ZERAR') return json(res, 400, { erro: 'Confirmação inválida.' });
   db.alunos = {}; db.pecas = {}; db.entregas = {}; db.proximoNum = 1; salvarDb();
