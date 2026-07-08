@@ -108,902 +108,405 @@ textarea.redacao{width:100%;min-height:340px;margin-top:14px;padding:16px;font-f
   <main id="conteudo"></main>
 </div>
 <script>
-const PECAS=[
-{id:"queixa",nome:"Queixa-Crime",disc:"Estágio I",
-ficha:{cabimento:"Peça inicial da ação penal privada, nos crimes que se procedem mediante queixa (ex.: crimes contra a honra — calúnia, difamação e injúria, arts. 138 a 140 do CP c/c art. 145 do CP).",prazo:"6 meses, contados do conhecimento da autoria (prazo decadencial — art. 38 do CPP).",base:"Arts. 30, 38, 41 e 44 do CPP.",end:"Juiz de Direito do Juizado Especial Criminal ou da Vara Criminal da circunscrição do local da infração (art. 70 do CPP). No DF: 'Excelentíssimo Senhor Doutor Juiz de Direito do Juizado Especial Criminal de [circunscrição]/DF'.",leg:"Ofendido (querelante), por advogado com PROCURAÇÃO COM PODERES ESPECIAIS, com menção ao fato criminoso (art. 44 do CPP)."},
-estrutura:[
-{t:"Endereçamento",p:"Ao juízo competente do local da consumação. Não abrevie; deixe cerca de 10 linhas antes do nome das partes.",ex:"EXCELENTÍSSIMO SENHOR DOUTOR JUIZ DE DIREITO DO JUIZADO ESPECIAL CRIMINAL DE BRASÍLIA/DF"},
-{t:"Qualificação das partes",p:"Querelante (ofendido) e querelado (autor do fato), com qualificação completa: nome, nacionalidade, estado civil, profissão, RG, CPF e endereço.",ex:"FULANO DE TAL, brasileiro, casado, empresário, RG..., CPF..., residente..., por seu advogado (procuração com poderes especiais anexa), vem, respeitosamente, oferecer QUEIXA-CRIME, com fundamento no art. 41 do CPP, em face de BELTRANO..."},
-{t:"Dos fatos",p:"Narre o fato criminoso com todas as circunstâncias (art. 41 do CPP), de forma objetiva e fiel à narrativa do caso.",ex:""},
-{t:"Do direito",p:"Demonstre a tipicidade da conduta (classificação jurídica), a legitimidade do querelante e a tempestividade (dentro do prazo decadencial).",ex:"A conduta do querelado amolda-se ao tipo do art. 139 do CP (difamação), pois imputou ao querelante fato ofensivo à sua reputação..."},
-{t:"Dos pedidos",p:"Recebimento da queixa; citação do querelado; designação de audiência (rito); oitiva das testemunhas; procedência para condenar o querelado; condenação em custas. No JECRIM, atenção à audiência preliminar de conciliação e à possibilidade de transação penal.",ex:"a) o recebimento da presente queixa-crime;\nb) a citação do querelado para responder aos termos da ação;\nc) a oitiva das testemunhas abaixo arroladas;\nd) a total procedência do pedido, condenando-se o querelado nas penas do art. 139 do CP;\ne) a condenação do querelado ao pagamento das custas processuais."},
-{t:"Fechamento",p:"Rol de testemunhas, valor da causa quando exigível, local, data, advogado e OAB.",ex:"Nestes termos, pede deferimento.\nBrasília/DF, [data].\nADVOGADO — OAB/DF nº ..."}],
-caso:`JOÃO BATISTA PEREIRA, brasileiro, casado, engenheiro civil, portador do RG nº 1.234.567-SSP/DF, inscrito no CPF sob o nº 111.222.333-44, residente na QE 40, conjunto B, casa 15, Guará II/DF, exerce há quatro anos, sem remuneração, o cargo de síndico do Condomínio Residencial Flores do Guará. Em 10 de maio de 2026, às 20h, durante assembleia geral ordinária realizada no salão de festas do condomínio, com a presença de aproximadamente 30 condôminos e registro em ata e em gravação audiovisual autorizada, o condômino MARCOS AURÉLIO TAVARES, brasileiro, solteiro, comerciante, residente no mesmo condomínio, ao discutir a prestação de contas, afirmou em voz alta: "o síndico desviou o dinheiro da reforma da piscina para pagar as próprias dívidas; é um ladrão e todos aqui sabem disso".
-
-A afirmação é comprovadamente falsa: a obra da piscina atrasou por inadimplemento da construtora contratada, conforme notificação extrajudicial juntada à ata, e as contas do condomínio dos últimos três exercícios foram aprovadas por auditoria independente e pela própria assembleia. João Batista sentiu-se profundamente humilhado perante os vizinhos; nos dias seguintes, passou a ser hostilizado por moradores e cogitou renunciar ao cargo.
-
-Em 20 de junho de 2026, João Batista procurou o Núcleo de Prática Jurídica portando: cópia da ata da assembleia, mídia com a gravação, notificação extrajudicial da construtora, relatório da auditoria e rol de três testemunhas presenciais (Ana Lúcia Ramos, Carlos Eduardo Nunes e Débora Martins, todas condôminas). Manifestou, expressamente, a intenção de ver Marcos Aurélio processado criminalmente, dispondo-se a outorgar procuração com poderes especiais.
-
-Considerando que os fatos narrados envolvem crime de ação penal privada e que não houve, até a presente data, qualquer providência judicial, na condição de advogado(a) de João Batista, redija a peça processual cabível, observando todos os requisitos legais, com endereçamento correto, qualificação das partes, exposição do fato criminoso com todas as suas circunstâncias, classificação jurídica, rol de testemunhas e pedidos pertinentes. É vedada a mera indicação de "peça genérica". (Valor: 5,00)`,
-gab:`PEÇA CABÍVEL: Queixa-crime (ação penal privada — crime contra a honra).
-
-CLASSIFICAÇÃO: Calúnia (art. 138 do CP) — imputação falsa de fato definido como crime (apropriação indébita/peculato-equivalente na esfera privada: desvio de valores), majorada pelo art. 141, III, do CP (na presença de várias pessoas).
-
-PONTOS ESSENCIAIS:
-• Endereçamento: Juizado Especial Criminal do Guará/DF (pena máxima da calúnia majorada — verificar; sendo ≤ 2 anos, competência do JECRIM).
-• Procuração com poderes especiais e menção ao fato criminoso (art. 44 do CPP).
-• Tempestividade: fato em 10/05/2026, conhecimento imediato — queixa dentro dos 6 meses (art. 38 do CPP).
-• Teses: falsidade da imputação (dolo de caluniar); dano à honra objetiva.
-• Pedidos: recebimento, citação, audiência, oitiva de testemunhas, procedência/condenação (art. 138 c/c 141, III, CP), custas.
-
-ERROS FREQUENTES: oferecer 'denúncia' (peça do MP); esquecer a procuração com poderes especiais; endereçar à Vara Cível; classificar como difamação (a imputação é de FATO CRIMINOSO → calúnia).`},
-
-{id:"resposta",nome:"Resposta à Acusação",disc:"Estágio I",
-ficha:{cabimento:"Primeira peça de defesa após o recebimento da denúncia ou queixa e a citação do acusado, no procedimento comum (art. 396 do CPP).",prazo:"10 dias, contados da citação (art. 396 do CPP).",base:"Arts. 396, 396-A e 397 do CPP.",end:"Juízo criminal em que tramita a ação penal ('...Juiz de Direito da ... Vara Criminal de .../DF — Autos nº ...').",leg:"Acusado, por advogado constituído (procuração) ou defensor."},
-estrutura:[
-{t:"Endereçamento e preâmbulo",p:"Ao juízo do processo, com número dos autos. Indique o acusado já qualificado nos autos.",ex:"EXCELENTÍSSIMO SENHOR DOUTOR JUIZ DE DIREITO DA 2ª VARA CRIMINAL DE CEILÂNDIA/DF\nAutos nº ...\nFULANO, já qualificado nos autos, vem apresentar RESPOSTA À ACUSAÇÃO, nos termos dos arts. 396 e 396-A do CPP..."},
-{t:"Síntese acusatória",p:"Resuma a imputação da denúncia (fato, tipo penal).",ex:""},
-{t:"Preliminares",p:"Antes do mérito: inépcia da denúncia (art. 41), ausência de justa causa, nulidades (citação, incompetência), rejeição (art. 395 do CPP).",ex:""},
-{t:"Mérito — absolvição sumária",p:"Teses do art. 397 do CPP: I) excludente de ilicitude; II) excludente de culpabilidade (salvo inimputabilidade); III) atipicidade; IV) extinção da punibilidade. Se não for caso de absolvição sumária, argumente o que será demonstrado na instrução.",ex:"A conduta é manifestamente atípica (princípio da insignificância), impondo-se a absolvição sumária, nos termos do art. 397, III, do CPP."},
-{t:"Provas e testemunhas",p:"Requeira as provas e arrole testemunhas (até 8 no rito ordinário — art. 401 do CPP), sob pena de preclusão.",ex:""},
-{t:"Pedidos",p:"Acolhimento das preliminares; absolvição sumária; subsidiariamente, produção de provas e oitiva das testemunhas arroladas.",ex:"a) o acolhimento da preliminar de inépcia, rejeitando-se a denúncia;\nb) subsidiariamente, a absolvição sumária, art. 397, III, do CPP;\nc) não sendo esse o entendimento, a produção de prova testemunhal, com a oitiva do rol abaixo."}],
-caso:`PEDRO HENRIQUE DA SILVA, brasileiro, solteiro, auxiliar de serviços gerais desempregado, 22 anos, primário e de bons antecedentes, residente na QNL 5, bloco C, apartamento 202, Taguatinga/DF, foi denunciado pelo Ministério Público do Distrito Federal e Territórios como incurso no art. 155, caput, do Código Penal. Segundo a denúncia, em 3 de março de 2026, por volta das 18h30, no interior do Supermercado Preço Bom, situado em Taguatinga/DF, Pedro subtraiu, para si, um pacote de fraldas descartáveis e dois potes de leite em pó, avaliados, conforme auto de avaliação, em R$ 87,00 (oitenta e sete reais).
-
-Consta do inquérito que Pedro foi abordado pelo fiscal de loja logo após passar pelos caixas sem efetuar o pagamento, tendo as mercadorias sido integralmente recuperadas, sem qualquer dano, e imediatamente devolvidas ao estabelecimento, conforme termo de restituição. Em sede policial, Pedro confessou a subtração e declarou que estava desempregado havia cinco meses e que os produtos se destinavam ao filho recém-nascido, o que foi corroborado pela certidão de nascimento da criança e por declaração da genitora. A folha de antecedentes não registra qualquer anotação.
-
-A denúncia foi recebida em 15 de junho de 2026 pelo Juízo da 2ª Vara Criminal de Taguatinga/DF (autos nº 0712345-67.2026.8.07.0007). Pedro foi pessoalmente citado em 1º de julho de 2026 e, no mesmo dia, procurou o Núcleo de Prática Jurídica, apresentando cópia integral dos autos. Deseja arrolar como testemunhas sua vizinha, Maria das Graças Souza, e o líder comunitário Antônio Ferreira, que podem atestar sua situação de penúria à época dos fatos.
-
-Considerando a fase procedimental e que ainda não foi praticado qualquer ato de defesa nos autos, na condição de advogado(a) de Pedro, redija a peça processual cabível — vedada a impetração de habeas corpus —, arguindo todas as teses de direito material e processual pertinentes, com os respectivos fundamentos legais, requerimentos de prova e pedidos. (Valor: 5,00)`,
-gab:`PEÇA CABÍVEL: Resposta à acusação (arts. 396 e 396-A do CPP) — prazo de 10 dias da citação.
-
-TESES:
-• PRINCIPAL: atipicidade material pelo princípio da insignificância (mínima ofensividade, ausência de periculosidade, reduzido grau de reprovabilidade, inexpressividade da lesão — STF, HC 84.412) → absolvição sumária, art. 397, III, do CPP.
-• Subsidiárias: furto famélico/estado de necessidade (art. 24 do CP → art. 397, I); furto privilegiado (art. 155, §2º, do CP — primário + pequeno valor); arrependimento posterior (art. 16 do CP — restituição integral antes do recebimento).
-• Arrolar testemunhas sob pena de preclusão.
-
-PEDIDOS: absolvição sumária; subsidiariamente, provas e testemunhas; benefícios legais.
-
-ERROS FREQUENTES: perder-se em matéria de prova (a peça não é alegações finais); esquecer o rol de testemunhas; não formular pedidos subsidiários.`},
-
-{id:"alegacoes",nome:"Alegações Finais por Memoriais",disc:"Estágio I",
-ficha:{cabimento:"Última manifestação da defesa antes da sentença, quando convertidos os debates orais em memoriais escritos (art. 403, §3º, do CPP) ou no rito do júri, na 1ª fase (art. 411, §4º — em regra orais). Momento de análise de TODA a prova produzida.",prazo:"5 dias (art. 403, §3º, do CPP).",base:"Art. 403, §3º, do CPP; teses absolutórias do art. 386 do CPP.",end:"Juízo criminal do processo, com número dos autos.",leg:"Acusado, por seu defensor."},
-estrutura:[
-{t:"Preâmbulo",p:"Identifique o processo e a fase (memoriais).",ex:"...vem apresentar ALEGAÇÕES FINAIS POR MEMORIAIS, nos termos do art. 403, §3º, do CPP."},
-{t:"Síntese processual",p:"Resuma denúncia, instrução e provas produzidas (interrogatório, testemunhas, perícias).",ex:""},
-{t:"Preliminares",p:"Nulidades ocorridas na instrução (cerceamento de defesa, prova ilícita — art. 5º, LVI, CF; art. 157 do CPP).",ex:""},
-{t:"Mérito — teses absolutórias",p:"Fundamente na prova dos autos com as hipóteses do art. 386 do CPP (inexistência do fato, negativa de autoria, atipicidade, excludentes, insuficiência probatória — in dubio pro reo, inciso VII).",ex:"As testemunhas de acusação não presenciaram os fatos e o laudo é inconclusivo: impõe-se a absolvição por insuficiência de provas (art. 386, VII, do CPP)."},
-{t:"Teses subsidiárias — dosimetria",p:"Desclassificação; participação de menor importância; pena-base no mínimo; atenuantes (confissão — art. 65, III, d); causas de diminuição; regime inicial mais brando; substituição por restritivas (art. 44 do CP); sursis; direito de recorrer em liberdade.",ex:""},
-{t:"Pedidos",p:"Absolvição (indicando o inciso do art. 386); subsidiariamente, os pleitos de dosimetria em ordem lógica.",ex:""}],
-caso:`LUCAS MENDES FERREIRA, brasileiro, solteiro, auxiliar administrativo, 24 anos, primário, residente em Samambaia/DF, foi denunciado como incurso no art. 157, §2º, II, do Código Penal, porque, segundo a denúncia, em 12 de fevereiro de 2026, por volta das 21h, em via pública de Samambaia/DF, em concurso com adolescente não identificado, mediante grave ameaça, teria subtraído o aparelho celular da vítima Josué Almeida. A denúncia foi recebida em 20 de março de 2026 pelo Juízo da Vara Criminal de Samambaia (autos nº 0723456-78.2026.8.07.0009), a resposta à acusação foi apresentada por defensor anterior e não houve absolvição sumária.
-
-Na audiência de instrução e julgamento, realizada em 25 de junho de 2026, foram colhidas as seguintes provas: (i) a vítima Josué, ao ser instada a reconhecer o acusado presente na sala, declarou textualmente: "acho que era ele, mas estava escuro e tudo foi muito rápido", admitindo que o reconhecimento fotográfico na delegacia foi feito a partir de uma única foto exibida pelos policiais, sem observância de qualquer formalidade; (ii) o policial militar Sargento Ribeiro, única testemunha de acusação, relatou apenas que prendeu Lucas cerca de duas horas depois dos fatos, em local diverso, a dois quilômetros do roubo, sem que nada de ilícito fosse encontrado em seu poder — o celular jamais foi recuperado; (iii) as testemunhas de defesa, Pastor Elias Cardoso e a diácona Rute Moreira, afirmaram, de forma harmônica, que Lucas participava do culto na Igreja Batista local entre 19h30 e 22h da data dos fatos, como fazia todas as quartas-feiras; (iv) em interrogatório, Lucas negou os fatos e reiterou o álibi.
-
-Encerrada a instrução, o juiz converteu os debates orais em memoriais escritos, nos termos do art. 403, §3º, do CPP. O Ministério Público apresentou seus memoriais pugnando pela condenação nos termos da denúncia. Os autos vieram com vista à defesa em 3 de julho de 2026.
-
-Na condição de advogado(a) de Lucas, redija a peça processual cabível, com todas as teses defensivas principais e subsidiárias, devidamente fundamentadas. (Valor: 5,00)`,
-gab:`PEÇA CABÍVEL: Alegações finais por memoriais (art. 403, §3º, do CPP).
-
-TESES:
-• PRINCIPAL: absolvição por não existir prova suficiente da autoria — reconhecimento judicial frágil (inobservância do art. 226 do CPP, conforme o HC 598.886 do STJ, que tornou obrigatório o rito do reconhecimento), palavra isolada de policial sobre fato que não presenciou, álibi corroborado → art. 386, V e VII, do CPP (in dubio pro reo).
-• Subsidiárias: afastamento da majorante do concurso (não comprovado o vínculo com o adolescente); desclassificação para furto se afastada a grave ameaça (conforme prova); pena-base no mínimo (primariedade); regime inicial mais brando; direito de recorrer em liberdade.
-
-PEDIDOS: absolvição (art. 386, V ou VII, CPP); subsidiariamente, exclusão da majorante, pena mínima, regime aberto/semiaberto.
-
-ERROS FREQUENTES: repetir a resposta à acusação sem analisar a PROVA produzida; esquecer as teses subsidiárias; não indicar o inciso do art. 386.`},
-{id:"libprov",nome:"Pedido de Liberdade Provisória",disc:"Estágio I",
-ficha:{cabimento:"Quando a prisão em flagrante é LEGAL, mas não estão presentes os requisitos da preventiva (art. 312 do CPP): o juiz deve conceder liberdade provisória, com ou sem fiança/medidas cautelares (art. 310, III, e arts. 321 e ss. do CPP).",prazo:"Não há prazo — cabível enquanto perdurar a prisão.",base:"Art. 5º, LXVI, da CF; arts. 310, III, 319 e 321 do CPP.",end:"Juiz competente que apreciou/apreciará o flagrante (ex.: Juiz do Núcleo de Audiência de Custódia ou da Vara Criminal).",leg:"Preso, por advogado (procuração) ou qualquer pessoa em seu favor."},
-estrutura:[
-{t:"Preâmbulo",p:"Identifique o preso e o auto de prisão em flagrante (APF).",ex:"...vem requerer LIBERDADE PROVISÓRIA, com fundamento no art. 5º, LXVI, da CF e arts. 310, III, e 321 do CPP..."},
-{t:"Dos fatos",p:"Narre a prisão e a situação pessoal do preso (primariedade, residência fixa, trabalho lícito, família).",ex:""},
-{t:"Do direito",p:"Reconheça a legalidade formal do flagrante, mas demonstre a AUSÊNCIA dos requisitos da preventiva (art. 312): não há risco à ordem pública, à instrução ou à aplicação da lei penal. Invoque presunção de inocência (art. 5º, LVII, CF) e a excepcionalidade da prisão (art. 282, §6º). Se o crime não admite preventiva (art. 313), reforce.",ex:"O requerente é primário, possui residência fixa e trabalho lícito; a prisão cautelar é a ultima ratio..."},
-{t:"Medidas cautelares",p:"Demonstre que as medidas do art. 319 do CPP são suficientes e adequadas (comparecimento periódico, proibição de contato etc.).",ex:""},
-{t:"Pedidos",p:"Concessão da liberdade provisória, sem fiança (ou com dispensa — art. 350, se hipossuficiente), com expedição de alvará de soltura; subsidiariamente, cautelares do art. 319.",ex:"a) a concessão de liberdade provisória, sem fiança, expedindo-se o alvará de soltura;\nb) subsidiariamente, a aplicação de medidas cautelares diversas da prisão (art. 319 do CPP)."}],
-caso:`RAFAEL SOUZA LIMA, brasileiro, solteiro, entregador com contrato de trabalho registrado em CTPS, 25 anos, primário, sem qualquer anotação penal, residente com a mãe na Quadra 205, conjunto 8, casa 12, Recanto das Emas/DF, foi preso em flagrante em 28 de junho de 2026, às 22h15, por policiais militares em patrulhamento de rotina, quando portava, no bolso da jaqueta, 12 g (doze gramas) de maconha divididas em quatro porções e R$ 150,00 (cento e cinquenta reais) em notas trocadas. Foi autuado pela suposta prática do crime de tráfico de drogas (art. 33, caput, da Lei nº 11.343/2006).
-
-O auto de prisão em flagrante encontra-se formalmente perfeito: presentes as testemunhas de apresentação, lavrado o auto pela autoridade competente, entregue a nota de culpa no prazo legal, comunicada a prisão ao juízo, ao Ministério Público e à família dentro de 24 horas, e elaborado o laudo preliminar de constatação da substância. Em depoimento, Rafael declarou que a droga se destinava a consumo próprio e de amigos em uma confraternização.
-
-Na audiência de custódia, realizada em 29 de junho de 2026 no Núcleo de Audiência de Custódia de Brasília/DF, o Ministério Público requereu a conversão do flagrante em prisão preventiva, alegando, genericamente, que "a gravidade do crime de tráfico e a garantia da ordem pública recomendam a segregação cautelar". A defesa constituída não estava presente e o juiz plantonista determinou a conclusão dos autos para deliberação, encontrando-se Rafael, até o momento, custodiado.
-
-A família de Rafael procurou o Núcleo de Prática Jurídica portando: CTPS com contrato ativo, comprovante de residência fixa, certidões negativas de antecedentes e declaração do empregador. Considerando que não há ilegalidade formal na prisão em flagrante e que ainda não foi decretada a prisão preventiva, na condição de advogado(a) de Rafael, redija a peça processual cabível perante o juízo de primeiro grau — vedada a impetração de habeas corpus —, enfrentando a manifestação ministerial e formulando todos os pedidos, inclusive subsidiários. (Valor: 5,00)`,
-gab:`PEÇA CABÍVEL: Pedido de liberdade provisória (art. 310, III, c/c art. 321 do CPP) — o flagrante é LEGAL, então NÃO cabe relaxamento.
-
-TESES:
-• Ausência dos requisitos do art. 312 do CPP — gravidade abstrata e alegação genérica de 'ordem pública' não fundamentam preventiva (STF/STJ).
-• Condições pessoais favoráveis: primariedade, residência fixa, trabalho lícito.
-• Tráfico privilegiado (art. 33, §4º, Lei 11.343/06) em perspectiva: pena provável baixa, possível regime aberto — desproporcionalidade da prisão cautelar (art. 282, §6º, CPP; homogeneidade das cautelares).
-• Suficiência das medidas do art. 319 do CPP.
-
-PEDIDOS: liberdade provisória sem fiança com alvará de soltura; subsidiariamente, cautelares diversas.
-
-ERROS FREQUENTES: pedir relaxamento (flagrante é legal); pedir HC ao tribunal (a competência é do juiz de 1º grau); não impugnar a fundamentação genérica do art. 312.`},
-
-{id:"relax",nome:"Relaxamento de Prisão em Flagrante",disc:"Estágio I",
-ficha:{cabimento:"Quando a prisão é ILEGAL — vício formal ou material no flagrante (fora das hipóteses do art. 302 do CPP, inobservância de formalidades dos arts. 304-306, excesso de prazo etc.). A autoridade judiciária deve relaxá-la imediatamente.",prazo:"Não há — enquanto durar a ilegalidade.",base:"Art. 5º, LXV, da CF; art. 310, I, do CPP.",end:"Juiz competente para apreciar o flagrante (custódia ou vara criminal).",leg:"Preso, por advogado, ou qualquer pessoa."},
-estrutura:[
-{t:"Preâmbulo",p:"Identificação do preso e do APF, com fundamento no art. 5º, LXV, da CF.",ex:"...vem requerer o RELAXAMENTO DA PRISÃO EM FLAGRANTE, nos termos do art. 5º, LXV, da CF e do art. 310, I, do CPP..."},
-{t:"Dos fatos",p:"Narre a prisão destacando o vício (quando, onde, como).",ex:""},
-{t:"Do direito — ilegalidade",p:"Demonstre a ilegalidade: ausência de situação flagrancial (art. 302), flagrante preparado (Súmula 145/STF), inobservância de formalidades (nota de culpa, comunicação em 24h — art. 306, audiência de custódia), violação de domicílio sem fundadas razões (art. 5º, XI, CF; STF RE 603.616).",ex:"O requerente foi preso 3 dias após os fatos, sem situação de flagrância (art. 302 do CPP) e sem mandado judicial: prisão manifestamente ilegal."},
-{t:"Pedidos",p:"Relaxamento da prisão com expedição de alvará de soltura; subsidiariamente, liberdade provisória (art. 310, III) ou cautelares.",ex:"a) o RELAXAMENTO da prisão em flagrante, com a imediata expedição de alvará de soltura;\nb) subsidiariamente, a concessão de liberdade provisória, com ou sem cautelares do art. 319 do CPP."}],
-caso:`CARLOS EDUARDO RAMOS, brasileiro, solteiro, mecânico, 30 anos, residente na Quadra 2, conjunto A, casa 7, Planaltina/DF, foi preso em flagrante no dia 25 de junho de 2026, às 23h, no interior de sua residência, pela suposta prática do crime de tráfico de drogas (art. 33, caput, da Lei nº 11.343/2006).
-
-Consta do auto de prisão em flagrante que, naquela noite, a equipe de policiais militares recebeu, via COPOM, denúncia anônima de que "um homem conhecido como Cadu guardaria drogas em casa". Sem qualquer diligência prévia de averiguação, sem monitoramento, sem mandado judicial e sem que houvesse qualquer situação visível de flagrância — a casa estava fechada e silenciosa —, os policiais pularam o muro da residência, arrombaram a porta dos fundos e, no guarda-roupa do quarto, localizaram 30 g de cocaína. Não havia consentimento válido do morador: a esposa de Carlos, única presente no momento do ingresso, declarou em depoimento que os policiais já estavam dentro de casa quando se identificaram.
-
-Além disso, verificou-se dos autos que: (i) a nota de culpa somente foi entregue a Carlos três dias após a lavratura do auto; (ii) a comunicação da prisão ao juízo competente ocorreu 48 horas após a captura; e (iii) a audiência de custódia ainda não foi designada, passados oito dias, encontrando-se o auto de prisão em flagrante concluso ao Juízo da Vara Criminal de Planaltina/DF.
-
-A família procurou o Núcleo de Prática Jurídica em 3 de julho de 2026. Na condição de advogado(a) de Carlos, redija a peça processual cabível perante o juízo de primeiro grau — vedada a impetração de habeas corpus —, demonstrando fundamentadamente todas as ilegalidades da prisão e suas consequências sobre a prova, com os pedidos principais e subsidiários pertinentes. (Valor: 5,00)`,
-gab:`PEÇA CABÍVEL: Relaxamento de prisão em flagrante (art. 5º, LXV, CF; art. 310, I, CPP) — prisão ILEGAL.
-
-TESES:
-• Violação de domicílio: denúncia anônima, isolada, não constitui fundadas razões para ingresso sem mandado (art. 5º, XI, CF; STF RE 603.616; STJ HC 598.051) → ilicitude da prova obtida (art. 5º, LVI, CF; art. 157 CPP) e ilegalidade do flagrante.
-• Vícios formais: nota de culpa fora do prazo de 24h e comunicação tardia ao juiz (art. 306, §§1º e 2º, CPP).
-• Consequência: desentranhamento das provas ilícitas e derivadas.
-
-PEDIDOS: relaxamento com alvará de soltura; desentranhamento das provas ilícitas; subsidiariamente, liberdade provisória/cautelares.
-
-ERROS FREQUENTES: confundir com liberdade provisória (aqui a prisão é ILEGAL); esquecer o pedido subsidiário; não atacar a prova ilícita.`},
-
-{id:"revog",nome:"Revogação de Prisão Preventiva",disc:"Estágio I",
-ficha:{cabimento:"Quando a preventiva foi decretada, mas os motivos que a justificaram desapareceram ou nunca existiram (art. 316 do CPP). Também para prisão temporária vencida ou sem fundamento.",prazo:"Não há — a qualquer tempo; o juiz deve revisar a necessidade a cada 90 dias (art. 316, parágrafo único).",base:"Arts. 312, 313, 315 e 316 do CPP; art. 282, §6º, do CPP.",end:"Juízo que decretou a prisão (1º grau).",leg:"Preso, por advogado."},
-estrutura:[
-{t:"Preâmbulo",p:"Identifique o processo e a decisão que decretou a preventiva.",ex:"...vem requerer a REVOGAÇÃO DA PRISÃO PREVENTIVA, com fundamento no art. 316 do CPP..."},
-{t:"Dos fatos",p:"Narre a decretação e o que mudou (fato novo) ou por que a decisão carece de fundamento.",ex:""},
-{t:"Do direito",p:"Ausência/superação dos requisitos do art. 312; falta de contemporaneidade; fundamentação genérica (art. 315, §2º); condições pessoais; excesso de prazo da instrução; ultima ratio e cautelares (arts. 282 e 319).",ex:"Encerrada a instrução e ouvidas todas as testemunhas, não subsiste risco à instrução criminal — desapareceu o fundamento da custódia (art. 316 do CPP)."},
-{t:"Pedidos",p:"Revogação da preventiva com alvará de soltura; subsidiariamente, substituição por cautelares (art. 319) ou domiciliar (art. 318, se cabível).",ex:""}],
-caso:`ANDRÉ LUIZ CAMPOS, brasileiro, casado, corretor de imóveis, 62 anos, primário, hipertenso e diabético (conforme laudos médicos), residente há 20 anos em Sobradinho/DF, único responsável pelo sustento e pelos cuidados da esposa, diagnosticada com doença de Alzheimer em estágio moderado (atestado médico e laudo juntados), responde a ação penal pela suposta prática do crime de estelionato (art. 171, caput, do CP), em trâmite na 1ª Vara Criminal de Sobradinho/DF (autos nº 0734567-89.2026.8.07.0006).
-
-Em 5 de fevereiro de 2026, o juízo decretou sua prisão preventiva, a requerimento do Ministério Público, sob o único fundamento de "risco à instrução criminal, pois o acusado, em liberdade, poderia influenciar as testemunhas arroladas pela acusação, todas vítimas dos supostos golpes". André encontra-se preso desde então — há cinco meses.
-
-Em 30 de junho de 2026 realizou-se a audiência de instrução e julgamento: foram ouvidas TODAS as seis testemunhas de acusação e as três de defesa, e o réu foi interrogado. Ao final, o juízo declarou encerrada a instrução e abriu prazo para diligências do art. 402 do CPP, nada sendo requerido. Não há notícia de qualquer tentativa de contato de André com testemunhas ao longo do processo. Pedido de liberdade anterior, formulado em abril, foi indeferido "por persistirem os motivos da custódia" — decisão contra a qual não foi interposto qualquer recurso.
-
-O crime imputado foi cometido sem violência ou grave ameaça e a pena mínima é de 1 ano de reclusão. Na condição de advogado(a) de André, redija a peça processual cabível perante o próprio juízo de primeiro grau — vedadas a impetração de habeas corpus e a interposição de recurso —, demonstrando a alteração do quadro fático-processual e formulando todos os pedidos, inclusive subsidiários. (Valor: 5,00)`,
-gab:`PEÇA CABÍVEL: Pedido de revogação de prisão preventiva (art. 316 do CPP).
-
-TESES:
-• Fato novo: instrução encerrada — não subsiste o único fundamento da custódia (influência em testemunhas); ausência de contemporaneidade dos requisitos do art. 312.
-• Estelionato sem violência: pena provável e possibilidade de regime não fechado → desproporcionalidade (homogeneidade; art. 282, §6º).
-• Condições pessoais: primário, 62 anos, saúde debilitada, residência fixa.
-• Subsidiária: prisão domiciliar (art. 318, II — extrema debilidade por doença, conforme prova) ou cautelares do art. 319.
-
-PEDIDOS: revogação com alvará de soltura; subsidiariamente domiciliar/cautelares.
-
-ERROS FREQUENTES: repetir o pedido anterior sem apontar FATO NOVO; esquecer as subsidiárias; confundir com relaxamento (a preventiva foi formalmente válida — o fundamento é a superveniente desnecessidade). OBS.: se houver ilegalidade flagrante e urgência, discuta com a turma o cabimento paralelo de HC.`},
-{id:"apelacao",nome:"Apelação Criminal",disc:"Estágio II",
-ficha:{cabimento:"Contra sentença definitiva de condenação ou absolvição, e decisões definitivas ou com força de definitiva não atacáveis por RESE (art. 593, I a III, do CPP). No Júri, hipóteses restritas do art. 593, III.",prazo:"5 dias para INTERPOR (art. 593); 8 dias para as RAZÕES (art. 600). No JECRIM: 10 dias, petição única com razões (art. 82, §1º, Lei 9.099/95).",base:"Arts. 593 a 603 do CPP; art. 82 da Lei 9.099/95.",end:"INTERPOSIÇÃO dirigida ao juízo a quo (que proferiu a sentença); RAZÕES dirigidas ao tribunal ad quem (TJDFT: 'Egrégio Tribunal de Justiça do Distrito Federal e dos Territórios — Colenda Turma Criminal').",leg:"Réu (ou MP, querelante, assistente). Duas peças: petição de interposição + razões de apelação."},
-estrutura:[
-{t:"Petição de interposição",p:"Peça curta ao juízo a quo: manifesta a irresignação, requer o recebimento e a remessa ao tribunal, informa que as razões seguem anexas (ou serão apresentadas na superior instância — art. 600, §4º).",ex:"EXCELENTÍSSIMO SENHOR DOUTOR JUIZ DE DIREITO DA ... VARA CRIMINAL DE .../DF\nAutos nº...\nFULANO, já qualificado, inconformado com a r. sentença, vem interpor RECURSO DE APELAÇÃO, com fundamento no art. 593, I, do CPP, requerendo o recebimento e a remessa ao Eg. TJDFT, com as inclusas razões."},
-{t:"Razões — endereçamento e síntese",p:"Ao tribunal. Qualifique apelante/apelado, resuma o processo e a sentença.",ex:"EGRÉGIO TRIBUNAL DE JUSTIÇA DO DISTRITO FEDERAL E DOS TERRITÓRIOS\nCOLENDA TURMA CRIMINAL\nRazões de apelação\nApelante: ... Apelado: Ministério Público..."},
-{t:"Preliminares",p:"Nulidades da sentença ou da instrução (art. 564 do CPP), cerceamento de defesa, incompetência.",ex:""},
-{t:"Mérito",p:"Reforma da sentença: absolvição (art. 386), desclassificação, ou redução da pena (dosimetria em 3 fases — art. 68 do CP), regime, substituição (art. 44), detração.",ex:""},
-{t:"Pedidos",p:"Conhecimento e provimento; absolvição ou, subsidiariamente, cada pleito de dosimetria, em ordem.",ex:"a) o conhecimento e provimento do recurso para absolver o apelante (art. 386, VII, CPP);\nb) subsidiariamente, a redução da pena-base ao mínimo legal, a fixação do regime aberto e a substituição da pena (art. 44 do CP)."}],
-caso:`FERNANDO COSTA ARAÚJO, brasileiro, solteiro, vendedor, 26 anos, primário, foi condenado pelo Juízo da 1ª Vara Criminal de Brasília/DF (autos nº 0745678-90.2025.8.07.0001) à pena de 6 (seis) anos de reclusão, em regime inicial fechado, e 15 dias-multa, como incurso no art. 157, §2º, II, do Código Penal, pela subtração de um aparelho celular avaliado em R$ 1.200,00.
-
-Na sentença, publicada em 22 de junho de 2026, o magistrado assim decidiu: (i) na primeira fase da dosimetria, fixou a pena-base em 5 (cinco) anos — um ano acima do mínimo legal — com a seguinte fundamentação: "as circunstâncias judiciais são desfavoráveis, pois o crime de roubo é grave e assola a sociedade, gerando insegurança generalizada"; (ii) na segunda fase, reconheceu expressamente na fundamentação que "o réu confessou a subtração em juízo, confissão que serviu de esteio ao decreto condenatório", mas NÃO aplicou a atenuante correspondente, sem qualquer justificativa; (iii) na terceira fase, aplicou a majorante do concurso de pessoas (fração de 1/3), fundada exclusivamente na declaração da vítima de que "parecia haver outro rapaz olhando de longe, mas não tenho certeza" — nenhuma outra prova indicou a participação de terceiro; (iv) fixou o regime inicial fechado "em razão da gravidade do delito" e negou o direito de recorrer em liberdade, mantendo a prisão preventiva decretada na sentença sem indicação de fato concreto.
-
-Em seu interrogatório, Fernando confessara a subtração, negando, porém, o concurso de agentes e o emprego de qualquer arma. A defesa foi intimada da sentença em 1º de julho de 2026. O Ministério Público não recorreu.
-
-Na condição de advogado(a) de Fernando, redija a(s) peça(s) processual(is) cabível(is), com observância dos prazos e endereçamentos corretos, impugnando fundamentadamente todos os pontos da sentença desfavoráveis ao réu. (Valor: 5,00)`,
-gab:`PEÇA CABÍVEL: Apelação (art. 593, I, CPP) — interposição ao juízo a quo em 5 dias + razões ao TJDFT em 8 dias.
-
-TESES:
-• Afastamento da majorante do concurso de pessoas: prova frágil e dúvida ("parecia haver") → in dubio pro reo.
-• Dosimetria: pena-base no mínimo — gravidade abstrata do tipo não justifica exasperação (fundamentação inidônea, art. 93, IX, CF; Súmulas do STJ).
-• Atenuante da confissão espontânea (art. 65, III, d, CP) — Súmula 545/STJ: se usada na condenação, DEVE atenuar.
-• Consequências: pena reduzida → regime inicial mais brando (art. 33, §2º); recorrer em liberdade se cabível.
-
-PEDIDOS: provimento para afastar a majorante, reduzir a pena-base ao mínimo, aplicar a atenuante da confissão, abrandar o regime.
-
-ERROS FREQUENTES: peça única endereçada só ao tribunal (são DUAS peças); confundir prazos (5 + 8); pedir 'reforma' genérica sem enfrentar a dosimetria fase a fase.`},
-
-{id:"rese",nome:"Recurso em Sentido Estrito (RESE)",disc:"Estágio II",
-ficha:{cabimento:"Contra as decisões TAXATIVAMENTE previstas no art. 581 do CPP: ex.: rejeição da denúncia/queixa (I), incompetência (II), pronúncia (IV), concessão/negação de liberdade provisória (V), extinção da punibilidade (VIII e IX), entre outras.",prazo:"5 dias para interpor (art. 586); 2 dias para as razões (art. 588).",base:"Arts. 581 a 592 do CPP.",end:"Interposição ao juízo a quo; razões ao tribunal. Há JUÍZO DE RETRATAÇÃO (art. 589).",leg:"Parte prejudicada pela decisão."},
-estrutura:[
-{t:"Petição de interposição",p:"Ao juízo a quo, indicando o inciso do art. 581. Requeira a retratação (art. 589) e, não havendo, a remessa ao tribunal.",ex:"...vem interpor RECURSO EM SENTIDO ESTRITO, com fundamento no art. 581, IV, do CPP, requerendo o juízo de retratação (art. 589) e, mantida a decisão, a remessa das inclusas razões ao Eg. TJDFT."},
-{t:"Razões — síntese",p:"Ao tribunal: resumo do processo e da decisão recorrida.",ex:""},
-{t:"Mérito",p:"Conforme a hipótese. Na pronúncia: impronúncia (art. 414 — ausência de indícios), absolvição sumária (art. 415), desclassificação (art. 419), exclusão de qualificadora manifestamente improcedente.",ex:""},
-{t:"Pedidos",p:"Retratação; conhecimento e provimento; pedido específico da hipótese (ex.: despronúncia; exclusão de qualificadora).",ex:""}],
-caso:`JOSÉ RICARDO MOREIRA, brasileiro, casado, pedreiro, 35 anos, primário, responde a processo perante a Vara do Tribunal do Júri de Ceilândia/DF (autos nº 0756789-01.2025.8.07.0003), acusado da suposta prática de homicídio qualificado por motivo fútil (art. 121, §2º, II, do CP) contra a vítima Ronaldo Dias, morta a facadas em um bar de Ceilândia em 10 de outubro de 2025.
-
-Encerrada a primeira fase do procedimento do júri, sobreveio decisão de pronúncia, publicada em 22 de junho de 2026, com o seguinte teor essencial: "A materialidade está comprovada pelo laudo necroscópico. Quanto aos indícios de autoria, embora nenhuma das cinco testemunhas ouvidas em juízo tenha presenciado os fatos ou confirmado a presença do acusado no local, a testemunha Silvano Costa declarou, na fase inquisitorial, ter 'ouvido comentários no bairro' de que o autor das facadas teria sido José Ricardo — declaração não confirmada em juízo, pois a testemunha faleceu antes da instrução. Tal elemento, aliado à antiga rivalidade entre acusado e vítima, autoriza a pronúncia. Quanto à qualificadora do motivo fútil, sua análise compete exclusivamente aos jurados, juízes naturais da causa, razão pela qual a mantenho sem maiores considerações."
-
-Em juízo, José Ricardo negou a autoria e apresentou álibi (estava em obra na cidade vizinha, conforme testemunhas ouvidas). Nenhuma prova produzida sob contraditório judicial vincula o acusado ao crime. A defesa foi intimada da decisão de pronúncia em 26 de junho de 2026.
-
-Na condição de advogado(a) de José Ricardo, redija a peça processual cabível — vedado o habeas corpus —, com o endereçamento e o procedimento recursal corretos, impugnando a decisão em todos os seus pontos, com pedidos principais e subsidiários. (Valor: 5,00)`,
-gab:`PEÇA CABÍVEL: RESE (art. 581, IV, do CPP) contra a pronúncia — interposição em 5 dias, razões em 2 dias, com pedido de retratação (art. 589).
-
-TESES:
-• Impronúncia (art. 414 do CPP): pronúncia não pode se fundar exclusivamente em testemunho indireto ('hearsay') colhido no inquérito e não confirmado em juízo (art. 155 do CPP; jurisprudência do STJ).
-• Subsidiária: exclusão da qualificadora do motivo fútil — manifestamente improcedente, sem base concreta; excesso de linguagem, se houver.
-• Cuidado com o in dubio pro societate: enfrentar mostrando ausência de lastro probatório MÍNIMO.
-
-PEDIDOS: retratação; provimento para impronunciar; subsidiariamente, decotar a qualificadora.
-
-ERROS FREQUENTES: interpor apelação (contra pronúncia cabe RESE); esquecer a retratação; pedir 'absolvição' pura (na fase da pronúncia, o pedido técnico é impronúncia ou absolvição sumária do art. 415).`},
-
-{id:"contrarrazoes",nome:"Contrarrazões de Apelação",disc:"Estágio II",
-ficha:{cabimento:"Resposta da parte apelada ao recurso de apelação da parte contrária (em regra, do MP contra sentença favorável à defesa).",prazo:"8 dias (art. 600 do CPP); no JECRIM, 10 dias.",base:"Art. 600 do CPP.",end:"Apresentadas ao juízo a quo, dirigidas ao tribunal ad quem.",leg:"Parte apelada (réu, por seu defensor)."},
-estrutura:[
-{t:"Preâmbulo",p:"Identifique os autos e o recurso a que se responde.",ex:"...vem apresentar CONTRARRAZÕES ao recurso de apelação interposto pelo Ministério Público, requerendo a remessa ao Eg. TJDFT."},
-{t:"Preliminar de não conhecimento",p:"Se houver: intempestividade, ilegitimidade, falta de interesse recursal.",ex:""},
-{t:"Mérito — defesa da sentença",p:"Demonstre o acerto da decisão recorrida, rebatendo ponto a ponto as razões do apelante.",ex:""},
-{t:"Pedidos",p:"Não conhecimento do recurso; no mérito, desprovimento, mantendo-se a sentença.",ex:""}],
-caso:`MARINA OLIVEIRA SANTOS, brasileira, solteira, cabeleireira, 28 anos, primária, foi denunciada pela suposta prática do crime de tráfico de drogas (art. 33, caput, da Lei nº 11.343/2006) perante a 2ª Vara de Entorpecentes do Distrito Federal (autos nº 0767890-12.2025.8.07.0015).
-
-Ao final da instrução, sobreveio sentença ABSOLUTÓRIA, com fundamento no art. 386, II, do CPP, assim fundamentada em essência: "O ingresso dos policiais na residência da acusada deu-se sem mandado judicial, sem consentimento e sem fundadas razões prévias que indicassem situação de flagrância: a diligência baseou-se exclusivamente em denúncia anônima recebida naquela mesma tarde, sem qualquer averiguação preliminar, campana ou investigação. Nos termos do decidido pelo STF no RE 603.616 (Tema 280) e pelo STJ no HC 598.051, a prova obtida é ilícita, contaminando todas as demais dela derivadas (art. 5º, LVI, da CF e art. 157 do CPP). Sem prova lícita, impõe-se a absolvição."
-
-O Ministério Público interpôs recurso de apelação. Em suas razões, sustenta exclusivamente que: (i) o crime de tráfico, na modalidade "ter em depósito", é permanente, de modo que o estado de flagrância se protrai no tempo e autorizaria o ingresso domiciliar a qualquer momento, independentemente de mandado; e (ii) a denúncia anônima, por ter se confirmado a posteriori com a apreensão da droga, seria suficiente para legitimar a diligência. Pugna pela condenação de Marina nas penas do art. 33 da Lei de Drogas.
-
-A defesa foi intimada em 30 de junho de 2026 para apresentar a resposta ao recurso. Na condição de advogado(a) de Marina, redija a peça processual cabível, rebatendo especificamente cada tese ministerial e requerendo o que for de direito. (Valor: 5,00)`,
-gab:`PEÇA CABÍVEL: Contrarrazões de apelação (art. 600 do CPP) — 8 dias.
-
-TESES:
-• A permanência do crime NÃO dispensa fundadas razões prévias e concretas para o ingresso domiciliar (STF RE 603.616, Tema 280; STJ HC 598.051): denúncia anônima isolada não basta.
-• Prova ilícita e derivadas (art. 5º, LVI, CF; art. 157 CPP) → correta a absolvição (art. 386, II, CPP).
-• Manutenção da sentença por seus próprios fundamentos.
-
-PEDIDOS: desprovimento do recurso ministerial, mantendo-se integralmente a r. sentença absolutória.
-
-ERROS FREQUENTES: 'apelar' em vez de contrarrazoar; deixar de rebater especificamente a tese do apelante; inovar pedindo algo além da manutenção da sentença.`},
-
-{id:"edcl",nome:"Embargos de Declaração",disc:"Estágio II",
-ficha:{cabimento:"Contra sentença ou acórdão com AMBIGUIDADE, OBSCURIDADE, CONTRADIÇÃO ou OMISSÃO (art. 382 — sentença; art. 619 — acórdão).",prazo:"2 dias (arts. 382 e 619 do CPP). No JECRIM: 5 dias (art. 83, §1º, Lei 9.099/95).",base:"Arts. 382 e 619 do CPP; art. 83 da Lei 9.099/95.",end:"Ao próprio órgão prolator da decisão (juiz ou relator/órgão colegiado).",leg:"Qualquer das partes. Interrompem o prazo para outros recursos."},
-estrutura:[
-{t:"Preâmbulo",p:"Identifique a decisão embargada e o vício.",ex:"...vem opor EMBARGOS DE DECLARAÇÃO, com fundamento no art. 382 do CPP, ante a omissão adiante demonstrada."},
-{t:"Do vício",p:"Aponte com precisão o trecho e o vício (omissão sobre tese ou pedido; contradição entre fundamentação e dispositivo; obscuridade; ambiguidade).",ex:"A defesa requereu expressamente a aplicação da atenuante da confissão; a sentença, contudo, silenciou por completo sobre o pleito — omissão evidente."},
-{t:"Efeitos",p:"Requeira o suprimento do vício, com eventuais efeitos infringentes (modificativos) se a correção alterar o resultado; lembre a interrupção do prazo recursal.",ex:""},
-{t:"Pedidos",p:"Conhecimento e acolhimento para sanar o vício, atribuindo-se efeitos modificativos se for o caso.",ex:""}],
-caso:`TIAGO ALMEIDA ROCHA, brasileiro, solteiro, estoquista, 23 anos, primário, foi condenado pelo Juízo da 3ª Vara Criminal de Brasília/DF (autos nº 0778901-23.2025.8.07.0001) pela prática de furto qualificado pelo concurso de agentes (art. 155, §4º, IV, do CP), à pena de 2 (dois) anos e 6 (seis) meses de reclusão, em regime inicial aberto, e 12 dias-multa.
-
-A sentença, na fundamentação, consignou textualmente: "O réu confessou espontaneamente os fatos, tanto na fase policial quanto em juízo, e sua confissão foi decisiva para o decreto condenatório, na medida em que os demais elementos de prova eram frágeis. Por essa razão, a pena DEVE ser atenuada na segunda fase da dosimetria, em homenagem à Súmula 545 do STJ." No dispositivo, contudo, o magistrado fixou a pena-base em 2 anos e 2 meses e, na segunda fase, limitou-se a registrar: "ausentes agravantes e atenuantes", estabelecendo a pena definitiva em 2 anos e 6 meses após a exasperação pela qualificadora — sem aplicar a anunciada atenuante e sem qualquer explicação para a discrepância.
-
-Além disso, nas alegações finais a defesa havia requerido expressamente a substituição da pena privativa de liberdade por duas restritivas de direitos (art. 44 do CP), destacando o preenchimento de todos os requisitos legais. A sentença, porém, nada disse sobre o pedido — nem para deferi-lo, nem para indeferi-lo.
-
-A defesa foi intimada da sentença em 3 de julho de 2026 (quinta-feira). Considerando a existência de vícios internos da decisão e a conveniência de saná-los perante o próprio juízo prolator antes de eventual recurso, na condição de advogado(a) de Tiago, redija a peça processual cabível — vedada a apelação —, apontando com precisão cada vício e requerendo os efeitos pertinentes. (Valor: 5,00)`,
-gab:`PEÇA CABÍVEL: Embargos de declaração (art. 382 do CPP) — 2 dias, ao próprio juízo sentenciante.
-
-VÍCIOS:
-• CONTRADIÇÃO: fundamentação reconhece a confissão e anuncia atenuação; dispositivo não atenua.
-• OMISSÃO: ausência de exame do pedido de substituição da pena (art. 44 do CP).
-
-TESES: sanar os vícios com EFEITOS INFRINGENTES — aplicar a atenuante (art. 65, III, d, CP; Súmula 545/STJ) e apreciar a substituição. Destacar a interrupção do prazo para a apelação.
-
-PEDIDOS: acolhimento para suprir a omissão e eliminar a contradição, com efeitos modificativos.
-
-ERROS FREQUENTES: apelar diretamente (perde a via rápida dos embargos — embora a apelação também pudesse veicular as teses, o exercício pede embargos); dirigir ao tribunal (é ao prolator); perder o prazo exíguo de 2 dias.`},
-{id:"infringentes",nome:"Embargos Infringentes e de Nulidade",disc:"Estágio II",
-ficha:{cabimento:"Contra acórdão NÃO UNÂNIME de 2ª instância, DESFAVORÁVEL AO RÉU, em apelação, RESE ou agravo em execução. Limitados à matéria objeto da DIVERGÊNCIA (voto vencido). Infringentes: mérito; de nulidade: matéria processual.",prazo:"10 dias (art. 609, parágrafo único, do CPP).",base:"Art. 609, parágrafo único, do CPP.",end:"Ao relator do acórdão embargado, no próprio tribunal.",leg:"Exclusivos da DEFESA."},
-estrutura:[
-{t:"Preâmbulo",p:"Identifique o acórdão, o resultado não unânime e o voto vencido.",ex:"...vem opor EMBARGOS INFRINGENTES, com fundamento no art. 609, parágrafo único, do CPP, ante o v. acórdão não unânime que, por maioria, negou provimento à apelação defensiva, vencido o Des. ... que absolvia o embargante."},
-{t:"Da divergência",p:"Delimite exatamente o objeto do voto vencido — os embargos só podem versar sobre ele.",ex:""},
-{t:"Mérito",p:"Desenvolva os fundamentos do voto vencido, demonstrando seu acerto.",ex:""},
-{t:"Pedidos",p:"Acolhimento para prevalecer o voto vencido.",ex:""}],
-caso:`BRUNO DE JESUS ZEBA, brasileiro, solteiro, motoboy, 27 anos, primário, foi condenado pelo Juízo da 2ª Vara Criminal de Brasília/DF à pena de 1 ano e 4 meses de reclusão, em regime aberto, pela prática do crime de receptação (art. 180, caput, do CP), por ter adquirido, supostamente ciente da origem ilícita, uma motocicleta produto de furto.
-
-A defesa apelou. A 2ª Turma Criminal do TJDFT, em sessão de 18 de junho de 2026, NEGOU PROVIMENTO ao recurso, por maioria de votos (2x1), mantendo integralmente a condenação (Apelação Criminal nº 0720958-30.2025.8.07.0001). O Desembargador relator e o vogal entenderam que a desproporção entre o preço pago e o valor de mercado indicaria a ciência da origem criminosa. VENCIDO o Desembargador revisor, que DAVA PROVIMENTO à apelação para ABSOLVER o apelante por insuficiência de prova do dolo, nos termos do art. 386, VII, do CPP, sob os seguintes fundamentos: (i) Bruno adquiriu a motocicleta mediante recibo escrito, de vendedor identificado, com entrega de documento (ainda que posteriormente constatado como adulterado, sem prova de que o acusado soubesse); (ii) o preço pago era compatível com o estado de conservação do bem; (iii) o acusado usava a motocicleta ostensivamente para trabalhar, comportamento incompatível com a ciência da origem ilícita; (iv) a dúvida razoável sobre o elemento subjetivo impõe a absolvição.
-
-O acórdão foi publicado no DJe em 24 de junho de 2026 e não houve interposição de recurso pelo Ministério Público. A defesa pretende explorar a divergência instaurada no julgamento.
-
-Na condição de advogado(a) de Bruno, redija a peça processual cabível — vedados o recurso especial, o recurso extraordinário e a revisão criminal —, observando o cabimento restrito da via eleita, seu endereçamento e a delimitação do seu objeto. (Valor: 5,00)`,
-gab:`PEÇA CABÍVEL: Embargos infringentes (art. 609, parágrafo único, do CPP) — 10 dias, ao relator no TJDFT.
-
-PONTOS ESSENCIAIS:
-• Cabimento: acórdão não unânime (2x1) desfavorável ao réu em apelação; recurso EXCLUSIVO da defesa.
-• Objeto LIMITADO à divergência: ausência de prova do dolo (elemento subjetivo da receptação — art. 180 do CP: 'coisa que sabe ser produto de crime').
-• Desenvolvimento: fragilidade probatória; boa-fé (aquisição com documento, preço de mercado, conforme o caso); in dubio pro reo (art. 386, VII, CPP).
-
-PEDIDOS: acolhimento dos embargos para que prevaleça o voto vencido, absolvendo-se o embargante.
-
-ERROS FREQUENTES: opor contra acórdão unânime; extrapolar a divergência; confundir com embargos de declaração.`},
-
-{id:"agravoexec",nome:"Agravo em Execução",disc:"Estágio II",
-ficha:{cabimento:"Contra decisões do juiz da execução penal (art. 197 da LEP): regressão de regime, indeferimento de progressão, livramento condicional, remição, saídas etc.",prazo:"5 dias (Súmula 700 do STF), seguindo o rito do RESE (interposição + razões em 2 dias).",base:"Art. 197 da LEP; Súmula 700/STF.",end:"Interposição ao Juízo da Vara de Execuções Penais (VEP); razões ao tribunal.",leg:"Sentenciado (defesa) ou MP. Sem efeito suspensivo, em regra."},
-estrutura:[
-{t:"Petição de interposição",p:"À VEP, com pedido de retratação (rito do RESE) e remessa ao tribunal.",ex:"EXCELENTÍSSIMO SENHOR DOUTOR JUIZ DE DIREITO DA VARA DE EXECUÇÕES PENAIS DO DISTRITO FEDERAL\nExecução Penal nº...\n...vem interpor AGRAVO EM EXECUÇÃO, nos termos do art. 197 da LEP..."},
-{t:"Razões",p:"Ao tribunal: síntese da execução e da decisão agravada.",ex:""},
-{t:"Mérito",p:"Conforme o caso: requisitos objetivo (frações do art. 112 da LEP conforme a Lei 13.964/19) e subjetivo (boa conduta atestada pelo diretor) da progressão; ilegalidade da regressão sem oitiva prévia; remição (art. 126 LEP).",ex:""},
-{t:"Pedidos",p:"Retratação; provimento para reformar a decisão (ex.: deferir a progressão).",ex:""}],
-caso:`VALDIR ROCHA MENDES, brasileiro, casado, serralheiro, 41 anos, cumpre pena de 12 anos de reclusão, em regime fechado, imposta por condenação definitiva por roubo majorado, na Penitenciária do Distrito Federal (Execução Penal nº 0789012-34.2020.8.07.0015, em trâmite na Vara de Execuções Penais do DF). É reincidente em crime cometido com violência.
-
-Em 10 de maio de 2026, a defesa requereu: (i) a progressão ao regime semiaberto, demonstrando o preenchimento do requisito objetivo — cumprimento da fração legal exigida pelo art. 112 da LEP para sua situação, conforme atestado de pena a cumprir emitido pela própria VEP — e do requisito subjetivo, mediante atestado de boa conduta carcerária firmado pelo diretor do estabelecimento, sem registro de qualquer falta disciplinar nos últimos cinco anos; e (ii) a declaração da remição de 90 dias de pena pelos 270 dias efetivamente trabalhados na cozinha do presídio, comprovados por planilha oficial da direção da unidade juntada aos autos.
-
-Em 25 de junho de 2026, o Juízo da VEP proferiu a seguinte decisão: "1. INDEFIRO a progressão de regime. Embora presentes os requisitos objetivo e subjetivo, a gravidade abstrata do crime de roubo, praticado com arma, recomenda cautela e maior rigor no tratamento do apenado, sendo prematura a colocação em regime menos rigoroso. 2. INDEFIRO igualmente a remição, por ausência de comprovação idônea dos dias trabalhados." A decisão não determinou a realização de exame criminológico nem apontou qualquer fato concreto desabonador. A defesa foi intimada em 29 de junho de 2026.
-
-Na condição de advogado(a) de Valdir, redija a peça processual cabível contra a decisão, observando prazo, rito e endereçamento próprios, e impugnando fundamentadamente os dois capítulos do decisum. (Valor: 5,00)`,
-gab:`PEÇA CABÍVEL: Agravo em execução (art. 197 da LEP) — 5 dias (Súmula 700/STF), rito do RESE.
-
-TESES:
-• Progressão: preenchidos os requisitos objetivo (lapso do art. 112 da LEP) e subjetivo (atestado de conduta); gravidade abstrata do delito NÃO é fundamento idôneo para indeferir (Súmula 439/STJ — exame criminológico exige decisão fundamentada em elementos concretos; art. 112, §1º).
-• Remição: 1 dia de pena a cada 3 de trabalho (art. 126, §1º, II, LEP); prova documental oficial nos autos.
-
-PEDIDOS: retratação; provimento para deferir a progressão ao semiaberto e declarar a remição de 90 dias.
-
-ERROS FREQUENTES: usar apelação ou RESE; endereçar razões à VEP; esquecer a Súmula 700 (prazo de 5 dias).`},
-
-{id:"hc",nome:"Habeas Corpus",disc:"Estágio II",
-ficha:{cabimento:"Sempre que alguém sofrer ou se achar ameaçado de sofrer violência ou coação em sua LIBERDADE DE LOCOMOÇÃO, por ilegalidade ou abuso de poder (art. 5º, LXVIII, CF; art. 647 do CPP). Hipóteses do art. 648 do CPP. Preventivo (salvo-conduto) ou liberatório.",prazo:"Não há prazo.",base:"Art. 5º, LXVIII, da CF; arts. 647 a 667 do CPP.",end:"Depende da AUTORIDADE COATORA: Delegado/particular → Juiz de 1º grau; Juiz de 1º grau/Turma Recursal → TJDFT (ou TRF); Tribunal → STJ; STJ → STF (art. 102, I, i; art. 105, I, c, CF).",leg:"QUALQUER PESSOA pode impetrar (não exige advogado). Impetrante ≠ paciente ≠ autoridade coatora."},
-estrutura:[
-{t:"Endereçamento",p:"Identifique a autoridade coatora e suba um degrau na jurisdição.",ex:"EGRÉGIO TRIBUNAL DE JUSTIÇA DO DISTRITO FEDERAL E DOS TERRITÓRIOS (coator: Juiz de Direito de 1º grau)"},
-{t:"Preâmbulo",p:"Impetrante (quem assina), paciente (quem sofre a coação) e autoridade coatora.",ex:"FULANO, advogado..., vem impetrar ordem de HABEAS CORPUS, com pedido liminar, em favor de BELTRANO (paciente), apontando como autoridade coatora o MM. Juiz de Direito da ... Vara Criminal de .../DF."},
-{t:"Dos fatos e do constrangimento ilegal",p:"Narre a coação e enquadre no art. 648 (falta de justa causa, excesso de prazo, incompetência, extinção da punibilidade, nulidade etc.). Lembre: HC não admite dilação probatória — prova pré-constituída.",ex:""},
-{t:"Da liminar",p:"Demonstre fumus boni iuris e periculum in mora para a concessão liminar (soltura ou salvo-conduto imediato).",ex:""},
-{t:"Pedidos",p:"Liminar; informações da autoridade coatora; parecer do MP; concessão definitiva da ordem (com alvará de soltura/salvo-conduto).",ex:"a) a concessão LIMINAR da ordem, expedindo-se alvará de soltura;\nb) a requisição de informações à autoridade coatora;\nc) no mérito, a concessão definitiva da ordem."}],
-caso:`HELENA MARTINS COSTA, brasileira, solteira, manicure, 29 anos, primária, de bons antecedentes, mãe de uma criança de 4 anos que atualmente está sob os cuidados precários de uma vizinha, encontra-se presa preventivamente há 9 (nove) meses, por suposta participação em associação criminosa (art. 2º da Lei nº 12.850/2013), por força de decisão do Juízo da 3ª Vara Criminal de Brasília/DF (autos nº 0790123-45.2025.8.07.0001).
-
-A instrução processual está paralisada há 5 (cinco) meses sem a prática de qualquer ato: a audiência de instrução foi designada e remarcada TRÊS vezes — em fevereiro, abril e junho de 2026 — sempre por problemas de pauta do próprio juízo, jamais por qualquer contribuição da defesa, conforme certidões cartorárias. Não há data designada para nova audiência.
-
-A defesa requereu a revogação da prisão diretamente ao juízo processante, que indeferiu o pedido em 26 de junho de 2026, com a seguinte fundamentação: "o feito segue em regular andamento, sendo os adiamentos justificados pela sobrecarga de pauta; permanecem os fundamentos da preventiva". Contra essa decisão não cabe, na espécie, recurso com efeito suspensivo capaz de fazer cessar de imediato o constrangimento.
-
-Todos os corréus com situação idêntica já foram postos em liberdade. Helena tem residência fixa, ocupação lícita comprovada e nenhuma anotação penal. A documentação está pré-constituída: cópia integral dos autos, certidões dos adiamentos, certidão de nascimento da criança e comprovantes de residência e trabalho.
-
-Na condição de advogado(a) de Helena, redija a peça cabível para fazer cessar imediatamente o constrangimento ilegal, com o endereçamento correto, a correta identificação de impetrante, paciente e autoridade coatora, pedido liminar fundamentado e pedidos definitivos, inclusive subsidiários. (Valor: 5,00)`,
-gab:`PEÇA CABÍVEL: Habeas corpus liberatório, com pedido liminar, ao TJDFT (autoridade coatora: Juiz da 3ª Vara Criminal de Brasília).
-
-TESES:
-• Excesso de prazo na formação da culpa (art. 648, II, do CPP): 9 meses de prisão, instrução paralisada por 5 por falhas do juízo — desídia estatal não pode prejudicar a ré (razoável duração do processo, art. 5º, LXXVIII, CF).
-• Ausência de contemporaneidade dos fundamentos da preventiva; condições pessoais favoráveis.
-• Subsidiária: prisão domiciliar (art. 318, V, CPP — mãe de criança até 12 anos; HC coletivo 143.641/STF) ou cautelares do art. 319.
-
-PEDIDOS: liminar para soltura; informações; concessão definitiva da ordem.
-
-ERROS FREQUENTES: endereçar ao próprio juiz coator; confundir impetrante/paciente/coator; usar HC para matéria que exige prova (dilação probatória é vedada).`},
-
-{id:"revisao",nome:"Revisão Criminal",disc:"Estágio II",
-ficha:{cabimento:"Ação autônoma de impugnação contra condenação TRANSITADA EM JULGADO: sentença contrária ao texto expresso da lei ou à evidência dos autos; provas falsas; provas novas de inocência ou de circunstância que reduza a pena (art. 621 do CPP). Não existe revisão pro societate.",prazo:"A QUALQUER TEMPO, antes ou depois da extinção da pena (art. 622 do CPP).",base:"Arts. 621 a 631 do CPP.",end:"Tribunal competente (TJDFT para condenações da Justiça do DF; art. 624 para tribunais superiores).",leg:"O próprio condenado (mesmo sem advogado), procurador ou, se falecido, CADI (cônjuge, ascendente, descendente ou irmão — art. 623)."},
-estrutura:[
-{t:"Endereçamento e preâmbulo",p:"Ao tribunal. Identifique a condenação transitada em julgado (juízo, autos, pena, data do trânsito).",ex:"EGRÉGIO TRIBUNAL DE JUSTIÇA DO DISTRITO FEDERAL E DOS TERRITÓRIOS\n...vem ajuizar REVISÃO CRIMINAL, com fundamento no art. 621, III, do CPP..."},
-{t:"Do cabimento",p:"Enquadre na hipótese do art. 621 (I, II ou III) e comprove o trânsito em julgado (certidão).",ex:""},
-{t:"Do mérito",p:"Desenvolva a tese: prova nova (ex.: DNA, retratação, novo álibi), falsidade de prova, contrariedade à lei ou à evidência dos autos.",ex:""},
-{t:"Pedidos",p:"Procedência para absolver, anular o processo, alterar a classificação ou reduzir a pena (art. 626); justa indenização se cabível (art. 630).",ex:""}],
-caso:`ROBERTO NUNES FERREIRA, brasileiro, casado, motorista, 38 anos, foi condenado pelo Juízo da 1ª Vara Criminal de Ceilândia/DF à pena de 8 (oito) anos de reclusão, em regime inicial fechado, pela prática do crime de estupro (art. 213 do CP), supostamente cometido em 14 de março de 2022. A condenação, mantida pelo TJDFT em apelação, TRANSITOU EM JULGADO em 10 de outubro de 2023, conforme certidão. Roberto cumpre pena atualmente em regime semiaberto.
-
-A condenação baseou-se EXCLUSIVAMENTE no reconhecimento fotográfico realizado pela vítima na delegacia — a partir de uma única fotografia extraída de rede social —, reconhecimento posteriormente ratificado em juízo. Não havia laudo pericial conclusivo à época, testemunhas presenciais ou qualquer outro elemento de corroboração. Roberto sempre negou a autoria.
-
-Em junho de 2026, dois fatos novos surgiram: (i) EVANDRO SOARES, condenado em outro processo por crimes sexuais na mesma região, CONFESSOU em juízo, com riqueza de detalhes que somente o autor poderia conhecer (local exato, dinâmica dos fatos, objeto pessoal levado da vítima), ser o único autor do estupro pelo qual Roberto foi condenado — confissão reduzida a termo nos autos daquele processo; e (ii) exame de DNA realizado sobre o material biológico coletado à época e preservado no instituto de criminalística EXCLUIU categoricamente o perfil genético de Roberto e APONTOU correspondência com o perfil de Evandro, conforme laudo pericial definitivo juntado.
-
-A família de Roberto procurou o Núcleo de Prática Jurídica com a certidão de trânsito em julgado, a cópia integral dos autos originários, o termo da confissão de Evandro e o laudo de DNA. Na condição de advogado(a) de Roberto, redija a peça cabível — vedados o habeas corpus e qualquer recurso —, observando a competência para julgamento, as hipóteses legais de cabimento e todos os pedidos possíveis, inclusive o de indenização. (Valor: 5,00)`,
-gab:`PEÇA CABÍVEL: Revisão criminal (art. 621, III, do CPP) — a qualquer tempo, ao TJDFT.
-
-PONTOS ESSENCIAIS:
-• Hipótese: descoberta de PROVAS NOVAS de inocência após o trânsito (confissão qualificada do verdadeiro autor + DNA excludente).
-• Também art. 621, I (condenação contrária à evidência dos autos, à luz do conjunto atual).
-• Juntar certidão do trânsito em julgado e as provas novas (pré-constituídas).
-• Pedidos: procedência para ABSOLVER (art. 626); alvará de soltura; restabelecimento de direitos; indenização (art. 630 do CPP).
-
-ERROS FREQUENTES: chamar de 'recurso' (é ação autônoma); esquecer a certidão de trânsito; usar para mero reexame de prova já apreciada (exige prova NOVA); pedir revisão pro societate (inexistente).`},
-
-{id:"resp_re",nome:"REsp / RE / ROC / Carta Testemunhável",disc:"Estágio II",soficha:true,
-ficha:{cabimento:"RECURSO ESPECIAL (STJ): acórdão que contraria lei federal ou dá interpretação divergente (art. 105, III, CF). RECURSO EXTRAORDINÁRIO (STF): questão constitucional com repercussão geral (art. 102, III, CF). ROC: HC denegado em única/última instância por tribunal (arts. 102, II, a, e 105, II, a, CF). CARTA TESTEMUNHÁVEL: contra decisão que denega ou obsta RESE/agravo (art. 639 do CPP).",prazo:"REsp/RE: 15 dias (art. 1.003, §5º, CPC c/c Súmula — interposição perante o presidente/vice do tribunal a quo). ROC em HC: 5 dias (art. 30 da Lei 8.038/90). Carta testemunhável: 48 HORAS (art. 640 do CPP).",base:"Arts. 102 e 105 da CF; Lei 8.038/90; arts. 26 a 32; arts. 639-646 do CPP.",end:"REsp/RE: petição ao Presidente/Vice-Presidente do tribunal recorrido (juízo de admissibilidade), razões ao STJ/STF. ROC: ao tribunal que denegou o HC, razões ao STJ/STF. Carta: ao escrivão do juízo.",leg:"Parte sucumbente. Exigem prequestionamento (REsp/RE) e esgotamento das instâncias ordinárias."},
-estrutura:[
-{t:"Quando usar cada um",p:"Fluxo mental: matéria de LEI FEDERAL → REsp; matéria CONSTITUCIONAL → RE; HC denegado no tribunal → ROC (não impetre novo HC quando o exercício pedir o recurso próprio); RESE/agravo denegado ou obstado → carta testemunhável.",ex:""},
-{t:"Requisitos de admissibilidade",p:"Prequestionamento (a matéria deve ter sido decidida no acórdão — se omisso, embargos de declaração); esgotamento das vias ordinárias (Súmula 207/STJ); repercussão geral no RE; vedação ao reexame de prova (Súmula 7/STJ; 279/STF).",ex:""},
-{t:"Estrutura",p:"Petição de interposição (ao presidente do tribunal a quo) + razões (ao tribunal superior), com: cabimento (permissivo constitucional e alínea), prequestionamento, dispositivo violado, demonstração da violação/divergência (cotejo analítico), pedidos.",ex:""}],
-caso:"",gab:""},
-];
-// ============================================================
-// CHAVE DA TURMA: cole a chave de API entre as aspas abaixo.
-// Enquanto estiver com o texto COLE_A_CHAVE_AQUI, o aluno precisa
-// configurar a própria chave pelo botão 🔑.
-const CHAVE_TURMA='';
-const USAR_BACKEND=(location.protocol==='http:'||location.protocol==='https:');
-// ============================================================
-function getKey(){const k=sget('apikey','');if(k)return k;return CHAVE_TURMA.indexOf('sk-')===0?CHAVE_TURMA:'';}
-const LEIS={'CP':['Código Penal','https://www.planalto.gov.br/ccivil_03/decreto-lei/del2848compilado.htm'],'CPP':['Código de Processo Penal','https://www.planalto.gov.br/ccivil_03/decreto-lei/del3689compilado.htm'],'CF':['Constituição Federal','https://www.planalto.gov.br/ccivil_03/constituicao/constituicao.htm'],'LEP':['Lei de Execução Penal (7.210/84)','https://www.planalto.gov.br/ccivil_03/leis/l7210.htm'],'9.099':['Lei 9.099/95 (Juizados Especiais)','https://www.planalto.gov.br/ccivil_03/leis/l9099.htm'],'11.343':['Lei 11.343/06 (Drogas)','https://www.planalto.gov.br/ccivil_03/_ato2004-2006/2006/lei/l11343.htm']};
-const TEMAS={
-queixa:[ 'calúnia e difamação — imputação de fato criminoso (arts. 138 e 139 do CP)','decadência do direito de queixa (art. 38 do CPP)','retratação nos crimes contra a honra (art. 143 do CP)'],
-resposta:[ 'absolvição sumária (art. 397 do CPP)','princípio da insignificância no furto','inépcia da denúncia e rejeição (arts. 41 e 395 do CPP)'],
-alegacoes:[ 'absolvição por insuficiência de provas — in dubio pro reo (art. 386, VII, do CPP)','nulidade do reconhecimento pessoal (art. 226 do CPP)','atenuante da confissão espontânea (Súmula 545 do STJ)'],
-libprov:[ 'liberdade provisória no tráfico privilegiado (art. 33, §4º, da Lei 11.343/06)','fundamentação genérica da prisão preventiva (art. 312 do CPP)','medidas cautelares diversas da prisão (art. 319 do CPP)'],
-relax:[ 'ingresso domiciliar sem mandado — fundadas razões (RE 603.616)','denúncia anônima e busca domiciliar','formalidades do flagrante e nota de culpa (art. 306 do CPP)'],
-revog:[ 'contemporaneidade dos fundamentos da preventiva (art. 316 do CPP)','excesso de prazo na instrução criminal','prisão domiciliar humanitária (art. 318 do CPP)'],
-apelacao:[ 'pena-base e gravidade abstrata do delito (art. 59 do CP)','confissão espontânea usada na condenação (Súmula 545 do STJ)','prova da majorante do concurso de pessoas no roubo'],
-rese:[ 'pronúncia fundada em testemunho indireto (hearsay)','exclusão de qualificadora manifestamente improcedente','impronúncia por ausência de indícios (art. 414 do CPP)'],
-contrarrazoes:[ 'prova ilícita por violação de domicílio (art. 157 do CPP)','manutenção de sentença absolutória em apelação do MP'],
-edcl:[ 'omissão e contradição na sentença penal (art. 382 do CPP)','efeitos infringentes dos embargos de declaração'],
-infringentes:[ 'embargos infringentes e limite da divergência (art. 609, parágrafo único, do CPP)','dolo na receptação e in dubio pro reo (art. 180 do CP)'],
-agravoexec:[ 'progressão de regime e gravidade abstrata (Súmula 439 do STJ)','remição de pena pelo trabalho (art. 126 da LEP)','exame criminológico — exigência de fundamentação concreta'],
-hc:[ 'excesso de prazo na formação da culpa (art. 648, II, do CPP)','prisão domiciliar de mãe de criança (HC coletivo 143.641 do STF)','contemporaneidade dos fundamentos da preventiva'],
-revisao:[ 'revisão criminal com base em prova nova (art. 621, III, do CPP)','indenização por erro judiciário (art. 630 do CPP)'],
-resp_re:[ 'prequestionamento (Súmula 211 do STJ)','vedação ao reexame de prova (Súmula 7 do STJ e 279 do STF)','repercussão geral em matéria criminal']};
-
-async function abrirGabarito(id){
-  const box=document.getElementById('gab');
-  box.classList.toggle('aberto');
-  if(!box.classList.contains('aberto'))return;
-  const bloco=document.getElementById('gabbloco');
-  if(bloco.dataset.pronto)return;
-  const p=PECAS.find(x=>x.id===id);
-  const gab=sget('ggab_'+id,'')||p.gab;
-  const caso=sget('gcaso_'+id,'')||p.caso;
-  // 1) INSTANTÂNEO: gabarito com links de busca oficial em CADA citação (impossível alucinar — são pesquisas na fonte)
-  bloco.innerHTML=linkCitacoesHtml(md2html(gab))
-    +'<p style="font-family:Arial,sans-serif;font-size:.82rem;color:var(--cinza);margin-top:8px">🔗 Cada súmula, julgado e lei acima é um link que abre a pesquisa no site oficial (STF, STJ, TJDFT ou Planalto) — clique para conferir a citação na fonte.</p>'
-    +'<div id="gabIA"></div>';
-  bloco.dataset.pronto='1';
-  // 2) EM SEGUNDO PLANO: a IA verifica e acrescenta comentário/precedentes (não bloqueia; se falhar, os links acima continuam valendo)
-  const alvo=document.getElementById('gabIA');
-  const prog=iniciarProgresso(alvo,ETAPAS_GABARITO,80);
-  try{
-    const r=await apiPost('/api/gabarito',{peca:{nome:p.nome,disc:p.disc,ficha:p.ficha,caso:caso,gab:gab}});
-    const d=await r.json().catch(()=>null);
-    prog.fim();
-    if(r.ok&&d.texto){
-      alvo.innerHTML='<hr style="border:none;border-top:1px solid #cfe3cf;margin:14px 0"><h4 style="color:var(--azul)">Análise da IA (jurisprudência verificada em tempo real)</h4>'+linkCitacoesHtml(md2html(d.texto));
-    }else{
-      alvo.innerHTML='';
-    }
-  }catch(e){prog.fim();alvo.innerHTML='';}
-}
-
-function fontesGabarito(p){
-  const temas=TEMAS[p.id]||[];
-  if(!temas.length)return '';
-  const stf=q=>'https://jurisprudencia.stf.jus.br/pages/search?queryString='+encodeURIComponent(q);
-  const stj=q=>'https://scon.stj.jus.br/SCON/pesquisar.jsp?b=ACOR&livre='+encodeURIComponent(q);
-  const tj=q=>'https://jurisdf.tjdft.jus.br/?query='+encodeURIComponent(q);
-  let h='<div class="bloco" style="background:#f4f6fa;border-color:#d4dce8;margin-top:10px"><h4>📚 Fontes — jurisprudência das teses deste gabarito</h4><ul class="mat" style="margin-top:6px">';
-  for(const t of temas){
-    h+='<li>⚖️ <b>'+t+'</b><br><span style="font-family:Arial,sans-serif;font-size:.82rem">Pesquisar: <a href="'+stf(t)+'" target="_blank" rel="noopener">STF</a> · <a href="'+stj(t)+'" target="_blank" rel="noopener">STJ</a> · <a href="'+tj(t)+'" target="_blank" rel="noopener">TJDFT</a></span></li>';
-  }
-  h+='</ul><p class="aviso">Links de busca nos sites oficiais — confira sempre o teor atualizado.</p></div>';
-  return h;
-}
-function materiaisHtml(p){
-  const base=p.ficha.base||'';
-  let leis='';
-  for(const k in LEIS){if(base.indexOf(k)>-1||(k==='CP'&&/\bCP\b/.test(base))){leis+='<li>📕 <a href="'+LEIS[k][1]+'" target="_blank" rel="noopener">'+LEIS[k][0]+' — texto integral (Planalto)</a></li>'}}
-  if(!leis)leis='<li>📕 <a href="'+LEIS['CPP'][1]+'" target="_blank" rel="noopener">Código de Processo Penal — texto integral (Planalto)</a></li>';
-  const qv=encodeURIComponent(p.nome+' aula OAB 2ª fase penal');
-  let temasHtml='';
-  for(const t of (TEMAS[p.id]||[])){
-    const et=encodeURIComponent(t);
-    temasHtml+='<li>⚖️ <b>'+t+'</b><br><span style="font-family:Arial,sans-serif;font-size:.82rem">Pesquisar: '
-     +'<a href="https://jurisprudencia.stf.jus.br/pages/search?queryString='+et+'" target="_blank" rel="noopener">STF</a> · '
-     +'<a href="https://scon.stj.jus.br/SCON/pesquisar.jsp?b=ACOR&livre='+et+'" target="_blank" rel="noopener">STJ</a> · '
-     +'<a href="https://jurisdf.tjdft.jus.br/?query='+et+'" target="_blank" rel="noopener">TJDFT</a> · '
-     +'<a href="https://www.jusbrasil.com.br/busca?q='+et+'" target="_blank" rel="noopener">artigos</a></span></li>';
-  }
-  return '<div class="card"><h3>Materiais gratuitos na internet</h3><ul class="mat">'
-   +leis
-   +'<li>🎬 <a href="https://www.youtube.com/results?search_query='+qv+'" target="_blank" rel="noopener">Vídeo-aulas gratuitas sobre '+p.nome+' (YouTube)</a></li>'
-   +temasHtml
-   +'</ul><p class="aviso">Jurisprudência organizada por teses práticas reais trabalhadas nesta peça — links de busca direto nas fontes oficiais.</p></div>';
-}
-
-const CHECKLIST=[
-"Escolhi a peça cabível para o caso (cabimento correto)",
-"Endereçamento ao juízo/tribunal competente",
-"Qualificação completa das partes e capacidade postulatória (procuração, quando exigida)",
-"Indiquei o fundamento legal da peça e o prazo (tempestividade)",
-"Narrei os fatos com fidelidade, sem inventar dados",
-"Fundamentação jurídica completa: preliminares antes do mérito, teses com artigos de lei",
-"Formulei pedidos completos, em ordem lógica, com pedidos subsidiários",
-"Toda jurisprudência e súmula citada EXISTE de verdade e tem o teor indicado (citação falsa = nota zero)",
-"Incluí ao FINAL da peça o ANEXO com todas as fontes citadas e seus links oficiais (para conferência na origem)",
-"Abri a peça com o tópico de SÍNTESE: fatos, pedidos, decisão impugnada e dispositivos legais (art. 343-A do RISTJ)",
-"Peça topificada: cada argumento em tópico próprio e bem desenvolvido (nada de tópico com só 1–2 parágrafos), sustentado com jurisprudência válida",
-"Fechamento formal: local, data, ADVOGADO(A), OAB nº ... (sem assinar o próprio nome)",
-"Revisei português, clareza e organização do texto"];
-
+// ================= Helpers =================
 let store={};
 function sget(k,d){try{return localStorage.getItem(k)??d}catch(e){return store[k]??d}}
 function sset(k,v){try{localStorage.setItem(k,v)}catch(e){store[k]=v}}
-
 const menu=document.getElementById('menu'),conteudo=document.getElementById('conteudo');
-let atual=null,aba='aprender';
-let AUTH=null;
-try{AUTH=JSON.parse(sget('auth','null'))}catch(e){AUTH=null}
+let AUTH=null; try{AUTH=JSON.parse(sget('auth','null'))}catch(e){AUTH=null}
 async function apiPost(u,b){
   const h={'content-type':'application/json'};
   if(AUTH&&AUTH.token)h['authorization']='Bearer '+AUTH.token;
   const r=await fetch(u,{method:'POST',headers:h,body:JSON.stringify(b)});
   if(r.status===401){let d=null;try{d=await r.clone().json()}catch(e){}
-    if(d&&d.erro==='SESSAO'){sset('auth','');AUTH=null;renderLogin('Sua sessão expirou. Entre novamente.');throw new Error('sessao')}}
+    if(d&&d.erro==='SESSAO'){sair('Sua sessão expirou. Entre novamente.');throw new Error('sessao')}}
   return r;
 }
-function limparDadosPecas(){
-  try{
-    const rem=[];
-    for(let i=0;i<localStorage.length;i++){
-      const k=localStorage.key(i);
-      if(/^(txt_|gcaso_|ggab_|ck_|ultimacorrecao_|minhaChave)/.test(k))rem.push(k);
-    }
-    rem.forEach(k=>localStorage.removeItem(k));
-  }catch(e){store={}}
+async function apiGet(u){
+  const h={};if(AUTH&&AUTH.token)h['authorization']='Bearer '+AUTH.token;
+  return fetch(u,{headers:h});
 }
-function sair(){limparDadosPecas();sset('auth','');AUTH=null;renderLogin()}
-function barraUsuario(){
-  const el=document.getElementById('progresso');if(!el)return;
-  if(!AUTH){el.innerHTML='';return}
-  const uso=(AUTH.tipo==='aluno'&&AUTH.limiteSemana)?(' · correções da semana: '+(AUTH.usosSemana||0)+'/'+AUTH.limiteSemana):'';
-  const primeiroNome=AUTH.nome?AUTH.nome.split(' ')[0]:'';
-  const quem=AUTH.tipo==='professor'?'Professor':(primeiroNome?('Olá, '+primeiroNome.charAt(0)+primeiroNome.slice(1).toLowerCase()+' · '+AUTH.usuario):('Matrícula '+AUTH.usuario));
-  el.innerHTML='<span class="userbar">'+quem+uso+'<a onclick="sair()">sair</a></span>';
-}
-function renderLogin(msg){
-  menu.innerHTML='';
-  document.getElementById('progresso').innerHTML='';
-  conteudo.innerHTML='<div class="loginwrap"><h2>⚖️ Laboratório de Peças Penais</h2>'
-  +'<p>Entre com a sua matrícula. No primeiro acesso, a senha é a própria matrícula.</p>'
-  +'<input id="lg_user" placeholder="Matrícula" autocomplete="username">'
-  +'<input id="lg_pass" type="password" placeholder="Senha" autocomplete="current-password">'
-  +'<button onclick="fazerLogin()">Entrar</button>'
-  +(msg?'<p class="erro-ia">'+msg+'</p>':'')+'<div id="lg_erro"></div></div>';
-  const p=document.getElementById('lg_pass');if(p)p.addEventListener('keydown',e=>{if(e.key==='Enter')fazerLogin()});
-}
-async function fazerLogin(){
-  const u=document.getElementById('lg_user').value.trim(),p=document.getElementById('lg_pass').value;
-  const e=document.getElementById('lg_erro');
-  if(!u||!p){e.innerHTML='<p class="erro-ia">Preencha matrícula e senha.</p>';return}
-  e.innerHTML='<p style="font-family:Arial,sans-serif;font-size:.85rem"><span class="spinner"></span>Entrando... (o servidor pode levar até 1 min para acordar)</p>';
-  try{
-    const r=await fetch('/api/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({usuario:u,senha:p})});
-    const d=await r.json();
-    if(!r.ok){e.innerHTML='<p class="erro-ia">'+(d.erro||'Falha no login.')+'</p>';return}
-    limparDadosPecas();
-    AUTH={token:d.token,tipo:d.tipo,usuario:u,nome:d.nome||'',turmaAtiva:d.turmaAtiva,precisaTrocarSenha:d.precisaTrocarSenha,usosSemana:d.usosSemana||0,limiteSemana:d.limiteSemana||0};
-    sset('auth',JSON.stringify(AUTH));
-    iniciar();
-  }catch(err){e.innerHTML='<p class="erro-ia">Erro de conexão: '+err.message+'</p>'}
-}
-function renderTroca(){
-  menu.innerHTML='';
-  conteudo.innerHTML='<div class="loginwrap"><h2>Primeiro acesso</h2>'
-  +'<p>Por segurança, crie uma nova senha (mínimo 6 caracteres, diferente da matrícula).</p>'
-  +'<input id="ts_1" type="password" placeholder="Nova senha">'
-  +'<input id="ts_2" type="password" placeholder="Repita a nova senha">'
-  +'<button onclick="trocarSenha()">Salvar nova senha</button><div id="ts_erro"></div></div>';
-}
-async function trocarSenha(){
-  const a=document.getElementById('ts_1').value,b=document.getElementById('ts_2').value,e=document.getElementById('ts_erro');
-  if(a!==b){e.innerHTML='<p class="erro-ia">As senhas não conferem.</p>';return}
-  try{
-    const r=await apiPost('/api/trocar-senha',{novaSenha:a});
-    const d=await r.json();
-    if(!r.ok){e.innerHTML='<p class="erro-ia">'+(d.erro||'Falha.')+'</p>';return}
-    AUTH.precisaTrocarSenha=false;sset('auth',JSON.stringify(AUTH));iniciar();
-  }catch(err){}
-}
-function iniciar(){
-  if(!AUTH||!AUTH.token){renderLogin();return}
-  if(AUTH.precisaTrocarSenha){renderTroca();return}
-  barraUsuario();renderMenu();renderHome();
-}
-
-function renderMenu(){
-  let html='<button class="item'+(atual===null?' ativo':'')+'" onclick="irHome()">🏠 Início</button>';
-  if(AUTH&&AUTH.tipo==='professor')html+='<button class="item'+(atual==='__painel'?' ativo':'')+'" onclick="abrirPainel()">🛠️ Painel do professor</button>';
-  const discs=(AUTH&&AUTH.tipo==='aluno')?[AUTH.turmaAtiva]:["Estágio I","Estágio II"];
-  for(const disc of discs){
-    html+='<div class="grupo">'+disc+'</div>';
-    for(const p of PECAS.filter(x=>x.disc===disc)){
-      html+='<button class="item'+(atual===p.id?' ativo':'')+'" onclick="abrir(\''+p.id+'\')">'+p.nome+'</button>';
-    }
-  }
-  menu.innerHTML=html;
-}
-function irHome(){atual=null;renderMenu();renderHome()}
-function abrir(id){atual=id;aba='aprender';renderMenu();renderPeca()}
-function trocarAba(a){aba=a;renderPeca()}
-
-function renderHome(){
-  let cards='';
-  const pecasVisiveis=(AUTH&&AUTH.tipo==='aluno')?PECAS.filter(x=>x.disc===AUTH.turmaAtiva):PECAS;
-  for(const p of pecasVisiveis){cards+='<div class="g" onclick="abrir(\''+p.id+'\')"><b>'+p.nome+'</b><br><small>'+p.disc+'</small></div>'}
-  const saud=(AUTH&&AUTH.tipo==='aluno'&&AUTH.nome)?('Bem-vindo(a), '+AUTH.nome.split(' ')[0].charAt(0)+AUTH.nome.split(' ')[0].slice(1).toLowerCase()+'!'):'Bem-vindo(a) ao Laboratório de Peças Penais';
-  conteudo.innerHTML=`<div class="home">
-  <h2>${saud}</h2>
-  <p>Este sistema acompanha as disciplinas de <b>Estágio I</b> (práticas simuladas — peças da fase de conhecimento e peças de liberdade) e <b>Estágio II</b> (práticas reais — recursos e ações autônomas de impugnação) do curso de Direito do IESB.</p>
-  <p><b>Como estudar cada peça:</b> 1) na aba <i>Aprender</i>, domine a ficha técnica (cabimento, prazo, endereçamento) e a estrutura passo a passo; 2) na aba <i>Praticar</i>, leia o caso simulado e redija a peça completa no editor, consultando apenas a legislação seca, como na prova e na OAB; 3) confira seu texto com o <i>checklist de autoavaliação</i>; 4) use a <b>Correção por IA</b>, que corrige sua peça com base no gabarito e nos critérios da disciplina, sugere nota e propõe melhorias; 5) só então abra o <i>gabarito comentado</i>, ajuste o texto e envie ao professor pelo Google for Education.</p>
-  <p>A avaliação da disciplina segue o plano de ensino: <b>Média = 0,4×A1 + 0,6×A2</b>, aprovação com média ≥ 5,0 e frequência mínima de 75%. A correção considera cabimento, fundamentos, português, adequação da linguagem, clareza, apresentação formal e legibilidade.</p>
-  <div class="grade">${cards}</div>
-  <p class="aviso">Material didático do Prof. Me. Rodrigo Silva Pereira — NPJ/IESB. Os casos são fictícios; qualquer semelhança é mera coincidência. Sempre confira a legislação atualizada.</p>
-  </div>`;
-}
-
-function abrirPainel(){atual='__painel';renderMenu();renderPainel()}
-async function renderPainel(dadosPrev){
-  let dados=dadosPrev;
-  if(!dados){
-    conteudo.innerHTML='<div class="card"><p><span class="spinner"></span> Carregando painel...</p></div>';
-    try{const r=await apiPost('/api/admin',{});dados=await r.json();if(!r.ok){conteudo.innerHTML='<div class="card"><p class="erro-ia">'+(dados.erro||'Erro')+'</p></div>';return}}catch(e){return}
-  }
-  let linhas='';
-  for(const a of (dados.alunos||[])){
-    linhas+='<tr><td>'+a.matricula+'</td><td>'+(a.nome||'—')+'</td><td>'+(a.trocouSenha?'✓ trocou a senha':'senha inicial')+'</td><td>'+a.usosSemana+'/'+dados.limiteSemana+'</td>'
-    +'<td><a style="cursor:pointer;color:var(--azul)" onclick="resetarSenha(\''+a.matricula+'\')">resetar senha</a> · <a style="cursor:pointer;color:var(--vermelho)" onclick="excluirAluno(\''+a.matricula+'\')">excluir</a></td></tr>';
-  }
-  conteudo.innerHTML='<span class="badge">Painel do professor</span><h2 class="titulo-peca">Administração</h2>'
-  +'<div class="card"><h3>Turma ativa do semestre</h3><p style="font-size:.9rem;color:var(--cinza)">Os alunos só enxergam as peças da turma ativa.</p>'
-  +'<div class="botoes" style="margin-top:10px">'
-  +'<button class="'+(dados.turmaAtiva==='Estágio I'?'primario':'')+'" onclick="salvarTurma(\'Estágio I\')">Estágio I — Práticas Simuladas</button>'
-  +'<button class="'+(dados.turmaAtiva==='Estágio II'?'primario':'')+'" onclick="salvarTurma(\'Estágio II\')">Estágio II — Práticas Reais</button></div>'
-  +'<p class="aviso">Turma ativa atual: <b>'+dados.turmaAtiva+'</b></p></div>'
-  +'<div class="card painel"><h3>Alunos cadastrados ('+dados.totalAlunos+')</h3>'
-  +'<p style="font-size:.9rem;color:var(--cinza)">Cole as matrículas (uma por linha). O login e a senha inicial do aluno são a própria matrícula.</p>'
-  +'<div class="botoes" style="margin-bottom:8px"><label class="primario" style="padding:9px 18px;border-radius:6px;background:var(--azul);color:#fff;cursor:pointer;font-size:.85rem;font-family:Arial,sans-serif">📄 Importar lista de PDF<input type="file" accept="application/pdf" style="display:none" onchange="importarPdf(this)"></label></div>'
-  +'<textarea id="adm_mats" placeholder="500123\n500124\n500125"></textarea>'
-  +'<div class="botoes"><button class="primario" onclick="salvarAlunos(false)">Adicionar à lista</button>'
-  +'<button onclick="if(confirm(\'Substituir TODA a lista pelas matrículas coladas?\'))salvarAlunos(true)">Substituir lista inteira</button>'
-  +'<button style="border-color:var(--vermelho);color:var(--vermelho)" onclick="excluirTodos()">🗑 Excluir todos os alunos</button></div>'
-  +'<div id="adm_msg"></div>'
-  +'<table><tr><th>Matrícula</th><th>Nome</th><th>Senha</th><th>Correções na semana</th><th></th></tr>'+(linhas||'<tr><td colspan="5">Nenhum aluno cadastrado ainda.</td></tr>')+'</table></div>';
-  window.scrollTo(0,0);
-}
-function importarPdf(inp){
-  const f=inp.files&&inp.files[0];if(!f)return;
-  if(f.size>15000000){alert('PDF muito grande (máx 15 MB).');return}
-  const msg=document.getElementById('adm_msg');
-  msg.innerHTML='<p style="font-family:Arial,sans-serif;font-size:.85rem"><span class="spinner"></span>Lendo o PDF...</p>';
-  const fr=new FileReader();
-  fr.onload=async function(){
-    try{
-      const r=await apiPost('/api/extrair-pdf',{pdf:fr.result});
-      const d=await r.json();
-      if(!r.ok){msg.innerHTML='<p class="erro-ia">'+(d.erro||'Erro ao ler o PDF.')+'</p>';return}
-      document.getElementById('adm_mats').value=d.alunos.map(a=>a.matricula+(a.nome?' - '+a.nome:'')).join('\n');
-      msg.innerHTML='<p style="font-family:Arial,sans-serif;font-size:.88rem;color:var(--verde)"><b>'+d.alunos.length+' alunos encontrados (sem duplicatas).</b> Revise a lista acima (formato: matrícula - nome) e clique em Adicionar ou Substituir.</p>';
-    }catch(e){msg.innerHTML='<p class="erro-ia">Falha: '+e.message+'</p>'}
-  };
-  fr.readAsDataURL(f);
-  inp.value='';
-}
-async function salvarTurma(t){try{const r=await apiPost('/api/admin',{turma:t});const d=await r.json();if(r.ok){AUTH.turmaAtiva=t;sset('auth',JSON.stringify(AUTH));renderPainel(d)}}catch(e){}}
-async function salvarAlunos(sub){
-  const txt=document.getElementById('adm_mats').value;
-  const mats=txt.split(/\n+/).map(x=>x.trim()).filter(x=>x);
-  if(!mats.length){document.getElementById('adm_msg').innerHTML='<p class="erro-ia">Cole ao menos uma matrícula.</p>';return}
-  try{const r=await apiPost('/api/admin',{matriculas:mats,substituir:!!sub});const d=await r.json();
-  if(r.ok){renderPainel(d);setTimeout(()=>{const m2=document.getElementById('adm_msg');if(m2)m2.innerHTML='<p style="font-family:Arial,sans-serif;font-size:.88rem;color:var(--verde)"><b>'+(d.novas||0)+' aluno(s) novo(s) cadastrado(s).</b>'+((d.existentes||0)?' '+d.existentes+' já estavam na lista e foram ignorados — sem duplicatas.':'')+'</p>'},100);}
-  else document.getElementById('adm_msg').innerHTML='<p class="erro-ia">'+(d.erro||'Erro')+'</p>';}catch(e){}
-}
-async function excluirAluno(m){
-  if(!confirm('Excluir o aluno '+m+'? Ele perderá o acesso e o histórico de uso.'))return;
-  try{const r=await apiPost('/api/admin',{excluirAluno:m});const d=await r.json();if(r.ok)renderPainel(d);}catch(e){}
-}
-async function excluirTodos(){
-  if(!confirm('EXCLUIR TODOS os alunos? Todos perderão o acesso. Esta ação não pode ser desfeita.'))return;
-  if(!confirm('Tem certeza mesmo? Digite OK para confirmar.'))return;
-  try{const r=await apiPost('/api/admin',{excluirTodos:true});const d=await r.json();if(r.ok)renderPainel(d);}catch(e){}
-}
-async function resetarSenha(m){
-  if(!confirm('Resetar a senha de '+m+' para a própria matrícula?'))return;
-  try{const r=await apiPost('/api/admin',{resetarSenha:m});const d=await r.json();if(r.ok)renderPainel(d);}catch(e){}
-}
-function renderPeca(){
-  const p=PECAS.find(x=>x.id===atual);if(!p)return irHome();
-  if(AUTH&&AUTH.tipo==='aluno'&&p.disc!==AUTH.turmaAtiva)return irHome();
-  let html='<span class="badge">'+p.disc+'</span><h2 class="titulo-peca">'+p.nome+'</h2>';
-  html+='<div class="abas"><button class="'+(aba==='aprender'?'ativa':'')+'" onclick="trocarAba(\'aprender\')">📖 Aprender</button>';
-  if(!p.soficha)html+='<button class="'+(aba==='praticar'?'ativa':'')+'" onclick="trocarAba(\'praticar\')">✍️ Praticar</button>';
-  html+='</div>';
-
-  if(aba==='aprender'||p.soficha){
-    html+='<div class="card"><h3>Ficha técnica</h3><div class="ficha">'
-    +'<div class="f"><b>Cabimento</b><span>'+p.ficha.cabimento+'</span></div>'
-    +'<div class="f"><b>Prazo</b><span>'+p.ficha.prazo+'</span></div>'
-    +'<div class="f"><b>Base legal</b><span>'+p.ficha.base+'</span></div>'
-    +'<div class="f"><b>Endereçamento</b><span>'+p.ficha.end+'</span></div>'
-    +'<div class="f"><b>Legitimidade</b><span>'+p.ficha.leg+'</span></div></div></div>';
-    html+='<div class="card"><h3>Estrutura passo a passo</h3>';
-    html+='<div class="passo"><h4>Resumo da peça (síntese inicial)</h4><p>Antes de tudo, abra a peça com um tópico curto de SÍNTESE: resuma os fatos, os pedidos, a decisão impugnada (nos recursos) e os dispositivos legais invocados. É exigência do art. 343-A do Regimento Interno do STJ (emenda de 2026) para as peças dirigidas àquele tribunal — e, nesta disciplina, é padrão para TODAS as peças: o julgador deve entender sua linha argumentativa de relance.</p><div class="ex">SÍNTESE: Trata-se de apelação contra sentença da 1ª Vara Criminal de Brasília que condenou o apelante por roubo majorado (art. 157, §2º, II, CP) a 6 anos de reclusão. Pede-se o afastamento da majorante, a redução da pena-base ao mínimo e a aplicação da atenuante da confissão (arts. 59, 65, III, d, e 68 do CP).</div></div>';
-    html+='<div class="passo"><h4>Anexo de fontes (ao final da peça)</h4><p>Encerre a peça com um <b>ANEXO listando todas as fontes citadas</b> — cada súmula, julgado ou lei com o respectivo link oficial (STF, STJ, TJDFT, Planalto). Serve para que o leitor confira cada citação na origem e comprove que nenhuma é inventada. Citar jurisprudência sem trazê-la no anexo é falha formal; fonte que não confere é tratada como citação falsa.</p><div class="ex">ANEXO — FONTES CITADAS:\n[1] Súmula 545 do STJ — https://scon.stj.jus.br/SCON/pesquisar.jsp?b=ACOR&livre=sumula%20545\n[2] STF, RE 603.616 (Tema 280) — https://jurisprudencia.stf.jus.br/pages/search?queryString=RE%20603616</div></div>';
-    for(const s of p.estrutura){html+='<div class="passo"><h4>'+s.t+'</h4><p>'+s.p+'</p>'+(s.ex?'<div class="ex">'+s.ex+'</div>':'')+'</div>'}
-    html+='</div>';
-    html+=materiaisHtml(p);
-    if(!p.soficha)html+='<div class="botoes"><button class="primario" onclick="trocarAba(\'praticar\')">Ir para a prática →</button></div>';
-  }else{
-    const rascunho=sget('txt_'+p.id,'');
-    const casoAtual=sget('gcaso_'+p.id,'')||p.caso;
-    const ehGerado=!!sget('gcaso_'+p.id,'');
-    html+='<div class="card"><h3>Caso simulado'+(ehGerado?' <span class="badge">gerado por IA para você</span>':'')+'</h3><div class="caso" id="casobox">'+casoAtual+'</div>'
-    +'<div class="botoes" style="margin-top:14px"><select id="nivel" style="padding:8px;border:1px solid var(--azul);border-radius:6px;font-family:Arial,sans-serif;font-size:.85rem">'
-    +'<option value="BÁSICO">Nível: Básico</option><option value="INTERMEDIÁRIO" selected>Nível: Intermediário</option><option value="AVANÇADO">Nível: Avançado (OAB raiz)</option></select>'
-    +'<button class="primario" onclick="gerarCaso(\''+p.id+'\')">🎲 Gerar novo caso com IA</button>'
-    +(ehGerado?'<button onclick="voltarCasoOriginal(\''+p.id+'\')">↩ Voltar ao caso original</button>':'')
-    +'</div><div id="gerafeedback"></div></div>';
-    html+='<div class="card"><h3>Sua peça</h3><p style="font-size:.88rem;color:var(--cinza)">Redija a peça completa, como se fosse protocolar. Consulte apenas a legislação seca. Atenção: o texto vale só para esta sessão — baixe o arquivo antes de sair.</p>'
-    +'<textarea class="redacao" id="red" placeholder="EXCELENTÍSSIMO SENHOR...">'+rascunho.replace(/</g,'&lt;')+'</textarea>'
-    +'<div class="botoes"><button onclick="salvarTxt(\''+p.id+'\')">💾 Salvar rascunho</button><button onclick="baixarTxt(\''+p.id+'\')">⬇️ Baixar como arquivo (.txt)</button></div></div>';
-    html+='<div class="card"><h3>Autoavaliação</h3><div class="check">';
-    CHECKLIST.forEach((c,i)=>{const ck=sget('ck_'+p.id+'_'+i,'')==='1';
-      html+='<label><input type="checkbox" '+(ck?'checked':'')+' onchange="mudarCheck(\''+p.id+'\','+i+',this.checked)"> '+c+'</label>'});
-    html+='</div><div class="score" id="score"></div></div>';
-    const temChave=USAR_BACKEND||getKey()!=='';
-    html+='<div class="card iabox"><h3>Correção por IA 🤖</h3>'
-    +'<p style="font-size:.88rem;color:var(--cinza)">A IA corrige sua peça como o professor: compara com o caso, o gabarito e os critérios da disciplina, aponta acertos e erros, sugere nota e propõe melhorias de redação.</p>'
-    +'<div class="botoes"><button class="primario" onclick="corrigirIA(\''+p.id+'\')">Corrigir minha peça</button>'
-    +(USAR_BACKEND?'':'<button onclick="toggleChave()">🔑 '+(temChave?'Alterar':'Configurar')+' chave de API</button>')+'</div>'
-    +(USAR_BACKEND?'':'<div id="chavebox" style="display:'+(temChave?'none':'block')+'">'
-    +'<input type="password" class="campo-chave" id="apikey" placeholder="Cole aqui a chave de API (sk-ant-...) fornecida pelo professor" value="'+sget('apikey','')+'">'
-    +'<div class="botoes"><button onclick="salvarChave()">Salvar chave</button></div>'
-    +'<p class="aviso">A chave fica salva apenas neste navegador. Peça a chave ao professor ou crie a sua em console.anthropic.com.</p></div>')
-    +'<div id="iafeedback"></div></div>';
-    html+='<div class="card"><h3>Gabarito comentado</h3><p style="font-size:.88rem;color:var(--cinza)">Abra somente depois de terminar sua peça e passar pelo checklist. Ao abrir, a IA verifica a jurisprudência das teses em tempo real e anexa os links oficiais.</p>'
-    +'<div class="botoes"><button class="primario" onclick="abrirGabarito(\''+p.id+'\')">👁️ Mostrar/ocultar gabarito</button></div>'
-    +'<div class="gabarito" id="gab"><div class="bloco" id="gabbloco"></div></div></div>';
-  }
-  conteudo.innerHTML=html;
-  if(aba==='praticar'&&!p.soficha){atualizarScore(p.id);
-    const t=document.getElementById('red');if(t)t.addEventListener('input',()=>sset('txt_'+p.id,t.value));}
-  window.scrollTo(0,0);
-}
-function mudarCheck(id,i,v){sset('ck_'+id+'_'+i,v?'1':'');atualizarScore(id)}
-function atualizarScore(id){const n=CHECKLIST.filter((c,i)=>sget('ck_'+id+'_'+i,'')==='1').length;
-  const el=document.getElementById('score');if(!el)return;
-  el.textContent='Checklist: '+n+' de '+CHECKLIST.length+(n===CHECKLIST.length?' — peça pronta para envio! 🎉':'');}
-function salvarTxt(id){const t=document.getElementById('red');sset('txt_'+id,t.value);
-  const el=document.getElementById('score');if(el)el.textContent='Rascunho salvo. '+el.textContent.replace(/^Rascunho salvo\. /,'');}
-function baixarTxt(id){const p=PECAS.find(x=>x.id===id);const t=document.getElementById('red').value;
-  const blob=new Blob([t],{type:'text/plain;charset=utf-8'});const a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);a.download=p.nome.replace(/ /g,'_')+'.txt';a.click();}
-
-function toggleChave(){const b=document.getElementById('chavebox');if(b)b.style.display=(b.style.display==='none'?'block':'none')}
-function salvarChave(){const v=document.getElementById('apikey').value.trim();sset('apikey',v);
-  const fb=document.getElementById('iafeedback');fb.innerHTML=v?'<p class="aviso">✓ Chave salva neste navegador.</p>':'<p class="erro-ia">Chave vazia.</p>';
-  if(v)document.getElementById('chavebox').style.display='none';}
-function linkCitacoes(t){
-  const stf=q=>'https://jurisprudencia.stf.jus.br/pages/search?queryString='+encodeURIComponent(q);
-  const stj=q=>'https://scon.stj.jus.br/SCON/pesquisar.jsp?b=ACOR&livre='+encodeURIComponent(q);
-  // Súmulas com tribunal indicado
-  t=t.replace(/S[úu]mula\s+(?:n[ºo°]?\s*)?(\d+)(\s*(?:do|da|\/)\s*)(STF|STJ)/gi,function(m,n,sep,trib){
-    const u=trib.toUpperCase()==='STF'?stf('Súmula '+n):stj('Súmula '+n);
-    return '['+m+']('+u+')';});
-  // Julgados STF: RE/ADI/ADPF (e HC por padrão, salvo indicação de STJ)
-  t=t.replace(/\b(RE|ADI|ADPF|ARE)\s+(?:n[ºo°]?\s*)?([\d\.]+)\b/g,function(m,cl,n){return '['+m+']('+stf(cl+' '+n)+')';});
-  t=t.replace(/\b(REsp|AREsp|EREsp)\s+(?:n[ºo°]?\s*)?([\d\.]+)\b/g,function(m,cl,n){return '['+m+']('+stj(cl+' '+n)+')';});
-  t=t.replace(/\bHC\s+(?:coletivo\s+)?(?:n[ºo°]?\s*)?([\d\.]+)(\s*(?:do|da|\/)\s*(STF|STJ))?/gi,function(m,n,sep,trib){
-    const u=(trib&&trib.toUpperCase()==='STJ')?stj('HC '+n):stf('HC '+n);
-    return '['+m+']('+u+')';});
-  // Legislação — primeira ocorrência de cada diploma
-  const leis=[[/\b(C[óo]digo Penal|do CP)\b/, 'https://www.planalto.gov.br/ccivil_03/decreto-lei/del2848compilado.htm'],
-    [/\b(C[óo]digo de Processo Penal|do CPP)\b/, 'https://www.planalto.gov.br/ccivil_03/decreto-lei/del3689compilado.htm'],
-    [/\b(da CF|Constitui[çc][ãa]o Federal)\b/, 'https://www.planalto.gov.br/ccivil_03/constituicao/constituicao.htm'],
-    [/\b(da LEP|Lei de Execu[çc][ãa]o Penal)\b/, 'https://www.planalto.gov.br/ccivil_03/leis/l7210.htm'],
-    [/\bLei\s+(?:n[ºo°]?\s*)?9\.?099\/?95?\b/, 'https://www.planalto.gov.br/ccivil_03/leis/l9099.htm'],
-    [/\bLei\s+(?:n[ºo°]?\s*)?11\.?343\/?(?:20)?06\b/, 'https://www.planalto.gov.br/ccivil_03/_ato2004-2006/2006/lei/l11343.htm'],
-    [/\bLei\s+(?:n[ºo°]?\s*)?12\.?850\/?(?:20)?13\b/, 'https://www.planalto.gov.br/ccivil_03/_ato2011-2014/2013/lei/l12850.htm']];
-  for(const par of leis){t=t.replace(par[0],function(m){return '['+m+']('+par[1]+')'});}
-  return t;
+function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function md2html(t){
+  t=esc(t);
+  t=t.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');
+  t=t.replace(/\[([^\]]+)\]\((https?:[^\s)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
+  t=t.replace(/(^|[^"=>])(https?:\/\/[^\s<)]+)/g,'$1<a href="$2" target="_blank" rel="noopener">$2</a>');
+  const linhas=t.split('\n');let out='',lista=false;
+  for(let l of linhas){const s2=l.trim();
+    if(/^#{1,4}\s/.test(s2)){if(lista){out+='</ul>';lista=false}out+='<h4>'+s2.replace(/^#{1,4}\s*/,'')+'</h4>';continue}
+    if(/^NOTA SUGERIDA/i.test(s2)){if(lista){out+='</ul>';lista=false}out+='<div class="nota">'+s2+'</div>';continue}
+    if(/^[-•*]\s/.test(s2)){if(!lista){out+='<ul>';lista=true}out+='<li>'+s2.replace(/^[-•*]\s*/,'')+'</li>';continue}
+    if(s2===''){if(lista){out+='</ul>';lista=false}continue}
+    if(lista){out+='</ul>';lista=false}out+='<p>'+s2+'</p>';}
+  if(lista)out+='</ul>';return out;
 }
 function urlSTF(q){return 'https://jurisprudencia.stf.jus.br/pages/search?queryString='+encodeURIComponent(q)}
 function urlSTJ(q){return 'https://scon.stj.jus.br/SCON/pesquisar.jsp?b=ACOR&livre='+encodeURIComponent(q)}
 function linkCitacoesHtml(html){
   return html.split(/(<a\b[^>]*>[\s\S]*?<\/a>)/g).map(function(seg){
     if(/^<a\b/.test(seg))return seg;
-    seg=seg.replace(/S[úu]mula\s+(?:n[ºo°]?\s*)?(\d+)(\s*(?:do|da|\/)\s*)(STF|STJ)/gi,function(m,n,sep,trib){
-      const u=trib.toUpperCase()==='STF'?urlSTF('Súmula '+n):urlSTJ('Súmula '+n);
-      return '<a href="'+u+'" target="_blank" rel="noopener">'+m+'</a>';});
+    seg=seg.replace(/S[úu]mula\s+(?:n[ºo°]?\s*)?(\d+)(\s*(?:do|da|\/)\s*)(STF|STJ)/gi,function(m,n,sep,tr){const u=tr.toUpperCase()==='STF'?urlSTF('Súmula '+n):urlSTJ('Súmula '+n);return '<a href="'+u+'" target="_blank" rel="noopener">'+m+'</a>'});
     seg=seg.replace(/\b(RE|ADI|ADPF|ARE)\s+(?:n[ºo°]?\s*)?([\d\.]+)\b/g,function(m,cl,n){return '<a href="'+urlSTF(cl+' '+n)+'" target="_blank" rel="noopener">'+m+'</a>'});
     seg=seg.replace(/\b(REsp|AREsp|EREsp)\s+(?:n[ºo°]?\s*)?([\d\.]+)\b/g,function(m,cl,n){return '<a href="'+urlSTJ(cl+' '+n)+'" target="_blank" rel="noopener">'+m+'</a>'});
-    seg=seg.replace(/\bHC\s+(?:coletivo\s+)?(?:n[ºo°]?\s*)?([\d\.]+)(\s*(?:do|da|\/)\s*(STF|STJ))?/gi,function(m,n,sep,trib){
-      const u=(trib&&trib.toUpperCase()==='STJ')?urlSTJ('HC '+n):urlSTF('HC '+n);
-      return '<a href="'+u+'" target="_blank" rel="noopener">'+m+'</a>';});
+    seg=seg.replace(/\bHC\s+(?:coletivo\s+)?(?:n[ºo°]?\s*)?([\d\.]+)(\s*(?:do|da|\/)\s*(STF|STJ))?/gi,function(m,n,sep,tr){const u=(tr&&tr.toUpperCase()==='STJ')?urlSTJ('HC '+n):urlSTF('HC '+n);return '<a href="'+u+'" target="_blank" rel="noopener">'+m+'</a>'});
     return seg;
   }).join('');
 }
-function md2html(t){
-  t=t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  t=t.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');
-  t=t.replace(/\[([^\]]+)\]\((https?:[^\s)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
-  t=t.replace(/(^|[^"=>])(https?:\/\/[^\s<)]+)/g,'$1<a href="$2" target="_blank" rel="noopener">$2</a>');
-  const linhas=t.split('\n');let out='',emLista=false;
-  for(let l of linhas){
-    const s=l.trim();
-    if(/^#{1,4}\s/.test(s)){if(emLista){out+='</ul>';emLista=false}out+='<h4>'+s.replace(/^#{1,4}\s*/,'')+'</h4>';continue}
-    if(/^NOTA SUGERIDA/i.test(s)){if(emLista){out+='</ul>';emLista=false}out+='<div class="nota">'+s+'</div>';continue}
-    if(/^[-•*]\s/.test(s)){if(!emLista){out+='<ul>';emLista=true}out+='<li>'+s.replace(/^[-•*]\s*/,'')+'</li>';continue}
-    if(s===''){if(emLista){out+='</ul>';emLista=false}continue}
-    if(emLista){out+='</ul>';emLista=false}
-    out+='<p>'+s+'</p>';
-  }
-  if(emLista)out+='</ul>';
-  return out;
+function progresso(el,etapas,dur){
+  el.innerHTML='<div class="pbar"><div class="trilho"><div class="fill"></div></div><div class="etapa"><span class="et"></span><span class="tempo"></span></div></div>';
+  const fill=el.querySelector('.fill'),et=el.querySelector('.et'),tempo=el.querySelector('.tempo');const ini=Date.now();
+  function tick(){const seg=(Date.now()-ini)/1000;const p=Math.min(95,95*(1-Math.exp(-seg/(dur/2.5))));fill.style.width=p.toFixed(1)+'%';let a=etapas[0];for(const par of etapas)if(seg>=par[0])a=par;et.textContent=a[1];const mm=Math.floor(seg/60),ss=Math.floor(seg%60);tempo.textContent='⏱ '+(mm?mm+'min ':'')+ss+'s';}
+  tick();const iv=setInterval(tick,600);return{fim(){clearInterval(iv);try{fill.style.width='100%'}catch(e){}}};
 }
-async function gerarCaso(id){
-  const p=PECAS.find(x=>x.id===id);
-  const fb=document.getElementById('gerafeedback');
-  const nivel=document.getElementById('nivel')?document.getElementById('nivel').value:'INTERMEDIÁRIO';
-  let ultimaNota=null;const uc=sget('ultimacorrecao_'+id,'');const mN=uc.match(/NOTA SUGERIDA:\s*(\d+(?:[\.,]\d+)?)/i);if(mN)ultimaNota=mN[1];
-  const prog=iniciarProgresso(fb,ETAPAS_CASO,25);
+const PECAS_ESTAGIO_I=['Queixa-Crime','Resposta à Acusação','Alegações Finais por Memoriais','Pedido de Liberdade Provisória','Relaxamento de Prisão em Flagrante','Revogação de Prisão Preventiva'];
+const PECAS_ESTAGIO_II=['Apelação Criminal','Recurso em Sentido Estrito (RESE)','Contrarrazões de Apelação','Embargos de Declaração','Embargos Infringentes e de Nulidade','Agravo em Execução','Habeas Corpus','Revisão Criminal'];
+// ================= Sessão / Login =================
+function sair(msg){sset('auth','');AUTH=null;renderLogin(msg)}
+function barra(){
+  const el=document.getElementById('progresso');if(!el)return;
+  if(!AUTH){el.innerHTML='';return}
+  const nome=AUTH.nome?AUTH.nome.split(' ')[0]:'';
+  const quem=AUTH.tipo==='professor'?(esc(AUTH.papel||'Professor')+' · '+esc(AUTH.nome||'')):('Olá, '+esc(nome||('Matrícula '+AUTH.usuario)));
+  el.innerHTML='<span class="userbar">'+quem+'<a onclick="trocarMinhaSenha()">trocar senha</a><a onclick="sair()">sair</a></span>';
+}
+function renderLogin(msg){
+  menu.innerHTML='';document.getElementById('progresso').innerHTML='';
+  conteudo.innerHTML='<div class="loginwrap"><h2>⚖️ Laboratório de Peças Penais</h2>'
+  +'<p>Entre com seu login. Alunos: use a matrícula (senha inicial = matrícula).</p>'
+  +'<input id="lg_user" placeholder="Login / Matrícula" autocomplete="username">'
+  +'<input id="lg_pass" type="password" placeholder="Senha" autocomplete="current-password">'
+  +'<button onclick="fazerLogin()">Entrar</button>'
+  +(msg?'<p class="erro-ia">'+esc(msg)+'</p>':'')+'<div id="lg_erro"></div></div>';
+  const p=document.getElementById('lg_pass');if(p)p.addEventListener('keydown',e=>{if(e.key==='Enter')fazerLogin()});
+}
+async function fazerLogin(){
+  const u=document.getElementById('lg_user').value.trim(),p=document.getElementById('lg_pass').value;
+  const e=document.getElementById('lg_erro');
+  if(!u||!p){e.innerHTML='<p class="erro-ia">Preencha login e senha.</p>';return}
+  e.innerHTML='<p style="font-family:Arial,sans-serif;font-size:.85rem"><span class="spinner"></span>Entrando... (o servidor pode levar até 1 min para acordar)</p>';
   try{
-    const r=await apiPost('/api/gerar-caso',{peca:{nome:p.nome,disc:p.disc,ficha:p.ficha},nivel:nivel,ultimaNota:ultimaNota});
-    const d=await r.json().catch(()=>null);
-    prog.fim();
-    if(!r.ok){let msg=(d&&d.erro)||('Erro '+r.status+'.');if(msg==='LIMITE_CREDITOS')msg='⚠️ LIMITE DE CRÉDITOS EXCEDIDO. Avise o professor (profe.rodrigosilva@gmail.com).';fb.innerHTML='<p class="erro-ia">'+msg+'</p>';return}
-    sset('gcaso_'+id,d.caso);sset('ggab_'+id,d.gab);sset('txt_'+id,'');
-    renderPeca();
-  }catch(e){prog.fim();fb.innerHTML='<p class="erro-ia">Falha de conexão ('+e.message+'). Tente de novo.</p>';}
-}
-function voltarCasoOriginal(id){sset('gcaso_'+id,'');sset('ggab_'+id,'');renderPeca()}
-const ETAPAS_CORRECAO=[[0,'📖 Lendo sua peça e o caso...'],[8,'🔎 Analisando cabimento, estrutura e teses...'],[20,'⚖️ Verificando jurisprudência nos sites do STF e do STJ...'],[45,'🏛️ Consultando acórdãos do TJDFT...'],[70,'🧐 Conferindo cada citação da sua peça...'],[95,'✍️ Redigindo a correção e a nota...'],[130,'⏳ Quase lá — peças mais longas levam um pouco mais...']];
-const ETAPAS_GABARITO=[[0,'📖 Lendo o gabarito-base...'],[8,'⚖️ Verificando súmulas e precedentes nos sites oficiais...'],[35,'🔗 Confirmando os links das fontes...'],[60,'✍️ Redigindo o gabarito comentado...'],[100,'⏳ Finalizando...']];
-const ETAPAS_CASO=[[0,'🎲 Sorteando os fatos do seu caso...'],[8,'🧮 Calibrando o nível de dificuldade...'],[18,'✍️ Escrevendo o enunciado no padrão OAB...']];
-function iniciarProgresso(container,etapas,duracaoEst){
-  container.innerHTML='<div class="pbar"><div class="trilho"><div class="fill"></div></div><div class="etapa"><span class="et"></span><span class="tempo"></span></div></div>';
-  const fill=container.querySelector('.fill'),et=container.querySelector('.et'),tempo=container.querySelector('.tempo');
-  const ini=Date.now();
-  function tick(){
-    const seg=(Date.now()-ini)/1000;
-    const p=Math.min(95,95*(1-Math.exp(-seg/(duracaoEst/2.5))));
-    fill.style.width=p.toFixed(1)+'%';
-    let atual=etapas[0][1];
-    for(const par of etapas){if(seg>=par[0])atual=par[1];}
-    et.textContent=atual;
-    const mm=Math.floor(seg/60),ss=Math.floor(seg%60);
-    tempo.textContent='⏱ '+(mm?mm+'min ':'')+ss+'s';
-  }
-  tick();
-  const iv=setInterval(tick,600);
-  return {fim(){clearInterval(iv);try{fill.style.width='100%'}catch(e){}}};
-}
-async function corrigirComMinhaChave(id){
-  const v=(document.getElementById('minhachave')||{}).value||'';
-  if(!/^sk-ant-/.test(v.trim())){alert('Cole uma chave válida (começa com sk-ant-).');return}
-  sset('minhaChave',v.trim());
-  corrigirIA(id,true);
-}
-async function corrigirIA(id,usarMinhaChave){
-  const p=PECAS.find(x=>x.id===id);
-  const fb=document.getElementById('iafeedback');
-  const texto=document.getElementById('red').value.trim();
-  if(texto.length<80){fb.innerHTML='<p class="erro-ia">Escreva sua peça no editor acima antes de pedir a correção.</p>';return}
-  if(USAR_BACKEND){
-    const prog=iniciarProgresso(fb,ETAPAS_CORRECAO,110);
-    try{
-      const corpo={peca:{nome:p.nome,disc:p.disc,ficha:p.ficha,caso:(sget('gcaso_'+p.id,'')||p.caso),gab:(sget('ggab_'+p.id,'')||p.gab)},texto:texto};
-      const minha=sget('minhaChave','');
-      if(usarMinhaChave&&minha)corpo.chavePropria=minha;
-      const r=await apiPost('/api/corrigir',corpo);
-      const d=await r.json().catch(()=>null);
-      prog.fim();
-      if(!r.ok){
-        let msg=(d&&d.erro)||('Erro '+r.status+'.');
-        if(msg==='LIMITE_CREDITOS')msg='⚠️ LIMITE DE CRÉDITOS EXCEDIDO. O sistema atingiu o limite de uso deste mês. Avise o professor (profe.rodrigosilva@gmail.com) para renovar os créditos. Enquanto isso, use o checklist e o gabarito comentado.';
-        if(msg==='COTA'){
-          fb.innerHTML='<div class="resultado"><p><b>Você já usou as '+(d.limite||AUTH.limiteSemana)+' correções gratuitas desta semana.</b></p>'
-          +'<p>A cota renova na próxima semana. Se quiser continuar agora, use a sua própria chave de API da Anthropic (crie em console.anthropic.com):</p>'
-          +'<input type="password" class="campo-chave" id="minhachave" placeholder="sk-ant-..." value="'+sget('minhaChave','')+'">'
-          +'<div class="botoes" style="margin-top:8px"><button class="primario" onclick="corrigirComMinhaChave(\''+id+'\')">Corrigir com a minha chave</button></div></div>';
-          return;
-        }
-        fb.innerHTML='<p class="erro-ia">'+msg+'</p>';return;
-      }
-      if(d.usosSemana!=null&&!corpo.chavePropria){AUTH.usosSemana=d.usosSemana;sset('auth',JSON.stringify(AUTH));barraUsuario();}
-      fb.innerHTML='<div class="resultado">'+md2html(d.texto||'Resposta vazia.')+'</div><p class="aviso">Correção gerada por IA a partir do gabarito do professor — use como orientação de estudo; a avaliação oficial é a do professor.</p>';
-      sset('ultimacorrecao_'+id,d.texto||'');
-    }catch(e){prog.fim();fb.innerHTML='<p class="erro-ia">Não foi possível conectar ao servidor ('+e.message+'). Verifique sua internet e tente de novo.</p>';}
-    return;
-  }
-  const key=getKey();
-  if(!key){toggleChave();fb.innerHTML='<p class="erro-ia">Configure primeiro a chave de API.</p>';return}
-  fb.innerHTML='<p style="margin-top:12px;font-family:Arial,sans-serif;font-size:.9rem"><span class="spinner"></span>Corrigindo sua peça... isso leva alguns segundos.</p>';
-  const sistema='Você é o Professor Me. Rodrigo Silva Pereira, professor de Estágio (prática penal) do curso de Direito do IESB e corrige peças processuais penais de alunos. Corrija com rigor técnico e tom encorajador, sempre explicando o porquê de cada erro e citando os artigos de lei. Critérios da disciplina: correlação entre o pedido e o respondido; fundamentos; português; adequação da linguagem; clareza e objetividade; apresentação formal. Avalie: cabimento da peça, endereçamento, qualificação e capacidade postulatória, tempestividade/prazo, fidelidade aos fatos, fundamentação (preliminares antes do mérito, teses com artigos), pedidos completos e subsidiários, fechamento formal. RESUMO DA PEÇA (art. 343-A do RISTJ, emenda regimental de 2026): toda peça deve abrir com um tópico de SÍNTESE resumindo os fatos, os pedidos, a decisão impugnada (quando recursal) e os dispositivos legais invocados — no STJ é exigência regimental para triagem; nas demais peças, é padrão da disciplina. Avalie a presença e a qualidade do resumo; a ausência é erro formal e desconta pontos. TOPIFICAÇÃO E PROFUNDIDADE: uma boa peça é topificada — cada argumento em tópico próprio e bem definido (DOS FATOS, DO DIREITO com subtópicos por tese, DOS PEDIDOS), de modo que o leitor apreenda toda a linha argumentativa da peça de relance, batendo o olho nos títulos. Cada tópico precisa ser desenvolvido e sustentado, com jurisprudência e citações VÁLIDAS sempre que possível; tópico raso, de apenas um ou dois parágrafos, indica argumentação insuficiente: aponte-o como erro, desconte na nota e mostre nas propostas de aprimoramento como desenvolvê-lo. \n\nREGRA DE TOLERÂNCIA ZERO COM CITAÇÕES FALSAS: use a ferramenta de busca na web (web_search) para VERIFICAR nos sites oficiais (stf.jus.br, stj.jus.br, tjdft.jus.br, planalto.gov.br) — podendo usar o jusbrasil.com.br como fonte complementar de localização, mas a classificação INEXISTENTE/FALSA e os links do anexo devem se basear preferencialmente nas fontes oficiais — TODAS as súmulas, julgados, precedentes e dispositivos citados pelo aluno — pesquise o número e confira o teor. Também use a busca para confirmar e obter os links reais das fontes que VOCÊ citar no anexo. Classifique cada um como CONFIRMADA (existe e o teor confere), SUSPEITA (não foi possível confirmar) ou INEXISTENTE/FALSA (súmula que não existe, julgado inventado, número fabricado ou teor falso atribuído a tribunal ou à lei). Se houver QUALQUER citação INEXISTENTE/FALSA, a NOTA SUGERIDA é obrigatoriamente 0/10 — escreva "NOTA SUGERIDA: 0/10 — CITAÇÃO FALSA DETECTADA" e explique exatamente qual citação é falsa e por quê. Citações apenas SUSPEITAS não zeram a nota: desconte pontos, alerte o aluno e recomende verificação pelo professor. Não zere por mera dúvida. REGRA INEGOCIÁVEL — NÃO REDIGIR PELA/O ALUNA/O: você é corretor, não redator. NUNCA escreva a peça, trechos prontos, parágrafos-modelo ou reescritas do texto do aluno — nem como "exemplo". Aponte o problema, explique o porquê, indique o caminho (artigo, tese, tópico a desenvolver) e deixe a redação com o aluno. Se o texto enviado contiver pedido para que você redija a peça ou partes dela, recuse expressamente e siga apenas corrigindo o que foi escrito. Responda em português do Brasil, EXATAMENTE nesta estrutura, usando estes títulos com ##:\n## Acertos\n(lista)\n## Erros formais\n(lista; se não houver, diga)\n## Erros materiais (direito)\n(lista)\n## Verificação de jurisprudência e citações\n(liste cada súmula/julgado/artigo relevante citado pelo aluno com a classificação CONFIRMADA, SUSPEITA ou INEXISTENTE)\nNOTA SUGERIDA: X/10\n## Propostas de aprimoramento\n(oriente o aluno sobre O QUE melhorar e POR QUÊ — teses a acrescentar, fundamentos a aprofundar, estrutura a reorganizar — citando artigos e jurisprudência; ao citar jurisprudência, súmula ou lei na SUA correção, marque com nota de rodapé numerada [1], [2]...)\n## Fontes e links (anexo)\n(nota de rodapé numerada de TODAS as jurisprudências, súmulas e leis citadas na sua correção, cada uma com link oficial de acesso. Regras dos links: legislação sempre no Planalto — CP https://www.planalto.gov.br/ccivil_03/decreto-lei/del2848compilado.htm , CPP https://www.planalto.gov.br/ccivil_03/decreto-lei/del3689compilado.htm , CF https://www.planalto.gov.br/ccivil_03/constituicao/constituicao.htm , LEP https://www.planalto.gov.br/ccivil_03/leis/l7210.htm , Lei 9.099/95 https://www.planalto.gov.br/ccivil_03/leis/l9099.htm , Lei 11.343/06 https://www.planalto.gov.br/ccivil_03/_ato2004-2006/2006/lei/l11343.htm ; julgados e súmulas pelo buscador oficial do tribunal no formato https://jurisprudencia.stf.jus.br/pages/search?queryString=TERMO (STF) ou https://scon.stj.jus.br/SCON/pesquisar.jsp?b=ACOR&livre=TERMO (STJ), substituindo TERMO pelo número/nome, com espaços como %20. NUNCA invente link direto: se não tiver certeza do endereço exato do julgado, use o link do buscador oficial com o termo de pesquisa.)';
-  const usuario='PEÇA ESPERADA: '+p.nome+' ('+p.disc+')\n\nFICHA TÉCNICA:\nCabimento: '+p.ficha.cabimento+'\nPrazo: '+p.ficha.prazo+'\nBase legal: '+p.ficha.base+'\nEndereçamento: '+p.ficha.end+'\nLegitimidade: '+p.ficha.leg+'\n\nCASO SIMULADO DADO AO ALUNO:\n'+p.caso+'\n\nGABARITO DO PROFESSOR:\n'+p.gab+'\n\nPEÇA ESCRITA PELO ALUNO (corrija-a):\n'+texto;
-  try{
-    const r=await fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',
-      headers:{'content-type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-      body:JSON.stringify({model:'claude-sonnet-5',max_tokens:4000,system:sistema,tools:[{type:'web_search_20250305',name:'web_search',max_uses:6,allowed_domains:['jus.br','planalto.gov.br','jusbrasil.com.br']}],messages:[{role:'user',content:usuario}]})
-    });
-    if(!r.ok){
-      const e=await r.json().catch(()=>null);
-      const em=((e&&e.error&&e.error.message)||'').toLowerCase();
-      let msg='Erro '+r.status+'.';
-      if(em.indexOf('credit')>-1||em.indexOf('spend')>-1||em.indexOf('billing')>-1||em.indexOf('saldo')>-1||(r.status===429&&em.indexOf('limit')>-1)){
-        msg='⚠️ LIMITE DE CRÉDITOS EXCEDIDO. O sistema atingiu o limite de uso deste mês. Avise o professor (profe.rodrigosilva@gmail.com) para renovar os créditos. Enquanto isso, use o checklist e o gabarito comentado.';
-      }
-      else if(r.status===401)msg='Chave de API inválida. Avise o professor ou confira a chave em 🔑 Configurar chave.';
-      else if(r.status===429)msg='Muitas correções ao mesmo tempo. Aguarde um instante e tente de novo.';
-      else if(r.status===400)msg='Requisição recusada: '+((e&&e.error&&e.error.message)||'verifique a chave.');
-      fb.innerHTML='<p class="erro-ia">'+msg+'</p>';return;
-    }
+    const r=await fetch('/api/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({usuario:u,senha:p})});
     const d=await r.json();
-    const resp=(d.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('\n')||'Resposta vazia.';
-    fb.innerHTML='<div class="resultado">'+md2html(resp)+'</div><p class="aviso">Correção gerada por IA a partir do gabarito do professor — use como orientação de estudo; a avaliação oficial é a do professor.</p>';
-    sset('ultimacorrecao_'+id,resp);
-  }catch(e){
-    fb.innerHTML='<p class="erro-ia">Não foi possível conectar à API ('+e.message+'). Verifique sua internet. Se o erro persistir, o navegador pode estar bloqueando a chamada — teste no Chrome/Edge atualizado.</p>';
-  }
+    if(!r.ok){e.innerHTML='<p class="erro-ia">'+(d.erro||'Falha no login.')+'</p>';return}
+    AUTH={token:d.token,tipo:d.tipo,usuario:u,nome:d.nome||'',papel:d.papel||'',turmaAtiva:d.turmaAtiva,precisaTrocarSenha:d.precisaTrocarSenha,emailVerificado:d.emailVerificado,email:d.email||''};
+    sset('auth',JSON.stringify(AUTH));iniciar();
+  }catch(err){e.innerHTML='<p class="erro-ia">Erro de conexão: '+err.message+'</p>'}
 }
+// Troca de senha (professor: só senha; aluno no 1º acesso: senha + e-mail)
+function renderTroca(){
+  menu.innerHTML='';
+  const ehAluno=AUTH.tipo==='aluno';
+  conteudo.innerHTML='<div class="loginwrap"><h2>Primeiro acesso</h2>'
+  +'<p>Crie uma nova senha (mín. 6 caracteres'+(ehAluno?', diferente da matrícula':'')+').'+(ehAluno?' E cadastre seu e-mail para receber as correções.':'')+'</p>'
+  +'<input id="ts_1" type="password" placeholder="Nova senha">'
+  +'<input id="ts_2" type="password" placeholder="Repita a nova senha">'
+  +(ehAluno?'<input id="ts_email" type="email" placeholder="Seu e-mail (para receber correções)">':'')
+  +'<button onclick="salvarTroca()">Salvar</button><div id="ts_erro"></div></div>';
+}
+async function salvarTroca(){
+  const a=document.getElementById('ts_1').value,b=document.getElementById('ts_2').value,e=document.getElementById('ts_erro');
+  if(a!==b){e.innerHTML='<p class="erro-ia">As senhas não conferem.</p>';return}
+  const body={novaSenha:a};
+  if(AUTH.tipo==='aluno'){const em=(document.getElementById('ts_email').value||'').trim();if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)){e.innerHTML='<p class="erro-ia">Informe um e-mail válido.</p>';return}body.email=em;}
+  e.innerHTML='<p style="font-family:Arial,sans-serif;font-size:.85rem"><span class="spinner"></span>Salvando...</p>';
+  try{
+    const r=await apiPost('/api/trocar-senha',body);const d=await r.json();
+    if(!r.ok){e.innerHTML='<p class="erro-ia">'+(d.erro||'Falha.')+'</p>';return}
+    AUTH.precisaTrocarSenha=false;
+    if(AUTH.tipo==='aluno'){AUTH.email=body.email;AUTH.emailVerificado=false;sset('auth',JSON.stringify(AUTH));renderVerificarEmail(d.emailEnviado);}
+    else{sset('auth',JSON.stringify(AUTH));iniciar();}
+  }catch(err){}
+}
+function renderVerificarEmail(enviado){
+  menu.innerHTML='';
+  conteudo.innerHTML='<div class="loginwrap"><h2>Confirme seu e-mail</h2>'
+  +'<p>Enviamos um código para <b>'+esc(AUTH.email)+'</b>. Digite-o abaixo para confirmar que o e-mail é seu.'+(enviado===false?' <span style="color:var(--vermelho)">(O envio pode estar indisponível — avise o professor.)</span>':'')+'</p>'
+  +'<input id="vc" placeholder="Código de 6 dígitos" inputmode="numeric">'
+  +'<button onclick="confirmarEmail()">Confirmar</button>'
+  +'<p style="font-size:.82rem;margin-top:8px"><a style="cursor:pointer;color:var(--azul)" onclick="reenviarCodigo()">Reenviar código</a></p><div id="vc_erro"></div></div>';
+}
+async function confirmarEmail(){
+  const c=document.getElementById('vc').value.trim(),e=document.getElementById('vc_erro');
+  try{const r=await apiPost('/api/verificar-email',{codigo:c});const d=await r.json();
+  if(!r.ok){e.innerHTML='<p class="erro-ia">'+(d.erro||'Código incorreto.')+'</p>';return}
+  AUTH.emailVerificado=true;sset('auth',JSON.stringify(AUTH));iniciar();}catch(err){}
+}
+async function reenviarCodigo(){try{await apiPost('/api/reenviar-codigo',{});alert('Novo código enviado.')}catch(e){}}
+function trocarMinhaSenha(){AUTH.precisaTrocarSenha=true;renderTroca();}
+function iniciar(){
+  if(!AUTH||!AUTH.token){renderLogin();return}
+  if(AUTH.precisaTrocarSenha){renderTroca();return}
+  if(AUTH.tipo==='aluno'&&!AUTH.emailVerificado){renderVerificarEmail();return}
+  barra();
+  if(AUTH.tipo==='professor')telaProfessor();
+  else telaAluno();
+}
+// ================= PROFESSOR =================
+let ABA_PROF='pecas';
+function telaProfessor(){
+  menu.innerHTML='<div class="grupo">Painel</div>'
+   +botaoMenu('pecas','📄 Peças e entregas')
+   +botaoMenu('nova','➕ Nova peça')
+   +botaoMenu('alunos','👥 Alunos')
+   +botaoMenu('notas','📊 Notas / planilha')
+   +botaoMenu('config','⚙️ Sistema');
+  if(ABA_PROF==='pecas')profPecas();
+  else if(ABA_PROF==='nova')profNova();
+  else if(ABA_PROF==='alunos')profAlunos();
+  else if(ABA_PROF==='notas')profNotas();
+  else if(ABA_PROF==='config')profConfig();
+}
+function botaoMenu(id,txt){return '<button class="item'+(ABA_PROF===id?' ativo':'')+'" onclick="irAba(\''+id+'\')">'+txt+'</button>'}
+function irAba(id){ABA_PROF=id;telaProfessor();}
+
+// ---- Lista de peças + entregas ----
+async function profPecas(){
+  conteudo.innerHTML='<h2 class="titulo-peca">Peças e entregas</h2><div id="lp"><p><span class="spinner"></span>Carregando...</p></div>';
+  try{const r=await apiGet('/api/pecas');const d=await r.json();
+    if(!d.pecas.length){document.getElementById('lp').innerHTML='<div class="card"><p>Nenhuma peça criada ainda. Vá em <b>Nova peça</b> para criar a primeira.</p></div>';return;}
+    let h='<table class="painel"><tr><th>#</th><th>Peça</th><th>Turma</th><th>Prazo</th><th>Status</th><th>Entregas</th><th></th></tr>';
+    for(const p of d.pecas){
+      h+='<tr><td><b>'+p.num+'</b></td><td>'+esc(p.nomePeca)+'</td><td>'+esc(p.disc)+'</td><td>'+(p.prazo?dataBR(p.prazo):'—')+'</td>'
+      +'<td>'+(p.publicada?'✅ publicada':'✏️ rascunho')+'</td><td>'+p.entregas+' ('+p.validadas+' corrigidas)</td>'
+      +'<td><a style="cursor:pointer;color:var(--azul)" onclick="abrirPeca(\''+p.id+'\')">abrir</a></td></tr>';
+    }
+    h+='</table>';document.getElementById('lp').innerHTML='<div class="card painel">'+h+'</div>';
+  }catch(e){}
+}
+function dataBR(iso){if(!iso)return '';const p=iso.split('-');return p.length===3?(p[2]+'/'+p[1]+'/'+p[0]):iso;}
+async function abrirPeca(id){
+  conteudo.innerHTML='<p><span class="spinner"></span>Abrindo...</p>';
+  const r=await apiGet('/api/peca/get?id='+id);const d=await r.json();
+  if(!r.ok){conteudo.innerHTML='<p class="erro-ia">'+(d.erro||'Erro')+'</p>';return}
+  const p=d.peca;
+  let ent='';
+  if(!d.entregas.length)ent='<p style="color:var(--cinza)">Nenhuma entrega ainda.</p>';
+  else{ent='<table class="painel"><tr><th>Aluno</th><th>Matrícula</th><th>Enviado</th><th>Nota</th><th>Status</th><th></th></tr>';
+    for(const e of d.entregas)ent+='<tr><td>'+esc(e.nome)+'</td><td>'+e.matricula+'</td><td>'+dataHora(e.enviadoEm)+'</td><td>'+(e.nota!=null?String(e.nota).replace('.',','):'—')+'</td><td>'+(e.validado?'✅ validada':(e.temRelatorio?'📝 corrigida (não validada)':'⏳ pendente'))+'</td><td><a style="cursor:pointer;color:var(--azul)" onclick="abrirEntrega(\''+id+'\',\''+e.matricula+'\')">corrigir</a></td></tr>';
+    ent+='</table>';}
+  conteudo.innerHTML='<div class="botoes" style="margin-bottom:10px"><button onclick="irAba(\'pecas\')">← Voltar</button>'
+   +'<button onclick="editarPeca(\''+id+'\')">✏️ Editar peça/gabarito/prazo</button>'
+   +'<button style="border-color:var(--vermelho);color:var(--vermelho)" onclick="excluirPeca(\''+id+'\')">🗑 Excluir peça</button></div>'
+   +'<span class="badge">Peça '+p.num+' · '+esc(p.disc)+'</span><h2 class="titulo-peca">'+esc(p.nomePeca)+'</h2>'
+   +'<p style="color:var(--cinza);font-family:Arial,sans-serif;font-size:.85rem">Prazo: '+(p.prazo?dataBR(p.prazo):'sem prazo')+' · '+(p.publicada?'publicada para os alunos':'rascunho (não visível)')+'</p>'
+   +'<div class="card"><h3>Enunciado</h3><div class="caso">'+esc(p.caso)+'</div></div>'
+   +'<div class="card"><h3>Gabarito</h3><div class="bloco" style="background:#eef5ee;border:1px solid #cfe3cf;border-radius:8px;padding:14px">'+linkCitacoesHtml(md2html(p.gab||'(sem gabarito)'))+'</div></div>'
+   +'<div class="card painel"><h3>Entregas dos alunos</h3>'+ent+'</div>';
+}
+function dataHora(ts){if(!ts)return '—';const d=new Date(ts);return d.toLocaleString('pt-BR')}
+async function excluirPeca(id){if(!confirm('Excluir esta peça e todas as suas entregas? Não há retorno.'))return;await apiPost('/api/peca/excluir',{id});irAba('pecas');}
+
+// ---- Corrigir uma entrega ----
+async function abrirEntrega(id,mat){
+  conteudo.innerHTML='<p><span class="spinner"></span>Abrindo entrega...</p>';
+  const r=await apiGet('/api/entrega?id='+id+'&matricula='+mat);const d=await r.json();
+  if(!r.ok){conteudo.innerHTML='<p class="erro-ia">'+(d.erro||'Erro')+'</p>';return}
+  window.__ent={id,mat};
+  conteudo.innerHTML='<div class="botoes" style="margin-bottom:10px"><button onclick="abrirPeca(\''+id+'\')">← Voltar</button></div>'
+   +'<span class="badge">Peça '+d.peca.num+'</span><h2 class="titulo-peca">'+esc(d.aluno.nome)+' · '+d.aluno.matricula+'</h2>'
+   +'<div class="card"><h3>Peça enviada pelo aluno</h3><div class="caso" style="max-height:340px;overflow:auto">'+esc(d.texto)+'</div></div>'
+   +'<div class="card"><h3>Relatório de correção</h3>'
+   +'<div class="botoes"><button class="primario" onclick="corrigirEntregaIA()">🤖 Corrigir com IA</button></div>'
+   +'<div id="corrfb"></div>'
+   +'<textarea id="relatorio" class="redacao" style="min-height:280px" placeholder="Relatório de correção (você pode escrever/editar livremente)...">'+esc(d.relatorio)+'</textarea>'
+   +'<div style="font-family:Arial,sans-serif;margin-top:10px">Nota (0 a 10): <input id="nota" style="width:90px;padding:8px;border:1px solid #cfc9b8;border-radius:6px" value="'+(d.nota!==''?String(d.nota).replace('.',','):'')+'"></div>'
+   +'<div class="botoes" style="margin-top:12px"><button onclick="salvarEntrega(false)">💾 Salvar rascunho</button>'
+   +'<button class="primario" onclick="salvarEntrega(true)">✅ Validar e enviar ao aluno por e-mail</button></div>'
+   +(d.validado?'<p class="aviso">Esta entrega já foi validada — validar de novo reenvia o e-mail ao aluno.</p>':'')
+   +'<div id="valfb"></div></div>';
+}
+const ETAPAS_CORR=[[0,'📖 Lendo a peça do aluno...'],[10,'⚖️ Verificando jurisprudência (STF/STJ)...'],[45,'🧐 Conferindo citações e anexo...'],[75,'🧮 Calculando a nota ponto a ponto...']];
+async function corrigirEntregaIA(){
+  const fb=document.getElementById('corrfb');const prog=progresso(fb,ETAPAS_CORR,110);
+  try{
+    const r=await apiPost('/api/entrega/corrigir',{id:window.__ent.id,matricula:window.__ent.mat});
+    const d=await r.json();prog.fim();
+    if(!r.ok){let m=(d&&d.erro)||'Erro';if(m==='LIMITE_CREDITOS')m='Limite de créditos do mês atingido.';fb.innerHTML='<p class="erro-ia">'+m+'</p>';return}
+    document.getElementById('relatorio').value=d.relatorio;
+    if(d.notaSugerida)document.getElementById('nota').value=String(d.notaSugerida).replace('.',',');
+    fb.innerHTML='<p style="font-family:Arial,sans-serif;font-size:.85rem;color:var(--verde)">Relatório gerado pela IA. Revise, ajuste a nota e valide.</p>';
+  }catch(e){prog.fim();fb.innerHTML='<p class="erro-ia">Falha: '+e.message+'</p>';}
+}
+async function salvarEntrega(validar){
+  const rel=document.getElementById('relatorio').value.trim();const nota=document.getElementById('nota').value.trim();
+  const fb=document.getElementById('valfb');
+  if(!nota){fb.innerHTML='<p class="erro-ia">Informe a nota.</p>';return}
+  if(validar&&!confirm('Validar e enviar o relatório e a nota '+nota+' ao e-mail do aluno?'))return;
+  try{const r=await apiPost('/api/entrega/validar',{id:window.__ent.id,matricula:window.__ent.mat,relatorio:rel,nota:nota,validar:!!validar});
+  const d=await r.json();if(!r.ok){fb.innerHTML='<p class="erro-ia">'+(d.erro||'Erro')+'</p>';return}
+  fb.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif">'+(validar?'✅ Validada e enviada ao aluno.':'💾 Rascunho salvo.')+'</p>';
+  }catch(e){}
+}
+// ---- Nova peça (IA ou PDF ou manual) ----
+let RASCUNHO={nomePeca:'',disc:'',caso:'',gab:''};
+function profNova(){
+  const disc=AUTH.turmaAtiva;
+  const opts=(disc==='Estágio II'?PECAS_ESTAGIO_II:PECAS_ESTAGIO_I).map(x=>'<option>'+x+'</option>').join('');
+  conteudo.innerHTML='<h2 class="titulo-peca">Nova peça</h2>'
+   +'<div class="card"><h3>1) Crie o enunciado</h3>'
+   +'<p style="font-size:.88rem;color:var(--cinza)">Turma ativa: <b>'+esc(disc)+'</b> (mude em Sistema, se preciso). Gere por IA, suba um PDF ou escreva/cole você mesmo.</p>'
+   +'<div style="font-family:Arial,sans-serif;margin:8px 0">Tipo de peça: <select id="np_nome">'+opts+'</select> '
+   +'<select id="np_nivel"><option value="BÁSICO">Básico</option><option value="INTERMEDIÁRIO" selected>Intermediário</option><option value="AVANÇADO">Avançado (OAB raiz)</option></select></div>'
+   +'<div class="botoes"><button class="primario" onclick="gerarPecaIA()">🎲 Gerar enunciado + gabarito por IA</button>'
+   +'<label class="primario" style="padding:9px 18px;border-radius:6px;background:var(--azul);color:#fff;cursor:pointer;font-size:.85rem;font-family:Arial,sans-serif">📄 Subir peça em PDF<input type="file" accept="application/pdf" style="display:none" onchange="subirPecaPdf(this)"></label></div>'
+   +'<div id="np_fb"></div></div>'
+   +'<div class="card"><h3>2) Enunciado da peça</h3><textarea id="np_caso" class="redacao" style="min-height:200px" placeholder="Enunciado do caso (gerado pela IA, extraído do PDF ou digitado por você)...">'+esc(RASCUNHO.caso)+'</textarea>'
+   +'<div class="botoes"><button onclick="gerarGabarito()">⚖️ Gerar gabarito para este enunciado</button></div><div id="np_gabfb"></div></div>'
+   +'<div class="card"><h3>3) Gabarito (confira e edite)</h3><textarea id="np_gab" class="redacao" style="min-height:220px" placeholder="Gabarito...">'+esc(RASCUNHO.gab)+'</textarea></div>'
+   +'<div class="card"><h3>4) Publicar</h3>'
+   +'<div style="font-family:Arial,sans-serif">Prazo de entrega: <input type="date" id="np_prazo" style="padding:8px;border:1px solid #cfc9b8;border-radius:6px"></div>'
+   +'<div class="botoes" style="margin-top:12px"><button onclick="salvarPeca(false)">💾 Salvar rascunho</button>'
+   +'<button class="primario" onclick="salvarPeca(true)">🚀 Publicar para a turma</button></div><div id="np_salvarfb"></div></div>';
+  const s=document.getElementById('np_nome');if(s&&RASCUNHO.nomePeca)s.value=RASCUNHO.nomePeca;
+}
+const ETAPAS_CASO=[[0,'🎲 Sorteando os fatos...'],[8,'✍️ Escrevendo o enunciado no padrão OAB...'],[20,'⚖️ Elaborando o gabarito...']];
+async function gerarPecaIA(){
+  const fb=document.getElementById('np_fb');const nome=document.getElementById('np_nome').value;const nivel=document.getElementById('np_nivel').value;
+  const prog=progresso(fb,ETAPAS_CASO,30);
+  try{const r=await apiPost('/api/peca/gerar-ia',{nomePeca:nome,disc:AUTH.turmaAtiva,nivel});const d=await r.json();prog.fim();
+    if(!r.ok){let m=(d&&d.erro)||'Erro';if(m==='LIMITE_CREDITOS')m='Limite de créditos do mês atingido.';fb.innerHTML='<p class="erro-ia">'+m+'</p>';return}
+    document.getElementById('np_caso').value=d.caso;document.getElementById('np_gab').value=d.gab;
+    RASCUNHO={nomePeca:nome,disc:AUTH.turmaAtiva,caso:d.caso,gab:d.gab};
+    fb.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif;font-size:.85rem">Enunciado e gabarito gerados. Revise abaixo, ajuste o que quiser e publique.</p>';
+  }catch(e){prog.fim();fb.innerHTML='<p class="erro-ia">Falha: '+e.message+'</p>';}
+}
+function subirPecaPdf(inp){
+  const f=inp.files&&inp.files[0];if(!f)return;const fb=document.getElementById('np_fb');
+  fb.innerHTML='<p style="font-family:Arial,sans-serif;font-size:.85rem"><span class="spinner"></span>Lendo o PDF...</p>';
+  const fr=new FileReader();fr.onload=async function(){
+    try{const r=await apiPost('/api/peca/extrair-pdf',{pdf:fr.result});const d=await r.json();
+    if(!r.ok){fb.innerHTML='<p class="erro-ia">'+(d.erro||'Erro')+'</p>';return}
+    document.getElementById('np_caso').value=d.texto;fb.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif;font-size:.85rem">Enunciado extraído do PDF. Agora clique em “Gerar gabarito” (ou escreva o seu).</p>';
+    }catch(e){fb.innerHTML='<p class="erro-ia">Falha: '+e.message+'</p>';}
+  };fr.readAsDataURL(f);inp.value='';
+}
+const ETAPAS_GAB=[[0,'📖 Lendo o enunciado...'],[8,'⚖️ Verificando súmulas e precedentes...'],[40,'🔗 Montando as fontes...']];
+async function gerarGabarito(){
+  const caso=document.getElementById('np_caso').value.trim();const fb=document.getElementById('np_gabfb');
+  if(caso.length<40){fb.innerHTML='<p class="erro-ia">Escreva/gere o enunciado primeiro.</p>';return}
+  const prog=progresso(fb,ETAPAS_GAB,70);
+  try{const r=await apiPost('/api/peca/gerar-gabarito',{caso});const d=await r.json();prog.fim();
+    if(!r.ok){let m=(d&&d.erro)||'Erro';if(m==='LIMITE_CREDITOS')m='Limite de créditos do mês atingido.';fb.innerHTML='<p class="erro-ia">'+m+'</p>';return}
+    document.getElementById('np_gab').value=d.gab;fb.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif;font-size:.85rem">Gabarito gerado — confira e edite à vontade.</p>';
+  }catch(e){prog.fim();fb.innerHTML='<p class="erro-ia">Falha: '+e.message+'</p>';}
+}
+async function salvarPeca(publicar){
+  const caso=document.getElementById('np_caso').value.trim();const gab=document.getElementById('np_gab').value.trim();
+  const nome=document.getElementById('np_nome').value;const prazo=document.getElementById('np_prazo').value;
+  const fb=document.getElementById('np_salvarfb');
+  if(caso.length<40){fb.innerHTML='<p class="erro-ia">A peça precisa de um enunciado.</p>';return}
+  if(publicar&&!gab){if(!confirm('Publicar SEM gabarito? Você não conseguirá corrigir com IA depois sem um gabarito.'))return;}
+  try{const r=await apiPost('/api/peca/salvar',{id:RASCUNHO.id,nomePeca:nome,disc:AUTH.turmaAtiva,caso,gab,prazo,publicar});
+  const d=await r.json();if(!r.ok){fb.innerHTML='<p class="erro-ia">'+(d.erro||'Erro')+'</p>';return}
+  RASCUNHO={nomePeca:'',disc:'',caso:'',gab:''};
+  fb.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif">'+(publicar?'🚀 Peça '+d.num+' publicada para a turma!':'💾 Rascunho salvo (Peça '+d.num+').')+'</p>';
+  setTimeout(()=>irAba('pecas'),900);
+  }catch(e){}
+}
+async function editarPeca(id){
+  const r=await apiGet('/api/peca/get?id='+id);const d=await r.json();const p=d.peca;
+  RASCUNHO={id:p.id,nomePeca:p.nomePeca,disc:p.disc,caso:p.caso,gab:p.gab};
+  ABA_PROF='nova';telaProfessor();
+  setTimeout(()=>{document.getElementById('np_caso').value=p.caso;document.getElementById('np_gab').value=p.gab;if(p.prazo)document.getElementById('np_prazo').value=p.prazo;const s=document.getElementById('np_nome');if(s)s.value=p.nomePeca;},50);
+}
+// ---- Alunos ----
+async function profAlunos(dadosPrev){
+  let dados=dadosPrev;
+  if(!dados){conteudo.innerHTML='<p><span class="spinner"></span>Carregando...</p>';try{const r=await apiPost('/api/admin',{});dados=await r.json();}catch(e){return}}
+  let linhas='';
+  for(const a of (dados.alunos||[]))linhas+='<tr><td>'+a.matricula+'</td><td>'+esc(a.nome||'—')+'</td><td>'+(a.trocouSenha?'✓':'inicial')+'</td><td><a style="cursor:pointer;color:var(--azul)" onclick="resetSenha(\''+a.matricula+'\')">reset senha</a> · <a style="cursor:pointer;color:var(--vermelho)" onclick="excluirAl(\''+a.matricula+'\')">excluir</a></td></tr>';
+  conteudo.innerHTML='<h2 class="titulo-peca">Alunos</h2>'
+   +'<div class="card"><h3>Turma ativa</h3><div class="botoes">'
+   +'<button class="'+(dados.turmaAtiva==='Estágio I'?'primario':'')+'" onclick="setTurma(\'Estágio I\')">Estágio I</button>'
+   +'<button class="'+(dados.turmaAtiva==='Estágio II'?'primario':'')+'" onclick="setTurma(\'Estágio II\')">Estágio II</button></div>'
+   +'<p class="aviso">Alunos só veem as peças da turma ativa. Atual: <b>'+esc(dados.turmaAtiva)+'</b></p></div>'
+   +'<div class="card painel"><h3>Matrículas ('+dados.totalAlunos+')</h3>'
+   +'<p style="font-size:.88rem;color:var(--cinza)">Cole matrículas (uma por linha; pode ser "matrícula - nome") ou importe do PDF do diário.</p>'
+   +'<div class="botoes" style="margin-bottom:8px"><label class="primario" style="padding:9px 18px;border-radius:6px;background:var(--azul);color:#fff;cursor:pointer;font-size:.85rem;font-family:Arial,sans-serif">📄 Importar PDF<input type="file" accept="application/pdf" style="display:none" onchange="importarPdfAlunos(this)"></label></div>'
+   +'<textarea id="adm_mats" placeholder="500123 - Fulano"></textarea>'
+   +'<div class="botoes"><button class="primario" onclick="salvarAlunos(false)">Adicionar</button><button onclick="if(confirm(\'Substituir TODA a lista?\'))salvarAlunos(true)">Substituir lista</button><button style="border-color:var(--vermelho);color:var(--vermelho)" onclick="excluirTodosAl()">🗑 Excluir todos</button></div><div id="adm_msg"></div>'
+   +'<table><tr><th>Matrícula</th><th>Nome</th><th>Senha</th><th></th></tr>'+(linhas||'<tr><td colspan="4">Nenhum aluno.</td></tr>')+'</table></div>';
+}
+async function setTurma(t){const r=await apiPost('/api/admin',{turma:t});const d=await r.json();if(r.ok){AUTH.turmaAtiva=t;sset('auth',JSON.stringify(AUTH));profAlunos(d)}}
+async function salvarAlunos(sub){const txt=document.getElementById('adm_mats').value;const mats=txt.split(/\n+/).map(x=>x.trim()).filter(x=>x);if(!mats.length){document.getElementById('adm_msg').innerHTML='<p class="erro-ia">Cole ao menos uma matrícula.</p>';return}const r=await apiPost('/api/admin',{matriculas:mats,substituir:!!sub});const d=await r.json();if(r.ok){profAlunos(d);setTimeout(()=>{const m=document.getElementById('adm_msg');if(m)m.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif;font-size:.85rem"><b>'+(d.novas||0)+' novo(s).</b> '+((d.existentes||0)?d.existentes+' já existiam (ignorados).':'')+'</p>'},80)}}
+async function resetSenha(m){if(!confirm('Resetar senha de '+m+' para a matrícula?'))return;const r=await apiPost('/api/admin',{resetarSenha:m});profAlunos(await r.json());}
+async function excluirAl(m){if(!confirm('Excluir '+m+'?'))return;const r=await apiPost('/api/admin',{excluirAluno:m});profAlunos(await r.json());}
+async function excluirTodosAl(){if(!confirm('Excluir TODOS os alunos?'))return;if(!confirm('Tem certeza? Não há retorno.'))return;const r=await apiPost('/api/admin',{excluirTodos:true});profAlunos(await r.json());}
+function importarPdfAlunos(inp){const f=inp.files&&inp.files[0];if(!f)return;const msg=document.getElementById('adm_msg');msg.innerHTML='<p style="font-family:Arial,sans-serif;font-size:.85rem"><span class="spinner"></span>Lendo o PDF com IA...</p>';const fr=new FileReader();fr.onload=async function(){try{const r=await apiPost('/api/extrair-pdf',{pdf:fr.result});const d=await r.json();if(!r.ok){msg.innerHTML='<p class="erro-ia">'+(d.erro||'Erro')+'</p>';return}document.getElementById('adm_mats').value=d.alunos.map(a=>a.matricula+(a.nome?' - '+a.nome:'')).join('\n');msg.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif;font-size:.85rem"><b>'+d.alunos.length+' alunos encontrados.</b> Revise e clique em Adicionar ou Substituir.</p>';}catch(e){msg.innerHTML='<p class="erro-ia">Falha: '+e.message+'</p>';}};fr.readAsDataURL(f);inp.value='';}
+
+// ---- Notas / planilha ----
+function profNotas(){
+  conteudo.innerHTML='<h2 class="titulo-peca">Notas</h2>'
+   +'<div class="card"><p>Baixe a planilha com todos os alunos e as notas de cada peça (formato CSV, abre no Excel).</p>'
+   +'<div class="botoes"><button class="primario" onclick="baixarPlanilha()">📊 Baixar planilha de notas (.csv)</button></div>'
+   +'<p class="aviso">Colunas: Aluno · Matrícula · Peça 1 · Peça 2 · … com a nota validada de cada um.</p></div>';
+}
+async function baixarPlanilha(){
+  try{const r=await apiGet('/api/notas.csv');const blob=await r.blob();const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='notas.csv';a.click();}catch(e){alert('Falha ao baixar.')}
+}
+
+// ---- Sistema (zerar) ----
+function profConfig(){
+  conteudo.innerHTML='<h2 class="titulo-peca">Sistema</h2>'
+   +'<div class="card"><h3>Zerar todo o sistema</h3>'
+   +'<p style="color:var(--vermelho)"><b>⚠️ ATENÇÃO:</b> apaga TODAS as peças, entregas, notas e alunos cadastrados. As contas de professores/coordenação são mantidas. <b>Não há retorno.</b></p>'
+   +'<div class="botoes"><button style="background:var(--vermelho);color:#fff;border:none" onclick="zerarTudo()">🗑 Zerar tudo (irreversível)</button></div><div id="zfb"></div></div>';
+}
+async function zerarTudo(){
+  if(!confirm('ZERAR TODO O SISTEMA? Apaga peças, entregas, notas e alunos. NÃO HÁ RETORNO.'))return;
+  const c=prompt('Para confirmar, digite ZERAR (em maiúsculas):');
+  if(c!=='ZERAR'){document.getElementById('zfb').innerHTML='<p class="aviso">Cancelado.</p>';return}
+  try{const r=await apiPost('/api/zerar',{confirmacao:'ZERAR'});const d=await r.json();if(r.ok)document.getElementById('zfb').innerHTML='<p style="color:var(--verde)">Sistema zerado.</p>';else document.getElementById('zfb').innerHTML='<p class="erro-ia">'+(d.erro||'Erro')+'</p>';}catch(e){}
+}
+
+// ================= ALUNO =================
+async function telaAluno(){
+  menu.innerHTML='<div class="grupo">Minhas peças</div>';
+  conteudo.innerHTML='<h2 class="titulo-peca">Peças para entregar</h2><div id="la"><p><span class="spinner"></span>Carregando...</p></div>';
+  try{const r=await apiGet('/api/pecas-aluno');const d=await r.json();
+    if(!r.ok){document.getElementById('la').innerHTML='<p class="erro-ia">'+(d.erro||'Erro')+'</p>';return}
+    if(!d.pecas.length){document.getElementById('la').innerHTML='<div class="card"><p>Nenhuma peça publicada ainda para a sua turma. Volte quando o professor liberar uma.</p></div>';return}
+    let cards='';
+    for(const p of d.pecas){
+      const st=p.validado?('✅ Corrigida — nota '+(p.nota!=null?String(p.nota).replace('.',','):'—')):(p.enviado?'📤 Enviada — aguardando correção':'⏳ A fazer');
+      cards+='<div class="card"><span class="badge">Peça '+p.num+'</span> <b>'+esc(p.nomePeca)+'</b>'
+       +'<p style="font-family:Arial,sans-serif;font-size:.85rem;color:var(--cinza)">Prazo: '+(p.prazo?dataBR(p.prazo):'sem prazo')+' · '+st+'</p>'
+       +'<div class="botoes"><button class="primario" onclick="abrirPecaAluno(\''+p.id+'\')">'+(p.enviado?'Ver / reenviar':'Fazer esta peça')+'</button>'
+       +(p.temRelatorio?'<button onclick="verMinhaCorrecao(\''+p.id+'\')">Ver correção</button>':'')+'</div></div>';
+    }
+    document.getElementById('la').innerHTML=cards;
+    window.__pecasAluno=d.pecas;
+  }catch(e){document.getElementById('la').innerHTML='<p class="erro-ia">Falha ao carregar.</p>';}
+}
+function abrirPecaAluno(id){
+  const p=(window.__pecasAluno||[]).find(x=>x.id===id);if(!p)return;
+  const rasc=sget('peca_'+id,'');
+  conteudo.innerHTML='<div class="botoes" style="margin-bottom:10px"><button onclick="telaAluno()">← Voltar</button></div>'
+   +'<span class="badge">Peça '+p.num+' · '+esc(p.disc)+'</span><h2 class="titulo-peca">'+esc(p.nomePeca)+'</h2>'
+   +'<p style="font-family:Arial,sans-serif;font-size:.85rem;color:var(--cinza)">Prazo: '+(p.prazo?dataBR(p.prazo):'sem prazo')+'</p>'
+   +'<div class="card"><h3>Enunciado</h3><div class="caso">'+esc(p.caso)+'</div></div>'
+   +'<div class="card"><h3>Sua peça</h3><p style="font-size:.85rem;color:var(--cinza)">Redija a peça completa. Se citar jurisprudência, inclua no FINAL um anexo com as fontes e seus links. O texto fica salvo neste navegador até você enviar.</p>'
+   +'<textarea id="al_texto" class="redacao" placeholder="EXCELENTÍSSIMO SENHOR...">'+esc(rasc)+'</textarea>'
+   +'<div class="botoes"><button onclick="salvarRascunhoAluno(\''+id+'\')">💾 Salvar rascunho</button>'
+   +'<button class="primario" onclick="enviarPeca(\''+id+'\')">📨 Enviar ao professor</button></div>'
+   +(p.enviado?'<p class="aviso">Você já enviou esta peça. Reenviar substitui a anterior e cancela a correção pendente.</p>':'')
+   +'<div id="al_fb"></div></div>';
+  const t=document.getElementById('al_texto');if(t)t.addEventListener('input',()=>sset('peca_'+id,t.value));
+}
+function salvarRascunhoAluno(id){sset('peca_'+id,document.getElementById('al_texto').value);document.getElementById('al_fb').innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif;font-size:.85rem">Rascunho salvo.</p>';}
+async function enviarPeca(id){
+  const texto=document.getElementById('al_texto').value.trim();const fb=document.getElementById('al_fb');
+  if(texto.length<80){fb.innerHTML='<p class="erro-ia">Escreva sua peça antes de enviar.</p>';return}
+  if(!confirm('Enviar sua peça ao professor? Após o prazo pode não ser possível reenviar.'))return;
+  try{const r=await apiPost('/api/entregar',{id,texto});const d=await r.json();
+  if(!r.ok){fb.innerHTML='<p class="erro-ia">'+(d.erro||'Erro')+'</p>';return}
+  sset('peca_'+id,'');
+  fb.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif">📨 Peça enviada! O professor foi avisado. Você receberá a correção por e-mail.</p>';
+  setTimeout(telaAluno,1200);
+  }catch(e){}
+}
+function verMinhaCorrecao(id){alert('A correção validada foi enviada ao seu e-mail cadastrado. Confira sua caixa de entrada (e o spam).');}
 
 iniciar();
 </script>

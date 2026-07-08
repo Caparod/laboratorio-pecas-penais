@@ -18,13 +18,41 @@ function confereSenha(senha, hash) {
   return hashSenha(senha, salt) === hash;
 }
 let db;
-function carregarDb() {
-  try { db = JSON.parse(fs.readFileSync(DB_PATH, 'utf8')); }
-  catch {
-    db = { turmaAtiva: 'Estágio I', alunos: {}, professor: { login: (process.env.PROF_LOGIN || '500686'), senha: hashSenha(process.env.PROF_SENHA || 'trocar-no-primeiro-acesso'), mudouSenha: false } };
-    salvarDb();
+function dbPadrao() {
+  return {
+    turmaAtiva: 'Estágio I',
+    alunos: {},
+    professor: { login: (process.env.PROF_LOGIN || '500686'), senha: hashSenha(process.env.PROF_SENHA || 'trocar-no-primeiro-acesso'), mudouSenha: false },
+    professores: {},
+    pecas: {},
+    proximoNum: 1,
+    entregas: {}
+  };
+}
+function migrarDb() {
+  // Garante campos novos em bancos antigos e cria os professores/coordenadora padrão
+  if (!db.professores) db.professores = {};
+  if (!db.pecas) db.pecas = {};
+  if (typeof db.proximoNum !== 'number') db.proximoNum = 1 + Object.keys(db.pecas).length;
+  if (!db.entregas) db.entregas = {};
+  // professor principal (Rodrigo) — mantém o registro legado db.professor
+  if (!db.professor) db.professor = { login: (process.env.PROF_LOGIN || '500686'), senha: hashSenha(process.env.PROF_SENHA || 'trocar-no-primeiro-acesso'), mudouSenha: false };
+  db.professores[db.professor.login] = db.professor; // espelha o principal na coleção
+  db.professor.nome = db.professor.nome || 'Prof. Rodrigo Silva Pereira';
+  db.professor.papel = 'Professor';
+  // Coordenadora Karine (mesmos poderes de professora) — cria uma vez
+  if (!db.professores['Karine'] && !db.karineCriada) {
+    db.professores['Karine'] = { login: 'Karine', senha: hashSenha('123456'), mudouSenha: false, nome: 'Karine Morais', papel: 'Coordenadora do NPJ' };
+    db.karineCriada = true;
   }
 }
+function carregarDb() {
+  try { db = JSON.parse(fs.readFileSync(DB_PATH, 'utf8')); }
+  catch { db = dbPadrao(); }
+  migrarDb();
+  salvarDb();
+}
+function professorDe(login) { if (!login) return null; if (db.professores && db.professores[login]) return db.professores[login]; if (db.professor && db.professor.login === login) return db.professor; return null; }
 function salvarDb() { try { fs.writeFileSync(DB_PATH, JSON.stringify(db)); } catch (e) { console.error('Falha ao salvar db:', e.message); } }
 carregarDb();
 // Autodiagnóstico de persistência (aparece nos logs do Render)
@@ -42,6 +70,26 @@ function sessaoDe(req) { const a = req.headers['authorization'] || ''; const t =
 function semanaAtual() { const d = new Date(); const inicio = new Date(d.getFullYear(), 0, 1); const dias = Math.floor((d - inicio) / 86400000); return d.getFullYear() + '-S' + Math.ceil((dias + inicio.getDay() + 1) / 7); }
 const LIMITE_SEMANAL = parseInt(process.env.LIMITE_SEMANAL || '5', 10);
 async function lerJson(req, max) { let b = ''; for await (const c of req) { b += c; if (b.length > (max || 300000)) throw new Error('grande'); } return JSON.parse(b); }
+
+// ===== Envio de e-mail (Gmail SMTP via nodemailer) =====
+let _transport = null;
+function transporteEmail() {
+  if (_transport) return _transport;
+  if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) return null;
+  let nodemailer; try { nodemailer = require('nodemailer'); } catch { return null; }
+  _transport = nodemailer.createTransport({ service: 'gmail', auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_APP_PASSWORD } });
+  return _transport;
+}
+async function enviarEmail(para, assunto, html) {
+  const t = transporteEmail();
+  if (!t) { console.log('[EMAIL] indisponível (defina GMAIL_USER e GMAIL_APP_PASSWORD). Assunto: ' + assunto); return { ok: false, motivo: 'sem-config' }; }
+  try {
+    await t.sendMail({ from: 'Laboratório de Peças Penais - IESB <' + process.env.GMAIL_USER + '>', to: para, subject: assunto, html });
+    return { ok: true };
+  } catch (e) { console.error('[EMAIL] falha:', e.message); return { ok: false, motivo: e.message }; }
+}
+function codigo6() { return String(Math.floor(100000 + Math.random() * 900000)); }
+function escHtml(t) { return String(t || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 const PUBLIC = __dirname; // index.html na raiz do repositório
 const MIME = { '.html': 'text/html; charset=utf-8', '.txt': 'text/plain; charset=utf-8', '.png': 'image/png', '.ico': 'image/x-icon' };
@@ -236,23 +284,53 @@ async function apiLogin(req, res) {
   let d; try { d = await lerJson(req, 5000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
   const usuario = String(d.usuario || '').trim(), senha = String(d.senha || '');
   if (!usuario || !senha) return json(res, 400, { erro: 'Informe matrícula e senha.' });
-  if (usuario === db.professor.login) {
-    if (!confereSenha(senha, db.professor.senha)) return json(res, 401, { erro: 'Matrícula ou senha incorreta.' });
-    return json(res, 200, { token: novaSessao(usuario, 'professor'), tipo: 'professor', precisaTrocarSenha: !db.professor.mudouSenha, turmaAtiva: db.turmaAtiva });
+  const prof = professorDe(usuario);
+  if (prof) {
+    if (!confereSenha(senha, prof.senha)) return json(res, 401, { erro: 'Login ou senha incorreta.' });
+    return json(res, 200, { token: novaSessao(usuario, 'professor'), tipo: 'professor', nome: prof.nome || 'Professor', papel: prof.papel || 'Professor', precisaTrocarSenha: !prof.mudouSenha, turmaAtiva: db.turmaAtiva });
   }
   const a = db.alunos[usuario];
   if (!a) return json(res, 401, { erro: 'Matrícula não cadastrada. Fale com o professor.' });
   if (!confereSenha(senha, a.senha)) return json(res, 401, { erro: 'Matrícula ou senha incorreta.' });
-  return json(res, 200, { token: novaSessao(usuario, 'aluno'), tipo: 'aluno', nome: a.nome || '', precisaTrocarSenha: !a.mudouSenha, turmaAtiva: db.turmaAtiva, usosSemana: (a.usos && a.usos[semanaAtual()]) || 0, limiteSemana: LIMITE_SEMANAL });
+  return json(res, 200, { token: novaSessao(usuario, 'aluno'), tipo: 'aluno', nome: a.nome || '', precisaTrocarSenha: !a.mudouSenha, emailVerificado: !!a.emailVerificado, email: a.email || '', turmaAtiva: db.turmaAtiva });
 }
 async function apiTrocarSenha(req, res) {
   const sess = sessaoDe(req); if (!sess) return json(res, 401, { erro: 'Sessão expirada. Entre novamente.' });
   let d; try { d = await lerJson(req, 5000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
   const nova = String(d.novaSenha || '');
   if (nova.length < 6) return json(res, 400, { erro: 'A nova senha deve ter pelo menos 6 caracteres.' });
-  if (sess.tipo === 'professor') { db.professor.senha = hashSenha(nova); db.professor.mudouSenha = true; }
-  else { const a = db.alunos[sess.usuario]; if (!a) return json(res, 401, { erro: 'Aluno não encontrado.' }); if (nova === sess.usuario) return json(res, 400, { erro: 'A nova senha não pode ser igual à matrícula.' }); a.senha = hashSenha(nova); a.mudouSenha = true; }
-  salvarDb(); json(res, 200, { ok: true });
+  if (sess.tipo === 'professor') {
+    const prof = professorDe(sess.usuario); if (!prof) return json(res, 401, { erro: 'Sessão inválida.' });
+    prof.senha = hashSenha(nova); prof.mudouSenha = true; salvarDb(); return json(res, 200, { ok: true });
+  }
+  const a = db.alunos[sess.usuario]; if (!a) return json(res, 401, { erro: 'Aluno não encontrado.' });
+  if (nova === sess.usuario) return json(res, 400, { erro: 'A nova senha não pode ser igual à matrícula.' });
+  const email = String(d.email || '').trim().toLowerCase();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return json(res, 400, { erro: 'Informe um e-mail válido para receber suas correções.' });
+  a.senha = hashSenha(nova); a.mudouSenha = true;
+  a.email = email; a.emailVerificado = false; a.codigoVerif = codigo6(); a.codigoEnviadoEm = Date.now();
+  salvarDb();
+  const r = await enviarEmail(email, 'Seu código de verificação — Laboratório de Peças Penais',
+    '<p>Olá, ' + escHtml(a.nome || '') + '!</p><p>Seu código de verificação é:</p><h2 style="letter-spacing:3px">' + a.codigoVerif + '</h2><p>Digite-o no sistema para confirmar seu e-mail. Assim você receberá as correções das suas peças.</p>');
+  json(res, 200, { ok: true, precisaVerificarEmail: true, emailEnviado: r.ok });
+}
+async function apiVerificarEmail(req, res) {
+  const sess = sessaoDe(req); if (!sess || sess.tipo !== 'aluno') return json(res, 401, { erro: 'Sessão expirada.' });
+  let d; try { d = await lerJson(req, 5000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
+  const a = db.alunos[sess.usuario]; if (!a) return json(res, 401, { erro: 'Aluno não encontrado.' });
+  const cod = String(d.codigo || '').trim();
+  if (!a.codigoVerif) return json(res, 400, { erro: 'Nenhum código pendente. Reenvie.' });
+  if (cod !== a.codigoVerif) return json(res, 400, { erro: 'Código incorreto. Confira o e-mail e tente de novo.' });
+  a.emailVerificado = true; a.codigoVerif = null; salvarDb();
+  json(res, 200, { ok: true });
+}
+async function apiReenviarCodigo(req, res) {
+  const sess = sessaoDe(req); if (!sess || sess.tipo !== 'aluno') return json(res, 401, { erro: 'Sessão expirada.' });
+  const a = db.alunos[sess.usuario]; if (!a || !a.email) return json(res, 400, { erro: 'Cadastre seu e-mail primeiro.' });
+  a.codigoVerif = codigo6(); a.codigoEnviadoEm = Date.now(); salvarDb();
+  const r = await enviarEmail(a.email, 'Seu código de verificação — Laboratório de Peças Penais',
+    '<p>Seu novo código é:</p><h2 style="letter-spacing:3px">' + a.codigoVerif + '</h2>');
+  json(res, 200, { ok: true, emailEnviado: r.ok });
 }
 async function apiAdmin(req, res) {
   const sess = sessaoDe(req); if (!sess || sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito ao professor.' });
@@ -418,6 +496,224 @@ async function gabaritoIA(req, res) {
   } catch (e) { json(res, 500, { erro: 'Erro interno: ' + e.message }); }
 }
 
+// ================= PEÇAS, ENTREGAS, NOTAS (fluxo professor↔aluno) =================
+const SISTEMA_GABPECA = 'Você é o Professor Me. Rodrigo Silva Pereira (IESB), prática penal. Receberá o ENUNCIADO de uma peça (caso simulado). Elabore o GABARITO DEFINITIVO para o professor conferir: peça cabível, endereçamento, prazo, TODAS as teses principais e subsidiárias com os dispositivos legais, pedidos, erros frequentes esperados e, ao final, uma seção "FONTES" listando cada súmula/julgado/lei citada com link oficial (legislação no Planalto; súmulas e julgados pelo buscador oficial https://jurisprudencia.stf.jus.br/pages/search?queryString=TERMO ou https://scon.stj.jus.br/SCON/pesquisar.jsp?b=ACOR&livre=TERMO). NUNCA invente link direto de acórdão. Responda apenas com o gabarito, em markdown com títulos ##.';
+
+async function iaTexto(system, usuario, maxTokens, comBusca) {
+  const body = { model: process.env.MODELO || 'claude-sonnet-5', max_tokens: maxTokens || 4000, system, messages: [{ role: 'user', content: usuario }] };
+  if (comBusca) body.tools = [{ type: 'web_search_20250305', name: 'web_search', max_uses: 4, allowed_domains: ['jus.br', 'planalto.gov.br'] }];
+  const mensagens = body.messages; const textos = []; let r = null, d = null; const ini = Date.now();
+  for (let volta = 0; volta < 12; volta++) {
+    const estourou = (Date.now() - ini) > 110000;
+    r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' }, body: JSON.stringify(Object.assign({}, body, { messages: mensagens })) });
+    d = await r.json().catch(() => null);
+    if (!r.ok) return { ok: false, status: r.status, erro: (d && d.error && d.error.message) || '' };
+    for (const b of (d.content || [])) if (b.type === 'text' && b.text) textos.push(b.text);
+    if (d.stop_reason === 'pause_turn' || (d.stop_reason === 'tool_use' && (d.content || []).some(b => b.type === 'server_tool_use' || b.type === 'web_search_tool_result'))) {
+      mensagens.push({ role: 'assistant', content: d.content });
+      if (estourou || volta >= 6) mensagens.push({ role: 'user', content: 'Encerre as buscas e produza AGORA a resposta final completa.' });
+      continue;
+    }
+    break;
+  }
+  return { ok: true, texto: textos.join('\n').trim() };
+}
+function erroIA(res, r) {
+  const em = (r.erro || '').toLowerCase();
+  if (em.includes('credit') || em.includes('spend') || em.includes('billing')) return json(res, 402, { erro: 'LIMITE_CREDITOS' });
+  return json(res, 500, { erro: 'A IA não respondeu agora (' + (r.status || '') + '). Tente novamente.' });
+}
+
+// Professor: gerar peça por IA (caso + gabarito) para revisão
+async function pecaGerarIA(req, res) {
+  const sess = sessaoDe(req); if (!sess || sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
+  if (limitado((req.headers['x-forwarded-for']||'').split(',')[0])) return json(res, 429, { erro: 'Aguarde um minuto.' });
+  let d; try { d = await lerJson(req, 20000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
+  if (!process.env.ANTHROPIC_API_KEY) return json(res, 500, { erro: 'Servidor sem chave configurada.' });
+  const nomePeca = String(d.nomePeca || '').trim(); const disc = String(d.disc || db.turmaAtiva);
+  const nivel = String(d.nivel || 'INTERMEDIÁRIO');
+  if (!nomePeca) return json(res, 400, { erro: 'Informe a peça-alvo.' });
+  const usuario = 'PEÇA-ALVO: ' + nomePeca + ' (' + disc + ')\nNÍVEL: ' + nivel + '\nData atual: ' + new Date().toLocaleDateString('pt-BR') + '\nGere um caso INÉDITO no padrão OAB e o gabarito.';
+  const r = await iaTexto(SISTEMA_CASO, usuario, 3800, false);
+  if (!r.ok) return erroIA(res, r);
+  const m = r.texto.match(/CASO:\s*([\s\S]*?)\nGABARITO:\s*([\s\S]*)/);
+  if (!m) return json(res, 500, { erro: 'Formato inesperado. Tente de novo.' });
+  json(res, 200, { caso: m[1].trim(), gab: m[2].trim(), nomePeca, disc });
+}
+// Professor: gerar gabarito para um enunciado que ele mesmo escreveu/subiu
+async function pecaGerarGabarito(req, res) {
+  const sess = sessaoDe(req); if (!sess || sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
+  if (limitado((req.headers['x-forwarded-for']||'').split(',')[0])) return json(res, 429, { erro: 'Aguarde um minuto.' });
+  let d; try { d = await lerJson(req, 200000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
+  const caso = String(d.caso || '').trim();
+  if (!caso || caso.length < 40) return json(res, 400, { erro: 'Envie o enunciado da peça.' });
+  if (!process.env.ANTHROPIC_API_KEY) return json(res, 500, { erro: 'Servidor sem chave configurada.' });
+  const r = await iaTexto(SISTEMA_GABPECA, 'ENUNCIADO DA PEÇA:\n\n' + caso.slice(0, 12000), 4000, true);
+  if (!r.ok) return erroIA(res, r);
+  json(res, 200, { gab: r.texto });
+}
+// Professor: extrair texto de um PDF de peça (enunciado)
+async function pecaExtrairPdf(req, res) {
+  const sess = sessaoDe(req); if (!sess || sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
+  let d; try { d = await lerJson(req, 20000000); } catch { return json(res, 400, { erro: 'Arquivo grande demais.' }); }
+  if (!d.pdf) return json(res, 400, { erro: 'Envie o PDF.' });
+  let pdfjsLib; try { pdfjsLib = require('pdfjs-dist/legacy/build/pdf.js'); } catch { return json(res, 500, { erro: 'Leitor de PDF indisponível.' }); }
+  try {
+    const buf = Buffer.from(String(d.pdf).replace(/^data:[^,]*,/, ''), 'base64');
+    const doc = await pdfjsLib.getDocument({ data: new Uint8Array(buf), isEvalSupported: false, useSystemFonts: true }).promise;
+    let txt = '';
+    for (let i = 1; i <= doc.numPages; i++) { const pg = await doc.getPage(i); const tc = await pg.getTextContent(); txt += tc.items.map(it => it.str).join(' ') + '\n'; }
+    txt = txt.replace(/[ \t]{2,}/g, ' ').trim();
+    if (txt.length < 40) return json(res, 422, { erro: 'Não consegui ler texto do PDF (pode ser escaneado). Cole o enunciado manualmente.' });
+    json(res, 200, { texto: txt.slice(0, 20000) });
+  } catch (e) { json(res, 500, { erro: 'Falha ao ler o PDF: ' + e.message }); }
+}
+// Professor: salvar/publicar peça
+async function pecaSalvar(req, res) {
+  const sess = sessaoDe(req); if (!sess || sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
+  let d; try { d = await lerJson(req, 300000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
+  const caso = String(d.caso || '').trim(); const gab = String(d.gab || '').trim();
+  const nomePeca = String(d.nomePeca || 'Peça').trim(); const disc = (d.disc === 'Estágio II') ? 'Estágio II' : 'Estágio I';
+  const prazo = String(d.prazo || '').trim();
+  if (!caso) return json(res, 400, { erro: 'A peça precisa de enunciado.' });
+  let id = d.id && db.pecas[d.id] ? d.id : null;
+  if (id) {
+    const p = db.pecas[id]; p.nomePeca = nomePeca; p.disc = disc; p.caso = caso; p.gab = gab; p.prazo = prazo; p.publicada = d.publicar !== false;
+  } else {
+    const num = db.proximoNum++; id = 'p' + num;
+    db.pecas[id] = { id, num, nomePeca, disc, caso, gab, prazo, criadoEm: Date.now(), publicada: d.publicar !== false, autor: sess.usuario };
+    db.entregas[id] = db.entregas[id] || {};
+  }
+  salvarDb();
+  json(res, 200, { ok: true, id, num: db.pecas[id].num });
+}
+function resumoPeca(p) {
+  const ents = db.entregas[p.id] || {};
+  const total = Object.keys(ents).length;
+  const corrigidas = Object.values(ents).filter(e => e.validado).length;
+  return { id: p.id, num: p.num, nomePeca: p.nomePeca, disc: p.disc, prazo: p.prazo, publicada: p.publicada, criadoEm: p.criadoEm, entregas: total, validadas: corrigidas };
+}
+async function pecasListar(req, res) {
+  const sess = sessaoDe(req); if (!sess || sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
+  const lista = Object.values(db.pecas).sort((a, b) => b.num - a.num).map(resumoPeca);
+  json(res, 200, { ok: true, pecas: lista, turmaAtiva: db.turmaAtiva });
+}
+async function pecaGet(req, res, id) {
+  const sess = sessaoDe(req); if (!sess || sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
+  const p = db.pecas[id]; if (!p) return json(res, 404, { erro: 'Peça não encontrada.' });
+  const ents = db.entregas[id] || {};
+  const entregas = Object.keys(ents).map(mat => ({ matricula: mat, nome: (db.alunos[mat] && db.alunos[mat].nome) || '', enviadoEm: ents[mat].enviadoEm, temRelatorio: !!ents[mat].relatorio, nota: ents[mat].nota, validado: !!ents[mat].validado }));
+  json(res, 200, { ok: true, peca: p, entregas });
+}
+async function pecaExcluir(req, res) {
+  const sess = sessaoDe(req); if (!sess || sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
+  let d; try { d = await lerJson(req, 5000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
+  const id = String(d.id || ''); if (db.pecas[id]) { delete db.pecas[id]; delete db.entregas[id]; salvarDb(); }
+  json(res, 200, { ok: true });
+}
+// Aluno: lista peças publicadas da sua turma, com status de entrega
+async function pecasAluno(req, res) {
+  const sess = sessaoDe(req); if (!sess || sess.tipo !== 'aluno') return json(res, 401, { erro: 'SESSAO' });
+  const a = db.alunos[sess.usuario]; if (!a) return json(res, 401, { erro: 'SESSAO' });
+  const lista = Object.values(db.pecas).filter(p => p.publicada && p.disc === db.turmaAtiva).sort((a2, b2) => b2.num - a2.num).map(p => {
+    const e = (db.entregas[p.id] || {})[sess.usuario];
+    return { id: p.id, num: p.num, nomePeca: p.nomePeca, disc: p.disc, prazo: p.prazo, caso: p.caso, enviado: !!e, enviadoEm: e ? e.enviadoEm : null, validado: e ? !!e.validado : false, nota: e ? e.nota : null, temRelatorio: e ? !!(e.validado && e.relatorio) : false };
+  });
+  json(res, 200, { ok: true, pecas: lista });
+}
+// Aluno: enviar peça ao professor
+async function entregar(req, res) {
+  const sess = sessaoDe(req); if (!sess || sess.tipo !== 'aluno') return json(res, 401, { erro: 'SESSAO' });
+  const a = db.alunos[sess.usuario]; if (!a) return json(res, 401, { erro: 'SESSAO' });
+  if (!a.emailVerificado) return json(res, 403, { erro: 'Verifique seu e-mail antes de enviar peças.' });
+  let d; try { d = await lerJson(req, 300000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
+  const p = db.pecas[String(d.id || '')]; if (!p || !p.publicada) return json(res, 404, { erro: 'Peça não encontrada.' });
+  const texto = String(d.texto || '').trim();
+  if (texto.length < 80) return json(res, 400, { erro: 'Escreva sua peça antes de enviar.' });
+  db.entregas[p.id] = db.entregas[p.id] || {};
+  const jaTinha = !!db.entregas[p.id][sess.usuario];
+  db.entregas[p.id][sess.usuario] = Object.assign(db.entregas[p.id][sess.usuario] || {}, { texto, enviadoEm: Date.now() });
+  // se reenviou depois de corrigir, invalida a correção anterior
+  if (jaTinha) { db.entregas[p.id][sess.usuario].relatorio = null; db.entregas[p.id][sess.usuario].nota = null; db.entregas[p.id][sess.usuario].validado = false; }
+  salvarDb();
+  // avisa os professores por e-mail
+  const quando = new Date().toLocaleString('pt-BR');
+  const dests = Object.values(db.professores).map(pr => pr.emailAviso || process.env.GMAIL_USER).filter(Boolean);
+  const destino = process.env.PROF_EMAIL || process.env.GMAIL_USER;
+  if (destino) enviarEmail(destino, 'Nova entrega — ' + (a.nome || sess.usuario) + ' enviou a Peça ' + p.num,
+    '<p>O aluno <b>' + escHtml(a.nome || '') + '</b> (matrícula ' + sess.usuario + ') enviou a <b>Peça ' + p.num + ' — ' + escHtml(p.nomePeca) + '</b>.</p><p>Em ' + quando + '. Acesse o painel para corrigir.</p>');
+  json(res, 200, { ok: true, reenvio: jaTinha });
+}
+// Professor: ver o texto de uma entrega
+async function entregaGet(req, res, id, mat) {
+  const sess = sessaoDe(req); if (!sess || sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
+  const e = (db.entregas[id] || {})[mat]; if (!e) return json(res, 404, { erro: 'Entrega não encontrada.' });
+  const p = db.pecas[id] || {};
+  json(res, 200, { ok: true, peca: { num: p.num, nomePeca: p.nomePeca, caso: p.caso, gab: p.gab }, aluno: { matricula: mat, nome: (db.alunos[mat] && db.alunos[mat].nome) || '' }, texto: e.texto, relatorio: e.relatorio || '', nota: (e.nota != null ? e.nota : ''), validado: !!e.validado });
+}
+// Professor: pedir à IA um relatório com nota para uma entrega
+async function entregaCorrigirIA(req, res) {
+  const sess = sessaoDe(req); if (!sess || sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
+  if (limitado((req.headers['x-forwarded-for']||'').split(',')[0])) return json(res, 429, { erro: 'Aguarde um minuto.' });
+  let d; try { d = await lerJson(req, 5000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
+  const p = db.pecas[String(d.id || '')]; const e = p && (db.entregas[p.id] || {})[String(d.matricula || '')];
+  if (!e) return json(res, 404, { erro: 'Entrega não encontrada.' });
+  if (!process.env.ANTHROPIC_API_KEY) return json(res, 500, { erro: 'Servidor sem chave configurada.' });
+  const usuario = 'PEÇA ESPERADA: ' + p.nomePeca + ' (' + p.disc + ')\n\nCASO DADO AO ALUNO:\n' + (p.caso||'') + '\n\nGABARITO DO PROFESSOR:\n' + (p.gab||'') + '\n\nPEÇA DO ALUNO (corrija-a e dê a nota):\n' + String(e.texto||'').slice(0,60000);
+  const r = await iaTexto(SISTEMA, usuario, 6000, true);
+  if (!r.ok) return erroIA(res, r);
+  const mN = r.texto.match(/NOTA SUGERIDA:\s*([0-9]+(?:[\.,][0-9]+)?)/i);
+  e.relatorio = r.texto; e.notaSugerida = mN ? mN[1].replace(',', '.') : ''; salvarDb();
+  json(res, 200, { ok: true, relatorio: r.texto, notaSugerida: e.notaSugerida });
+}
+// Professor: salvar (editar) relatório+nota e VALIDAR (envia ao aluno por e-mail)
+async function entregaValidar(req, res) {
+  const sess = sessaoDe(req); if (!sess || sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
+  let d; try { d = await lerJson(req, 300000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
+  const p = db.pecas[String(d.id || '')]; const e = p && (db.entregas[p.id] || {})[String(d.matricula || '')];
+  if (!e) return json(res, 404, { erro: 'Entrega não encontrada.' });
+  e.relatorio = String(d.relatorio || '').trim();
+  const notaNum = parseFloat(String(d.nota).replace(',', '.'));
+  if (isNaN(notaNum) || notaNum < 0 || notaNum > 10) return json(res, 400, { erro: 'Nota inválida (0 a 10).' });
+  e.nota = Math.round(notaNum * 100) / 100;
+  if (d.validar) {
+    e.validado = true; e.validadoEm = Date.now(); e.validadoPor = sess.usuario;
+    const a = db.alunos[String(d.matricula)];
+    if (a && a.email && a.emailVerificado) {
+      const html = '<p>Olá, ' + escHtml(a.nome || '') + '!</p><p>Sua <b>Peça ' + p.num + ' — ' + escHtml(p.nomePeca) + '</b> foi corrigida.</p><p><b>Nota: ' + e.nota.toString().replace('.', ',') + '/10</b></p><hr><div style="white-space:pre-wrap;font-family:Georgia,serif">' + escHtml(e.relatorio) + '</div>';
+      enviarEmail(a.email, 'Correção da Peça ' + p.num + ' — Nota ' + e.nota.toString().replace('.', ','), html);
+    }
+  }
+  salvarDb();
+  json(res, 200, { ok: true, validado: !!e.validado });
+}
+// Professor: planilha CSV de notas
+async function notasPlanilha(req, res) {
+  const sess = sessaoDe(req); if (!sess || sess.tipo !== 'professor') { res.writeHead(403); return res.end('restrito'); }
+  const pecas = Object.values(db.pecas).sort((a, b) => a.num - b.num);
+  const linhas = [];
+  const cab = ['Aluno', 'Matrícula'].concat(pecas.map(p => 'Peça ' + p.num + ' (' + p.nomePeca.replace(/;/g, ' ') + ')'));
+  linhas.push(cab.join(';'));
+  const mats = Object.keys(db.alunos).sort((m1, m2) => (db.alunos[m1].nome || '').localeCompare(db.alunos[m2].nome || ''));
+  for (const mat of mats) {
+    const a = db.alunos[mat];
+    const row = [(a.nome || '').replace(/;/g, ' '), mat];
+    for (const p of pecas) { const e = (db.entregas[p.id] || {})[mat]; row.push(e && e.nota != null ? String(e.nota).replace('.', ',') : ''); }
+    linhas.push(row.join(';'));
+  }
+  const csv = '﻿' + linhas.join('\r\n');
+  res.writeHead(200, { 'content-type': 'text/csv; charset=utf-8', 'content-disposition': 'attachment; filename="notas.csv"' });
+  res.end(csv);
+}
+// Professor: ZERAR todo o sistema (mantém contas de professores)
+async function zerarSistema(req, res) {
+  const sess = sessaoDe(req); if (!sess || sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
+  let d; try { d = await lerJson(req, 5000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
+  if (d.confirmacao !== 'ZERAR') return json(res, 400, { erro: 'Confirmação inválida.' });
+  db.alunos = {}; db.pecas = {}; db.entregas = {}; db.proximoNum = 1; salvarDb();
+  json(res, 200, { ok: true });
+}
+
 const server = http.createServer((req, res) => {
   if (req.method === 'POST' && req.url === '/api/login') return apiLogin(req, res);
   if (req.method === 'POST' && req.url === '/api/trocar-senha') return apiTrocarSenha(req, res);
@@ -425,6 +721,22 @@ const server = http.createServer((req, res) => {
   if (req.method === 'POST' && req.url === '/api/extrair-pdf') return extrairPdf(req, res);
   if (req.method === 'POST' && req.url === '/api/gabarito') return gabaritoIA(req, res);
   if (req.method === 'POST' && req.url === '/api/corrigir') return corrigir(req, res);
+  if (req.method === 'POST' && req.url === '/api/verificar-email') return apiVerificarEmail(req, res);
+  if (req.method === 'POST' && req.url === '/api/reenviar-codigo') return apiReenviarCodigo(req, res);
+  if (req.method === 'POST' && req.url === '/api/peca/gerar-ia') return pecaGerarIA(req, res);
+  if (req.method === 'POST' && req.url === '/api/peca/gerar-gabarito') return pecaGerarGabarito(req, res);
+  if (req.method === 'POST' && req.url === '/api/peca/extrair-pdf') return pecaExtrairPdf(req, res);
+  if (req.method === 'POST' && req.url === '/api/peca/salvar') return pecaSalvar(req, res);
+  if (req.method === 'POST' && req.url === '/api/peca/excluir') return pecaExcluir(req, res);
+  if (req.method === 'GET' && req.url === '/api/pecas') return pecasListar(req, res);
+  if (req.method === 'GET' && req.url.startsWith('/api/peca/get?')) { const id = new URLSearchParams(req.url.split('?')[1]).get('id'); return pecaGet(req, res, id); }
+  if (req.method === 'GET' && req.url === '/api/pecas-aluno') return pecasAluno(req, res);
+  if (req.method === 'POST' && req.url === '/api/entregar') return entregar(req, res);
+  if (req.method === 'GET' && req.url.startsWith('/api/entrega?')) { const q = new URLSearchParams(req.url.split('?')[1]); return entregaGet(req, res, q.get('id'), q.get('matricula')); }
+  if (req.method === 'POST' && req.url === '/api/entrega/corrigir') return entregaCorrigirIA(req, res);
+  if (req.method === 'POST' && req.url === '/api/entrega/validar') return entregaValidar(req, res);
+  if (req.method === 'GET' && req.url === '/api/notas.csv') return notasPlanilha(req, res);
+  if (req.method === 'POST' && req.url === '/api/zerar') return zerarSistema(req, res);
   if (req.method === 'POST' && req.url === '/api/gerar-caso') return gerarCaso(req, res);
   // página única: qualquer GET serve o index.html
   if (req.method !== 'GET') { res.writeHead(405); return res.end(); }
