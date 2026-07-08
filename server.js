@@ -810,8 +810,16 @@ async function pecasAluno(req, res) {
   const lista = Object.values(db.pecas).filter(p => p.publicada && p.disc === db.turmaAtiva).sort((a2, b2) => b2.num - a2.num).map(p => {
     const e = (db.entregas[p.id] || {})[sess.usuario];
     let noPrazo = true;
-    if (p.prazo && !p.foraDoPrazoGeral) { const limite = new Date(p.prazo + (/\d{2}:\d{2}/.test(p.prazo) ? '' : 'T23:59')).getTime(); noPrazo = Date.now() <= limite || !!(p.liberados && p.liberados[sess.usuario]); }
-    return { id: p.id, num: p.num, nomePeca: p.nomePeca, disc: p.disc, prazo: p.prazo, caso: p.caso, enviado: !!e, enviadoEm: e ? e.enviadoEm : null, validado: e ? !!e.validado : false, nota: (e && e.validado) ? e.nota : null, temRelatorio: e ? !!(e.validado && e.relatorio) : false, noPrazo: noPrazo };
+    let gabLiberado = false;
+    if (p.prazo && !p.foraDoPrazoGeral) {
+      const limite = new Date(p.prazo + (/\d{2}:\d{2}/.test(p.prazo) ? '' : 'T23:59')).getTime();
+      noPrazo = Date.now() <= limite || !!(p.liberados && p.liberados[sess.usuario]);
+      // Gabarito só é liberado quando o prazo da peça venceu para TODOS (sem liberação geral de
+      // entregas atrasadas). Aluno com liberação individual que ainda não entregou também não vê.
+      const liberadoIndividualSemEntrega = !!(p.liberados && p.liberados[sess.usuario]) && !e;
+      gabLiberado = Date.now() > limite && !liberadoIndividualSemEntrega;
+    }
+    return { id: p.id, num: p.num, nomePeca: p.nomePeca, disc: p.disc, prazo: p.prazo, caso: p.caso, enviado: !!e, enviadoEm: e ? e.enviadoEm : null, validado: e ? !!e.validado : false, nota: (e && e.validado) ? e.nota : null, temRelatorio: e ? !!(e.validado && e.relatorio) : false, noPrazo: noPrazo, gabLiberado: gabLiberado, gab: gabLiberado ? (p.gab || '') : undefined };
   });
   json(res, 200, { ok: true, pecas: lista });
 }

@@ -566,7 +566,8 @@ async function telaAluno(){
       const fechado=!p.enviado&&!p.noPrazo;
       cards+='<div class="card"><span class="badge">Peça '+p.num+'</span> <b>'+esc(p.nomePeca)+'</b>'
        +'<p style="font-family:Arial,sans-serif;font-size:.85rem;color:'+(fechado?'var(--vermelho)':'var(--cinza)')+'">Prazo: '+(p.prazo?dataHoraBR(p.prazo):'sem prazo')+' · '+st+'</p>'
-       +'<div class="botoes"><button class="primario" onclick="abrirPecaAluno(\''+p.id+'\')">'+(p.enviado?'Ver / reenviar':(fechado?'Ver enunciado':'Fazer esta peça'))+'</button>'
+       +'<div class="botoes"><button class="primario" onclick="abrirPecaAluno(\''+p.id+'\')">'+(p.enviado?(p.gabLiberado?'Ver peça e gabarito':'Ver / reenviar'):(fechado?'Ver enunciado':'Fazer esta peça'))+'</button>'
+       +(p.gabLiberado?'<button onclick="abrirPecaAluno(\''+p.id+'\')">📖 Gabarito</button>':'')
        +(p.temRelatorio?'<button onclick="verMinhaCorrecao(\''+p.id+'\')">Ver correção</button>':'')+'</div></div>';
     }
     document.getElementById('la').innerHTML=cards;
@@ -591,6 +592,7 @@ function abrirPecaAluno(id){
    +'<span class="badge">Peça '+p.num+' · '+esc(p.disc)+'</span><h2 class="titulo-peca">'+esc(p.nomePeca)+'</h2>'
    +'<p style="font-family:Arial,sans-serif;font-size:.85rem;color:'+(fechado?'var(--vermelho)':'var(--cinza)')+'">Prazo: '+(p.prazo?dataHoraBR(p.prazo):'sem prazo')+(fechado?' — PRAZO ENCERRADO':'')+'</p>'
    +'<div class="card"><h3>Enunciado</h3><div class="caso">'+esc(p.caso)+'</div></div>'
+   +((p.gabLiberado&&p.gab)?'<div class="card"><h3>📖 Gabarito oficial</h3><p style="font-size:.82rem;color:var(--cinza);font-family:Arial,sans-serif">Liberado após o encerramento do prazo. Compare com a sua peça e confira as fontes pelos links.</p><div class="bloco" style="background:#eef5ee;border:1px solid #cfe3cf;border-radius:8px;padding:14px">'+linkCitacoesHtml(md2html(p.gab))+'</div></div>':'')
    +(fechado?'<div class="card"><p class="erro-ia">O prazo desta peça já encerrou. Não é possível enviar. Se precisar, fale com o(a) professor(a) para renovar o prazo ou liberar sua entrega.</p></div>'
      :('<div class="card"><h3>Sua peça</h3><p style="font-size:.85rem;color:var(--cinza)">Redija a peça completa. Se citar jurisprudência, inclua no FINAL um anexo com as fontes e seus links. O texto fica salvo neste navegador até você enviar.</p>'
    +'<textarea id="al_texto" class="redacao" placeholder="EXCELENTÍSSIMO SENHOR...">'+esc(rasc)+'</textarea>'
