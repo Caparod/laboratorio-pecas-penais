@@ -637,9 +637,19 @@ async function pecaGerarGabarito(req, res) {
   const caso = String(d.caso || '').trim();
   if (!caso || caso.length < 40) return json(res, 400, { erro: 'Envie o enunciado da peça.' });
   if (!process.env.ANTHROPIC_API_KEY) return json(res, 500, { erro: 'Servidor sem chave configurada.' });
-  const r = await iaTexto(SISTEMA_GABPECA, 'ENUNCIADO DA PEÇA:\n\n' + caso.slice(0, 12000), 4000, true);
+  // Sem busca web (comBusca=false): o modelo monta as FONTES com os links oficiais de busca de forma determinística,
+  // o que retorna texto de forma confiável (a busca web às vezes ficava em loop e devolvia gabarito vazio).
+  let r = await iaTexto(SISTEMA_GABPECA, 'ENUNCIADO DA PEÇA:\n\n' + caso.slice(0, 12000), 5000, false);
   if (!r.ok) return erroIA(res, r);
-  json(res, 200, { gab: r.texto });
+  let gab = (r.texto || '').trim();
+  if (gab.length < 20) { // 1 nova tentativa, caso venha vazio
+    r = await iaTexto(SISTEMA_GABPECA, 'ENUNCIADO DA PEÇA:\n\n' + caso.slice(0, 12000), 5000, false);
+    if (!r.ok) return erroIA(res, r);
+    gab = (r.texto || '').trim();
+  }
+  try { console.error('[GABARITO IA] len=' + gab.length); } catch (e) {}
+  if (gab.length < 20) return json(res, 502, { erro: 'A IA não retornou o gabarito. Tente novamente.', bruto: (r.texto || '').slice(0, 300) });
+  json(res, 200, { gab });
 }
 // Professor: extrair texto de um PDF de peça (enunciado)
 async function pecaExtrairPdf(req, res) {
