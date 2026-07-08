@@ -192,7 +192,7 @@ async function fazerLogin(){
     const r=await fetch('/api/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({usuario:u,senha:p})});
     const d=await r.json();
     if(!r.ok){e.innerHTML='<p class="erro-ia">'+(d.erro||'Falha no login.')+'</p>';return}
-    AUTH={token:d.token,tipo:d.tipo,usuario:u,nome:d.nome||'',papel:d.papel||'',turmaAtiva:d.turmaAtiva,precisaTrocarSenha:d.precisaTrocarSenha,emailVerificado:d.emailVerificado,email:d.email||''};
+    AUTH={token:d.token,tipo:d.tipo,usuario:u,nome:d.nome||'',papel:d.papel||'',admin:!!d.admin,gereProf:!!d.gereProf,gereCoord:!!d.gereCoord,turmaAtiva:d.turmaAtiva,precisaTrocarSenha:d.precisaTrocarSenha,emailVerificado:d.emailVerificado,email:d.email||''};
     sset('auth',JSON.stringify(AUTH));iniciar();
   }catch(err){e.innerHTML='<p class="erro-ia">Erro de conexão: '+err.message+'</p>'}
 }
@@ -251,15 +251,17 @@ function iniciar(){
 let ABA_PROF='pecas';
 function telaProfessor(){
   menu.innerHTML='<div class="grupo">Painel</div>'
-   +botaoMenu('pecas','📄 Peças e entregas')
+   +botaoMenu('pecas','📚 Banco de peças')
    +botaoMenu('nova','➕ Nova peça')
    +botaoMenu('alunos','👥 Alunos')
    +botaoMenu('notas','📊 Notas / planilha')
+   +(AUTH&&AUTH.gereProf?botaoMenu('professores','🧑‍🏫 Professores'):'')
    +botaoMenu('config','⚙️ Sistema');
   if(ABA_PROF==='pecas')profPecas();
   else if(ABA_PROF==='nova')profNova();
   else if(ABA_PROF==='alunos')profAlunos();
   else if(ABA_PROF==='notas')profNotas();
+  else if(ABA_PROF==='professores')profProfessores();
   else if(ABA_PROF==='config')profConfig();
 }
 function botaoMenu(id,txt){return '<button class="item'+(ABA_PROF===id?' ativo':'')+'" onclick="irAba(\''+id+'\')">'+txt+'</button>'}
@@ -267,12 +269,13 @@ function irAba(id){ABA_PROF=id;telaProfessor();}
 
 // ---- Lista de peças + entregas ----
 async function profPecas(){
-  conteudo.innerHTML='<h2 class="titulo-peca">Peças e entregas</h2><div id="lp"><p><span class="spinner"></span>Carregando...</p></div>';
+  conteudo.innerHTML='<h2 class="titulo-peca">Banco de peças</h2><p style="color:var(--cinza);font-family:Arial,sans-serif;font-size:.88rem;margin-bottom:12px">Todas as peças criadas ficam aqui, compartilhadas entre os professores. Você pode abrir e reaproveitar qualquer peça; excluir, só as que você criou.</p><div id="lp"><p><span class="spinner"></span>Carregando...</p></div>';
   try{const r=await apiGet('/api/pecas');const d=await r.json();
     if(!d.pecas.length){document.getElementById('lp').innerHTML='<div class="card"><p>Nenhuma peça criada ainda. Vá em <b>Nova peça</b> para criar a primeira.</p></div>';return;}
-    let h='<table class="painel"><tr><th>#</th><th>Peça</th><th>Turma</th><th>Prazo</th><th>Status</th><th>Entregas</th><th></th></tr>';
+    let h='<table class="painel"><tr><th>#</th><th>Peça</th><th>Autor</th><th>Turma</th><th>Prazo</th><th>Status</th><th>Entregas</th><th></th></tr>';
     for(const p of d.pecas){
-      h+='<tr><td><b>'+p.num+'</b></td><td>'+esc(p.nomePeca)+'</td><td>'+esc(p.disc)+'</td><td>'+(p.prazo?dataBR(p.prazo):'—')+'</td>'
+      const minha=(p.autor===AUTH.usuario)||AUTH.admin;
+      h+='<tr><td><b>'+p.num+'</b></td><td>'+esc(p.nomePeca)+'</td><td>'+esc(p.autorNome||'—')+(minha&&p.autor===AUTH.usuario?' <span style="color:var(--dourado);font-size:.75rem">(você)</span>':'')+'</td><td>'+esc(p.disc)+'</td><td>'+(p.prazo?dataBR(p.prazo):'—')+'</td>'
       +'<td>'+(p.publicada?'✅ publicada':'✏️ rascunho')+'</td><td>'+p.entregas+' ('+p.validadas+' corrigidas)</td>'
       +'<td><a style="cursor:pointer;color:var(--azul)" onclick="abrirPeca(\''+p.id+'\')">abrir</a></td></tr>';
     }
@@ -293,11 +296,12 @@ async function abrirPeca(id){
     ent+='</table>';}
   window.__peca=p;
   const liberadosCount=Object.keys(d.liberados||{}).length;
+  const souAutor=(p.autor===AUTH.usuario)||AUTH.admin;
   conteudo.innerHTML='<div class="botoes" style="margin-bottom:10px"><button onclick="irAba(\'pecas\')">← Voltar</button>'
    +'<button onclick="editarPeca(\''+id+'\')">✏️ Editar peça/gabarito</button>'
-   +'<button style="border-color:var(--vermelho);color:var(--vermelho)" onclick="excluirPeca(\''+id+'\')">🗑 Excluir peça</button></div>'
+   +(souAutor?'<button style="border-color:var(--vermelho);color:var(--vermelho)" onclick="excluirPeca(\''+id+'\')">🗑 Excluir peça</button>':'')+'</div>'
    +'<span class="badge">Peça '+p.num+' · '+esc(p.disc)+'</span><h2 class="titulo-peca">'+esc(p.nomePeca)+'</h2>'
-   +'<p style="color:var(--cinza);font-family:Arial,sans-serif;font-size:.85rem">Prazo: '+(p.prazo?dataHoraBR(p.prazo):'sem prazo')+' · '+(p.publicada?'publicada':'rascunho')+'</p>'
+   +'<p style="color:var(--cinza);font-family:Arial,sans-serif;font-size:.85rem">Autor: '+esc((p.autor===AUTH.usuario)?'você':(p.autor||'—'))+' · Prazo: '+(p.prazo?dataHoraBR(p.prazo):'sem prazo')+' · '+(p.publicada?'publicada':'rascunho')+'</p>'
    +'<div class="card"><h3>Prazo de entrega</h3>'
    +'<div style="font-family:Arial,sans-serif;font-size:.9rem">Novo prazo (dia e hora): <input type="datetime-local" id="pz_novo" value="'+esc(p.prazo||'')+'" style="padding:7px;border:1px solid #cfc9b8;border-radius:6px"> <button onclick="renovarPrazo(\''+id+'\')">🔄 Renovar prazo</button></div>'
    +'<div style="margin-top:10px;font-family:Arial,sans-serif;font-size:.9rem"><label><input type="checkbox" id="pz_geral" '+(d.foraDoPrazoGeral?'checked':'')+' onchange="liberarGeral(\''+id+'\',this.checked)"> Aceitar entregas <b>fora do prazo</b> para TODA a turma nesta peça</label>'+(liberadosCount?(' <span style="color:var(--cinza)">· '+liberadosCount+' aluno(s) liberado(s) individualmente</span>'):'')+'</div>'
@@ -478,6 +482,56 @@ async function zerarTudo(){
   const c=prompt('Para confirmar, digite ZERAR (em maiúsculas):');
   if(c!=='ZERAR'){document.getElementById('zfb').innerHTML='<p class="aviso">Cancelado.</p>';return}
   try{const r=await apiPost('/api/zerar',{confirmacao:'ZERAR'});const d=await r.json();if(r.ok)document.getElementById('zfb').innerHTML='<p style="color:var(--verde)">Sistema zerado.</p>';else document.getElementById('zfb').innerHTML='<p class="erro-ia">'+(d.erro||'Erro')+'</p>';}catch(e){}
+}
+
+// ---- Professores / Coordenadores ----
+async function profProfessores(){
+  conteudo.innerHTML='<h2 class="titulo-peca">Professores</h2><div id="lpr"><p><span class="spinner"></span>Carregando...</p></div>';
+  try{const r=await apiGet('/api/professores');const d=await r.json();
+    if(!r.ok){document.getElementById('lpr').innerHTML='<p class="erro-ia">'+(d.erro||'Erro')+'</p>';return}
+    const admin=!!d.souAdmin;
+    let form='<div class="card"><h3>Cadastrar '+(admin?'professor(a) ou coordenador(a)':'professor(a)')+'</h3>'
+      +'<p style="font-size:.85rem;color:var(--cinza)">A senha inicial é o próprio login; a pessoa troca no primeiro acesso.</p>'
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap;font-family:Arial,sans-serif;align-items:center">'
+      +'<input id="pr_login" placeholder="Login (sem espaços)" style="padding:8px;border:1px solid #cfc9b8;border-radius:6px">'
+      +'<input id="pr_nome" placeholder="Nome completo" style="padding:8px;border:1px solid #cfc9b8;border-radius:6px">'
+      +(admin?'<select id="pr_papel" style="padding:8px;border:1px solid #cfc9b8;border-radius:6px"><option value="Professor">Professor(a)</option><option value="Coordenador">Coordenador(a)</option></select>':'<input type="hidden" id="pr_papel" value="Professor">')
+      +'<button class="primario" onclick="salvarProfessor()">Cadastrar</button></div><div id="pr_fb"></div></div>';
+    let tab='<div class="card painel"><h3>Cadastrados ('+d.professores.length+')</h3><table class="painel"><tr><th>Login</th><th>Nome</th><th>Papel</th><th>Senha</th><th></th></tr>';
+    for(const p of d.professores){
+      const podeMexer=!p.admin && p.login!==d.meuLogin && (admin || p.papel!=='Coordenador');
+      let acoes='<span style="color:var(--cinza)">—</span>';
+      if(p.login===d.meuLogin) acoes='<span style="color:var(--dourado)">você</span>';
+      else if(podeMexer) acoes='<a style="cursor:pointer;color:var(--azul)" onclick="resetProfessor(\''+p.login+'\')">resetar senha</a> · <a style="cursor:pointer;color:var(--vermelho)" onclick="excluirProfessor(\''+p.login+'\')">excluir</a>';
+      tab+='<tr><td>'+esc(p.login)+'</td><td>'+esc(p.nome||'—')+'</td><td>'+esc(p.papel)+(p.admin?' 👑':'')+'</td><td>'+(p.mudouSenha?'✓ trocada':'inicial')+'</td><td>'+acoes+'</td></tr>';
+    }
+    tab+='</table></div>';
+    document.getElementById('lpr').innerHTML=form+tab;
+  }catch(e){document.getElementById('lpr').innerHTML='<p class="erro-ia">Falha ao carregar.</p>';}
+}
+async function salvarProfessor(){
+  const login=document.getElementById('pr_login').value.trim();
+  const nome=document.getElementById('pr_nome').value.trim();
+  const papel=document.getElementById('pr_papel').value;
+  const fb=document.getElementById('pr_fb');
+  if(!login){fb.innerHTML='<p class="erro-ia">Informe o login.</p>';return}
+  const r=await apiPost('/api/professores/salvar',{login,nome,papel});const d=await r.json();
+  if(!r.ok){fb.innerHTML='<p class="erro-ia">'+(d.erro||'Erro')+'</p>';return}
+  if(d.novo)alert('Cadastrado(a)!\n\nLogin: '+login+'\nSenha inicial: '+login+'\n\nA pessoa troca a senha no primeiro acesso.');
+  profProfessores();
+}
+async function excluirProfessor(login){
+  if(!confirm('Remover '+login+' do sistema? As peças criadas por essa pessoa continuam no banco.'))return;
+  const r=await apiPost('/api/professores/excluir',{login});const d=await r.json();
+  if(!r.ok){alert(d.erro||'Erro');return}
+  profProfessores();
+}
+async function resetProfessor(login){
+  if(!confirm('Resetar a senha de '+login+' para o próprio login? A pessoa troca no próximo acesso.'))return;
+  const r=await apiPost('/api/professores/reset',{login});const d=await r.json();
+  if(!r.ok){alert(d.erro||'Erro');return}
+  alert('Senha resetada. Nova senha inicial: '+login);
+  profProfessores();
 }
 
 // ================= ALUNO =================

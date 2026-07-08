@@ -40,7 +40,7 @@ function migrarDb() {
   if (!db.professor) db.professor = { login: (process.env.PROF_LOGIN || '500686'), senha: hashSenha(process.env.PROF_SENHA || 'trocar-no-primeiro-acesso'), mudouSenha: false };
   db.professores[db.professor.login] = db.professor; // espelha o principal na coleção
   db.professor.nome = db.professor.nome || 'Prof. Rodrigo Silva Pereira';
-  db.professor.papel = 'Professor';
+  db.professor.papel = 'Administrador';
   // Coordenadora Karine (mesmos poderes de professora) — cria uma vez
   if (!db.professores['Karine'] && !db.karineCriada) {
     db.professores['Karine'] = { login: 'Karine', senha: hashSenha('123456'), mudouSenha: false, nome: 'Karine Morais', papel: 'Coordenadora do NPJ' };
@@ -54,6 +54,12 @@ function carregarDb() {
   salvarDb();
 }
 function professorDe(login) { if (!login) return null; if (db.professores && db.professores[login]) return db.professores[login]; if (db.professor && db.professor.login === login) return db.professor; return null; }
+// ===== Papéis: Administrador (dono) > Coordenador > Professor =====
+const OWNER_LOGIN = (process.env.PROF_LOGIN || '500686');
+function ehAdmin(login) { return !!login && login === OWNER_LOGIN; }
+function ehCoordenador(login) { const p = professorDe(login); return !!(p && /coorden/i.test(p.papel || '')); }
+function papelDe(login) { if (ehAdmin(login)) return 'Administrador'; const p = professorDe(login); if (p && /coorden/i.test(p.papel || '')) return 'Coordenador'; return 'Professor'; }
+function podeGerirProfessores(login) { return ehAdmin(login) || ehCoordenador(login); }
 function salvarDb() { try { fs.writeFileSync(DB_PATH, JSON.stringify(db)); } catch (e) { console.error('Falha ao salvar db:', e.message); } }
 carregarDb();
 // Autodiagnóstico de persistência (aparece nos logs do Render)
@@ -297,7 +303,7 @@ async function apiLogin(req, res) {
   const prof = professorDe(usuario);
   if (prof) {
     if (!confereSenha(senha, prof.senha)) return json(res, 401, { erro: 'Login ou senha incorreta.' });
-    return json(res, 200, { token: novaSessao(usuario, 'professor'), tipo: 'professor', nome: prof.nome || 'Professor', papel: prof.papel || 'Professor', email: prof.emailAviso || '', precisaTrocarSenha: !prof.mudouSenha, turmaAtiva: db.turmaAtiva });
+    return json(res, 200, { token: novaSessao(usuario, 'professor'), tipo: 'professor', nome: prof.nome || 'Professor', papel: papelDe(usuario), admin: ehAdmin(usuario), gereProf: podeGerirProfessores(usuario), gereCoord: ehAdmin(usuario), email: prof.emailAviso || '', precisaTrocarSenha: !prof.mudouSenha, turmaAtiva: db.turmaAtiva });
   }
   const a = db.alunos[usuario];
   if (!a) return json(res, 401, { erro: 'Matrícula não cadastrada. Fale com o professor.' });
@@ -334,6 +340,65 @@ async function apiEmailProfessor(req, res) {
   const em = String(d.email || '').trim().toLowerCase();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) return json(res, 400, { erro: 'E-mail inválido.' });
   prof.emailAviso = em; salvarDb(); json(res, 200, { ok: true });
+}
+// ===== Cadastro de professores/coordenadores =====
+function guardaGestor(req, res) {
+  const sess = sessaoDe(req); if (!sess) { json(res, 401, { erro: 'SESSAO' }); return null; }
+  if (sess.tipo !== 'professor' || !podeGerirProfessores(sess.usuario)) { json(res, 403, { erro: 'Acesso restrito.' }); return null; }
+  return sess;
+}
+async function professoresListar(req, res) {
+  const sess = guardaGestor(req, res); if (!sess) return;
+  const lista = [];
+  if (db.professor) lista.push({ login: db.professor.login, nome: db.professor.nome || 'Administrador', papel: 'Administrador', admin: true, mudouSenha: !!db.professor.mudouSenha });
+  for (const login of Object.keys(db.professores || {})) {
+    if (db.professor && login === db.professor.login) continue;
+    const p = db.professores[login];
+    lista.push({ login, nome: p.nome || '', papel: /coorden/i.test(p.papel || '') ? 'Coordenador' : 'Professor', admin: false, mudouSenha: !!p.mudouSenha });
+  }
+  lista.sort((a, b) => (a.papel + a.nome).localeCompare(b.papel + b.nome));
+  json(res, 200, { ok: true, professores: lista, souAdmin: ehAdmin(sess.usuario), meuLogin: sess.usuario });
+}
+async function professorSalvar(req, res) {
+  const sess = guardaGestor(req, res); if (!sess) return;
+  let d; try { d = await lerJson(req, 5000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
+  const login = String(d.login || '').trim();
+  const nome = String(d.nome || '').trim();
+  let papel = /coorden/i.test(String(d.papel || '')) ? 'Coordenador' : 'Professor';
+  if (!login || /\s/.test(login)) return json(res, 400, { erro: 'Informe um login sem espaços.' });
+  if (db.professor && login === db.professor.login) return json(res, 400, { erro: 'Este login é reservado ao administrador.' });
+  if (!ehAdmin(sess.usuario) && papel === 'Coordenador') return json(res, 403, { erro: 'Apenas o administrador cadastra coordenadores.' });
+  const existente = db.professores[login];
+  if (existente) {
+    if (!ehAdmin(sess.usuario) && /coorden/i.test(existente.papel || '')) return json(res, 403, { erro: 'Apenas o administrador gerencia coordenadores.' });
+    existente.nome = nome || existente.nome; existente.papel = papel;
+  } else {
+    db.professores[login] = { login, senha: hashSenha(login), mudouSenha: false, nome, papel };
+  }
+  salvarDb();
+  json(res, 200, { ok: true, novo: !existente, senhaInicial: existente ? null : login });
+}
+async function professorExcluir(req, res) {
+  const sess = guardaGestor(req, res); if (!sess) return;
+  let d; try { d = await lerJson(req, 5000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
+  const login = String(d.login || '').trim();
+  if (db.professor && login === db.professor.login) return json(res, 400, { erro: 'O administrador não pode ser removido.' });
+  const p = db.professores[login]; if (!p) return json(res, 404, { erro: 'Não encontrado.' });
+  if (!ehAdmin(sess.usuario) && /coorden/i.test(p.papel || '')) return json(res, 403, { erro: 'Apenas o administrador remove coordenadores.' });
+  delete db.professores[login];
+  for (const [t, s] of Array.from(sessoes)) { if (s.tipo === 'professor' && s.usuario === login) encerrarSessao(t); }
+  salvarDb();
+  json(res, 200, { ok: true });
+}
+async function professorReset(req, res) {
+  const sess = guardaGestor(req, res); if (!sess) return;
+  let d; try { d = await lerJson(req, 5000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
+  const login = String(d.login || '').trim();
+  if (db.professor && login === db.professor.login) return json(res, 400, { erro: 'Use “trocar senha” para o administrador.' });
+  const p = db.professores[login]; if (!p) return json(res, 404, { erro: 'Não encontrado.' });
+  if (!ehAdmin(sess.usuario) && /coorden/i.test(p.papel || '')) return json(res, 403, { erro: 'Apenas o administrador gerencia coordenadores.' });
+  p.senha = hashSenha(login); p.mudouSenha = false; salvarDb();
+  json(res, 200, { ok: true });
 }
 async function apiVerificarEmail(req, res) {
   const sess = sessaoDe(req); if (!sess || sess.tipo !== 'aluno') return json(res, 401, { erro: 'Sessão expirada.' });
@@ -625,7 +690,7 @@ function resumoPeca(p) {
   const ents = db.entregas[p.id] || {};
   const total = Object.keys(ents).length;
   const corrigidas = Object.values(ents).filter(e => e.validado).length;
-  return { id: p.id, num: p.num, nomePeca: p.nomePeca, disc: p.disc, prazo: p.prazo, publicada: p.publicada, criadoEm: p.criadoEm, entregas: total, validadas: corrigidas };
+  return { id: p.id, num: p.num, nomePeca: p.nomePeca, disc: p.disc, prazo: p.prazo, publicada: p.publicada, criadoEm: p.criadoEm, entregas: total, validadas: corrigidas, autor: p.autor || '', autorNome: ((professorDe(p.autor) || {}).nome) || p.autor || '—' };
 }
 async function pecasListar(req, res) {
   const sess = sessaoDe(req); if (!sess) return json(res, 401, { erro: 'SESSAO' }); if (sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
@@ -642,7 +707,11 @@ async function pecaGet(req, res, id) {
 async function pecaExcluir(req, res) {
   const sess = sessaoDe(req); if (!sess) return json(res, 401, { erro: 'SESSAO' }); if (sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
   let d; try { d = await lerJson(req, 5000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
-  const id = String(d.id || ''); if (db.pecas[id]) { delete db.pecas[id]; delete db.entregas[id]; salvarDb(); }
+  const id = String(d.id || ''); const p = db.pecas[id];
+  if (p) {
+    if (p.autor && p.autor !== sess.usuario && !ehAdmin(sess.usuario)) return json(res, 403, { erro: 'Só quem criou a peça pode excluí-la.' });
+    delete db.pecas[id]; delete db.entregas[id]; salvarDb();
+  }
   json(res, 200, { ok: true });
 }
 // Aluno: lista peças publicadas da sua turma, com status de entrega
@@ -801,6 +870,10 @@ const server = http.createServer((req, res) => {
   if (req.method === 'POST' && req.url === '/api/gabarito') return gabaritoIA(req, res);
   if (req.method === 'POST' && req.url === '/api/corrigir') return corrigir(req, res);
   if (req.method === 'POST' && req.url === '/api/email-professor') return apiEmailProfessor(req, res);
+  if (req.method === 'GET' && req.url === '/api/professores') return professoresListar(req, res);
+  if (req.method === 'POST' && req.url === '/api/professores/salvar') return professorSalvar(req, res);
+  if (req.method === 'POST' && req.url === '/api/professores/excluir') return professorExcluir(req, res);
+  if (req.method === 'POST' && req.url === '/api/professores/reset') return professorReset(req, res);
   if (req.method === 'POST' && req.url === '/api/verificar-email') return apiVerificarEmail(req, res);
   if (req.method === 'POST' && req.url === '/api/reenviar-codigo') return apiReenviarCodigo(req, res);
   if (req.method === 'POST' && req.url === '/api/peca/gerar-ia') return pecaGerarIA(req, res);
