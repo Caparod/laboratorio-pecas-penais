@@ -648,14 +648,17 @@ function garantirLinksFontes(gab) {
   try {
     const itens = new Map();
     let m;
-    const reSum = /S[úu]mula\s+(Vinculante\s+)?(?:n[ºo°.]*\s*)?(\d+)\s*(?:do|da|\/|—|-)?\s*(STF|STJ)?/gi;
+    // Aceita singular/plural e enumerações: "Súmula 52 do STJ", "Súmulas 718 e 719 do STF", "Súmulas 282, 356 e 279/STF"
+    const reSum = /S[úu]mulas?\s+(Vinculantes?\s+)?((?:n[ºo°.]*\s*)?\d+(?:\s*(?:,\s*|\s+e\s+)\s*\d+)*)\s*(?:do|da|\/|—|–|-)?\s*(STF|STJ)?/gi;
     while ((m = reSum.exec(gab))) {
-      const vinc = !!m[1]; const n = m[2]; const trib = (m[3] || (vinc ? 'STF' : '')).toUpperCase();
-      const rot = 'Súmula ' + (vinc ? 'Vinculante ' : '') + n + (trib ? '/' + trib : '');
-      const termo = 'Súmula ' + (vinc ? 'Vinculante ' : '') + n;
-      if (trib === 'STJ') itens.set(rot, urlBuscaSTJ(termo));
-      else if (trib === 'STF' || vinc) itens.set(rot, urlBuscaSTF(termo));
-      else { itens.set(rot + ' (STF)', urlBuscaSTF(termo)); itens.set(rot + ' (STJ)', urlBuscaSTJ(termo)); }
+      const vinc = !!m[1]; const trib = (m[3] || (vinc ? 'STF' : '')).toUpperCase();
+      for (const n of (m[2].match(/\d+/g) || [])) {
+        const rot = 'Súmula ' + (vinc ? 'Vinculante ' : '') + n + (trib ? '/' + trib : '');
+        const termo = 'Súmula ' + (vinc ? 'Vinculante ' : '') + n;
+        if (trib === 'STJ') itens.set(rot, urlBuscaSTJ(termo));
+        else if (trib === 'STF' || vinc) itens.set(rot, urlBuscaSTF(termo));
+        else { itens.set(rot + ' (STF)', urlBuscaSTF(termo)); itens.set(rot + ' (STJ)', urlBuscaSTJ(termo)); }
+      }
     }
     const reSTJ = /\b(REsp|AREsp|EREsp|AgRg no REsp)\s+(?:n[ºo°.]*\s*)?([\d\.]{3,})\b/g;
     while ((m = reSTJ.exec(gab))) itens.set(m[1] + ' ' + m[2] + ' (STJ)', urlBuscaSTJ(m[1] + ' ' + m[2]));
@@ -759,9 +762,11 @@ async function pecaSalvar(req, res) {
   // Avisa os alunos por e-mail quando a peça é publicada (apenas uma vez por peça)
   const pp = db.pecas[id];
   if (pp.publicada && !pp.avisadoAlunos && pp.disc === db.turmaAtiva) {
-    pp.avisadoAlunos = Date.now(); salvarDb();
     const prazoTxt = pp.prazo ? new Date(pp.prazo + (/\d{2}:\d{2}/.test(pp.prazo) ? '' : 'T23:59')).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'sem prazo definido';
     const alvo = Object.entries(db.alunos).filter(([m, a]) => a && a.email && a.emailVerificado);
+    // Só marca como avisado se houver ao menos um destinatário — senão, alunos que verificarem
+    // o e-mail depois ainda receberão o aviso quando a peça for salva/publicada novamente.
+    if (alvo.length) { pp.avisadoAlunos = Date.now(); salvarDb(); }
     const html = '<p>Olá!</p><p>O(a) Professor(a) publicou uma nova peça no <b>Laboratório de Peças Penais</b>:</p>'
       + '<p><b>Peça ' + pp.num + ' — ' + escHtml(pp.nomePeca) + '</b> (' + escHtml(pp.disc) + ')</p>'
       + '<p><b>Prazo de entrega:</b> ' + prazoTxt + '</p>'
@@ -806,7 +811,7 @@ async function pecasAluno(req, res) {
     const e = (db.entregas[p.id] || {})[sess.usuario];
     let noPrazo = true;
     if (p.prazo && !p.foraDoPrazoGeral) { const limite = new Date(p.prazo + (/\d{2}:\d{2}/.test(p.prazo) ? '' : 'T23:59')).getTime(); noPrazo = Date.now() <= limite || !!(p.liberados && p.liberados[sess.usuario]); }
-    return { id: p.id, num: p.num, nomePeca: p.nomePeca, disc: p.disc, prazo: p.prazo, caso: p.caso, enviado: !!e, enviadoEm: e ? e.enviadoEm : null, validado: e ? !!e.validado : false, nota: e ? e.nota : null, temRelatorio: e ? !!(e.validado && e.relatorio) : false, noPrazo: noPrazo };
+    return { id: p.id, num: p.num, nomePeca: p.nomePeca, disc: p.disc, prazo: p.prazo, caso: p.caso, enviado: !!e, enviadoEm: e ? e.enviadoEm : null, validado: e ? !!e.validado : false, nota: (e && e.validado) ? e.nota : null, temRelatorio: e ? !!(e.validado && e.relatorio) : false, noPrazo: noPrazo };
   });
   json(res, 200, { ok: true, pecas: lista });
 }
