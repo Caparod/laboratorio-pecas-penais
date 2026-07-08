@@ -577,6 +577,7 @@ const CHECKLIST=[
 "Fundamentação jurídica completa: preliminares antes do mérito, teses com artigos de lei",
 "Formulei pedidos completos, em ordem lógica, com pedidos subsidiários",
 "Toda jurisprudência e súmula citada EXISTE de verdade e tem o teor indicado (citação falsa = nota zero)",
+"Incluí ao FINAL da peça o ANEXO com todas as fontes citadas e seus links oficiais (para conferência na origem)",
 "Abri a peça com o tópico de SÍNTESE: fatos, pedidos, decisão impugnada e dispositivos legais (art. 343-A do RISTJ)",
 "Peça topificada: cada argumento em tópico próprio e bem desenvolvido (nada de tópico com só 1–2 parágrafos), sustentado com jurisprudência válida",
 "Fechamento formal: local, data, ADVOGADO(A), OAB nº ... (sem assinar o próprio nome)",
@@ -784,6 +785,7 @@ function renderPeca(){
     +'<div class="f"><b>Legitimidade</b><span>'+p.ficha.leg+'</span></div></div></div>';
     html+='<div class="card"><h3>Estrutura passo a passo</h3>';
     html+='<div class="passo"><h4>Resumo da peça (síntese inicial)</h4><p>Antes de tudo, abra a peça com um tópico curto de SÍNTESE: resuma os fatos, os pedidos, a decisão impugnada (nos recursos) e os dispositivos legais invocados. É exigência do art. 343-A do Regimento Interno do STJ (emenda de 2026) para as peças dirigidas àquele tribunal — e, nesta disciplina, é padrão para TODAS as peças: o julgador deve entender sua linha argumentativa de relance.</p><div class="ex">SÍNTESE: Trata-se de apelação contra sentença da 1ª Vara Criminal de Brasília que condenou o apelante por roubo majorado (art. 157, §2º, II, CP) a 6 anos de reclusão. Pede-se o afastamento da majorante, a redução da pena-base ao mínimo e a aplicação da atenuante da confissão (arts. 59, 65, III, d, e 68 do CP).</div></div>';
+    html+='<div class="passo"><h4>Anexo de fontes (ao final da peça)</h4><p>Encerre a peça com um <b>ANEXO listando todas as fontes citadas</b> — cada súmula, julgado ou lei com o respectivo link oficial (STF, STJ, TJDFT, Planalto). Serve para que o leitor confira cada citação na origem e comprove que nenhuma é inventada. Citar jurisprudência sem trazê-la no anexo é falha formal; fonte que não confere é tratada como citação falsa.</p><div class="ex">ANEXO — FONTES CITADAS:\n[1] Súmula 545 do STJ — https://scon.stj.jus.br/SCON/pesquisar.jsp?b=ACOR&livre=sumula%20545\n[2] STF, RE 603.616 (Tema 280) — https://jurisprudencia.stf.jus.br/pages/search?queryString=RE%20603616</div></div>';
     for(const s of p.estrutura){html+='<div class="passo"><h4>'+s.t+'</h4><p>'+s.p+'</p>'+(s.ex?'<div class="ex">'+s.ex+'</div>':'')+'</div>'}
     html+='</div>';
     html+=materiaisHtml(p);
