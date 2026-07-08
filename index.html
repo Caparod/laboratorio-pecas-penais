@@ -198,17 +198,19 @@ function renderTroca(){
   menu.innerHTML='';
   const ehAluno=AUTH.tipo==='aluno';
   conteudo.innerHTML='<div class="loginwrap"><h2>Primeiro acesso</h2>'
-  +'<p>Crie uma nova senha (mín. 6 caracteres'+(ehAluno?', diferente da matrícula':'')+').'+(ehAluno?' E cadastre seu e-mail para receber as correções.':'')+'</p>'
+  +'<p>Crie uma nova senha (mín. 6 caracteres'+(ehAluno?', diferente da matrícula':'')+').'+(ehAluno?' E cadastre seu e-mail para receber as correções.':' Cadastre seu e-mail para receber avisos de novas entregas.')+'</p>'
   +'<input id="ts_1" type="password" placeholder="Nova senha">'
   +'<input id="ts_2" type="password" placeholder="Repita a nova senha">'
-  +(ehAluno?'<input id="ts_email" type="email" placeholder="Seu e-mail (para receber correções)">':'')
+  +'<input id="ts_email" type="email" placeholder="'+(ehAluno?'Seu e-mail (para receber correções)':'Seu e-mail (para receber avisos de entregas)')+'">'
   +'<button onclick="salvarTroca()">Salvar</button><div id="ts_erro"></div></div>';
 }
 async function salvarTroca(){
   const a=document.getElementById('ts_1').value,b=document.getElementById('ts_2').value,e=document.getElementById('ts_erro');
   if(a!==b){e.innerHTML='<p class="erro-ia">As senhas não conferem.</p>';return}
   const body={novaSenha:a};
-  if(AUTH.tipo==='aluno'){const em=(document.getElementById('ts_email').value||'').trim();if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)){e.innerHTML='<p class="erro-ia">Informe um e-mail válido.</p>';return}body.email=em;}
+  const em=(document.getElementById('ts_email').value||'').trim();
+  if(AUTH.tipo==='aluno'){if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)){e.innerHTML='<p class="erro-ia">Informe um e-mail válido.</p>';return}body.email=em;}
+  else if(em){if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)){e.innerHTML='<p class="erro-ia">E-mail inválido (ou deixe em branco).</p>';return}body.email=em;}
   e.innerHTML='<p style="font-family:Arial,sans-serif;font-size:.85rem"><span class="spinner"></span>Salvando...</p>';
   try{
     const r=await apiPost('/api/trocar-senha',body);const d=await r.json();

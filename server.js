@@ -287,7 +287,7 @@ async function apiLogin(req, res) {
   const prof = professorDe(usuario);
   if (prof) {
     if (!confereSenha(senha, prof.senha)) return json(res, 401, { erro: 'Login ou senha incorreta.' });
-    return json(res, 200, { token: novaSessao(usuario, 'professor'), tipo: 'professor', nome: prof.nome || 'Professor', papel: prof.papel || 'Professor', precisaTrocarSenha: !prof.mudouSenha, turmaAtiva: db.turmaAtiva });
+    return json(res, 200, { token: novaSessao(usuario, 'professor'), tipo: 'professor', nome: prof.nome || 'Professor', papel: prof.papel || 'Professor', email: prof.emailAviso || '', precisaTrocarSenha: !prof.mudouSenha, turmaAtiva: db.turmaAtiva });
   }
   const a = db.alunos[usuario];
   if (!a) return json(res, 401, { erro: 'Matrícula não cadastrada. Fale com o professor.' });
@@ -301,7 +301,10 @@ async function apiTrocarSenha(req, res) {
   if (nova.length < 6) return json(res, 400, { erro: 'A nova senha deve ter pelo menos 6 caracteres.' });
   if (sess.tipo === 'professor') {
     const prof = professorDe(sess.usuario); if (!prof) return json(res, 401, { erro: 'Sessão inválida.' });
-    prof.senha = hashSenha(nova); prof.mudouSenha = true; salvarDb(); return json(res, 200, { ok: true });
+    prof.senha = hashSenha(nova); prof.mudouSenha = true;
+    const em = String(d.email || '').trim().toLowerCase();
+    if (em && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) prof.emailAviso = em;
+    salvarDb(); return json(res, 200, { ok: true });
   }
   const a = db.alunos[sess.usuario]; if (!a) return json(res, 401, { erro: 'Aluno não encontrado.' });
   if (nova === sess.usuario) return json(res, 400, { erro: 'A nova senha não pode ser igual à matrícula.' });
@@ -313,6 +316,14 @@ async function apiTrocarSenha(req, res) {
   const r = await enviarEmail(email, 'Seu código de verificação — Laboratório de Peças Penais',
     '<p>Olá, ' + escHtml(a.nome || '') + '!</p><p>Seu código de verificação é:</p><h2 style="letter-spacing:3px">' + a.codigoVerif + '</h2><p>Digite-o no sistema para confirmar seu e-mail. Assim você receberá as correções das suas peças.</p>');
   json(res, 200, { ok: true, precisaVerificarEmail: true, emailEnviado: r.ok });
+}
+async function apiEmailProfessor(req, res) {
+  const sess = sessaoDe(req); if (!sess || sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
+  const prof = professorDe(sess.usuario); if (!prof) return json(res, 401, { erro: 'Sessão inválida.' });
+  let d; try { d = await lerJson(req, 5000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
+  const em = String(d.email || '').trim().toLowerCase();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) return json(res, 400, { erro: 'E-mail inválido.' });
+  prof.emailAviso = em; salvarDb(); json(res, 200, { ok: true });
 }
 async function apiVerificarEmail(req, res) {
   const sess = sessaoDe(req); if (!sess || sess.tipo !== 'aluno') return json(res, 401, { erro: 'Sessão expirada.' });
@@ -636,11 +647,14 @@ async function entregar(req, res) {
   // se reenviou depois de corrigir, invalida a correção anterior
   if (jaTinha) { db.entregas[p.id][sess.usuario].relatorio = null; db.entregas[p.id][sess.usuario].nota = null; db.entregas[p.id][sess.usuario].validado = false; }
   salvarDb();
-  // avisa os professores por e-mail
+  // avisa por e-mail quem publicou a peça (ou todos os professores com e-mail cadastrado)
   const quando = new Date().toLocaleString('pt-BR');
-  const dests = Object.values(db.professores).map(pr => pr.emailAviso || process.env.GMAIL_USER).filter(Boolean);
-  const destino = process.env.PROF_EMAIL || process.env.GMAIL_USER;
-  if (destino) enviarEmail(destino, 'Nova entrega — ' + (a.nome || sess.usuario) + ' enviou a Peça ' + p.num,
+  const autor = professorDe(p.autor);
+  let destinos = [];
+  if (autor && autor.emailAviso) destinos.push(autor.emailAviso);
+  else destinos = Object.values(db.professores).map(pr => pr.emailAviso).filter(Boolean);
+  if (!destinos.length && process.env.GMAIL_USER) destinos.push(process.env.GMAIL_USER);
+  for (const dest of destinos) enviarEmail(dest, 'Nova entrega — ' + (a.nome || sess.usuario) + ' enviou a Peça ' + p.num,
     '<p>O aluno <b>' + escHtml(a.nome || '') + '</b> (matrícula ' + sess.usuario + ') enviou a <b>Peça ' + p.num + ' — ' + escHtml(p.nomePeca) + '</b>.</p><p>Em ' + quando + '. Acesse o painel para corrigir.</p>');
   json(res, 200, { ok: true, reenvio: jaTinha });
 }
@@ -721,6 +735,7 @@ const server = http.createServer((req, res) => {
   if (req.method === 'POST' && req.url === '/api/extrair-pdf') return extrairPdf(req, res);
   if (req.method === 'POST' && req.url === '/api/gabarito') return gabaritoIA(req, res);
   if (req.method === 'POST' && req.url === '/api/corrigir') return corrigir(req, res);
+  if (req.method === 'POST' && req.url === '/api/email-professor') return apiEmailProfessor(req, res);
   if (req.method === 'POST' && req.url === '/api/verificar-email') return apiVerificarEmail(req, res);
   if (req.method === 'POST' && req.url === '/api/reenviar-codigo') return apiReenviarCodigo(req, res);
   if (req.method === 'POST' && req.url === '/api/peca/gerar-ia') return pecaGerarIA(req, res);
