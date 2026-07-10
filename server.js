@@ -475,13 +475,50 @@ async function apiReenviarCodigo(req, res) {
     '<p>Seu novo código é:</p><h2 style="letter-spacing:3px">' + a.codigoVerif + '</h2>');
   json(res, 200, { ok: true, emailEnviado: r.ok });
 }
+// ===== Aluno: transcrever fotos de peça manuscrita (visão) =====
+const SISTEMA_OCR = 'Você transcreve manuscritos de peças processuais penais escritas à mão por estudantes de Direito. REGRAS ABSOLUTAS: (1) transcreva com FIDELIDADE TOTAL o que está escrito — NÃO corrija erros de português, NÃO melhore a redação, NÃO complete frases, NÃO acrescente nem remova nada: a transcrição substituirá o manuscrito do aluno em uma avaliação e qualquer "melhoria" seria fraude; (2) preserve a estrutura visual: endereçamento em maiúsculas, parágrafos, títulos de tópicos, numeração de pedidos; (3) palavra ou trecho que não conseguir ler com segurança vira [ilegível] — nunca chute; (4) se houver várias fotos, transcreva na ordem recebida, emendando o texto contínuo; (5) se as imagens não contiverem manuscrito legível, responda apenas: ERRO: não identifiquei texto manuscrito nas fotos. Responda SOMENTE com a transcrição, sem comentários.';
+async function alunoTranscrever(req, res) {
+  const sess = sessaoDe(req);
+  if (!sess || sess.tipo !== 'aluno') return json(res, 401, { erro: 'SESSAO' });
+  const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+  if (limitado(ip)) return json(res, 429, { erro: 'Muitas solicitações. Aguarde um minuto.' });
+  let d; try { d = await lerJson(req, 30000000); } catch { return json(res, 413, { erro: 'Fotos grandes demais. Tente menos fotos por vez.' }); }
+  const imgs = Array.isArray(d.imagens) ? d.imagens.slice(0, 6) : [];
+  if (!imgs.length) return json(res, 400, { erro: 'Envie ao menos uma foto.' });
+  if (!process.env.ANTHROPIC_API_KEY) return json(res, 500, { erro: 'Servidor sem chave configurada. Avise o professor.' });
+  const content = [];
+  for (const im of imgs) {
+    const m = String(im).match(/^data:(image\/(?:jpeg|png|webp|gif));base64,([A-Za-z0-9+/=]+)$/);
+    if (!m) return json(res, 400, { erro: 'Formato de imagem inválido (use JPG ou PNG).' });
+    content.push({ type: 'image', source: { type: 'base64', media_type: m[1], data: m[2] } });
+  }
+  content.push({ type: 'text', text: 'Transcreva fielmente o manuscrito destas ' + imgs.length + ' foto(s), na ordem.' });
+  const model = process.env.MODELO_OCR || 'claude-sonnet-5';
+  try {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({ model, max_tokens: 8000, system: SISTEMA_OCR, messages: [{ role: 'user', content }] })
+    });
+    const dd = await r.json().catch(() => null);
+    if (!r.ok) {
+      const em = ((dd && dd.error && dd.error.message) || '').toLowerCase();
+      if (em.includes('credit') || em.includes('spend') || em.includes('billing')) return json(res, 402, { erro: 'LIMITE_CREDITOS' });
+      return json(res, 500, { erro: 'Falha ao transcrever (' + r.status + '). Tente novamente.' });
+    }
+    registrarGasto(sess, model, dd && dd.usage);
+    const texto = (dd.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
+    if (!texto || /^ERRO:/.test(texto)) return json(res, 422, { erro: 'Não identifiquei texto manuscrito nas fotos. Tire fotos mais nítidas, com boa luz e a folha inteira no quadro.' });
+    json(res, 200, { texto });
+  } catch (e) { json(res, 500, { erro: 'Erro interno: ' + e.message }); }
+}
 // ===== Gastos: consulta mês a mês (Administrador e Coordenação) =====
 async function gastosListar(req, res) {
   const sess = sessaoDe(req); if (!sess) return json(res, 401, { erro: 'SESSAO' });
   if (sess.tipo !== 'professor' || !podeGerirProfessores(sess.usuario)) return json(res, 403, { erro: 'Restrito à administração e coordenação.' });
   const meses = Object.keys(db.gastos || {}).sort().reverse();
   const fator = parseFloat(process.env.FATOR_MANUTENCAO || '2');
-  const assinatura = parseFloat(process.env.ASSINATURA_MENSAL_USD || '20');
+  const assinatura = parseFloat(process.env.ASSINATURA_MENSAL_USD || '100');
   // O valor entregue já sai calculado (custo real × fator). O fator NÃO é exposto na resposta.
   const out = {};
   for (const [mes, regs] of Object.entries(db.gastos || {})) {
@@ -1145,6 +1182,7 @@ const server = http.createServer((req, res) => {
   if (req.method === 'POST' && req.url === '/api/turmas/salvar') return turmaSalvar(req, res);
   if (req.method === 'POST' && req.url === '/api/turmas/excluir') return turmaExcluir(req, res);
   if (req.method === 'POST' && req.url === '/api/aluno/turma') return alunoTurma(req, res);
+  if (req.method === 'POST' && req.url === '/api/aluno/transcrever') return alunoTranscrever(req, res);
   if (req.method === 'POST' && req.url === '/api/extrair-pdf') return extrairPdf(req, res);
   if (req.method === 'POST' && req.url === '/api/gabarito') return gabaritoIA(req, res);
   if (req.method === 'POST' && req.url === '/api/corrigir') return corrigir(req, res);

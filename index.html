@@ -651,6 +651,9 @@ function abrirPecaAluno(id){
    +((p.gabLiberado&&p.gab)?'<div class="card"><h3>📖 Gabarito oficial</h3><p style="font-size:.82rem;color:var(--cinza);font-family:Arial,sans-serif">Liberado após o encerramento do prazo. Compare com a sua peça e confira as fontes pelos links.</p><div class="bloco" style="background:#eef5ee;border:1px solid #cfe3cf;border-radius:8px;padding:14px">'+linkCitacoesHtml(md2html(p.gab))+'</div></div>':'')
    +(fechado?'<div class="card"><p class="erro-ia">O prazo desta peça já encerrou. Não é possível enviar. Se precisar, fale com o(a) professor(a) para renovar o prazo ou liberar sua entrega.</p></div>'
      :('<div class="card"><h3>Sua peça</h3><p style="font-size:.85rem;color:var(--cinza)">Redija a peça completa. Se citar jurisprudência, inclua no FINAL um anexo com as fontes e seus links. O texto fica salvo neste navegador até você enviar.</p>'
+   +'<div class="botoes" style="margin-bottom:8px"><label style="padding:9px 18px;border-radius:6px;background:var(--azul);color:#fff;cursor:pointer;font-size:.85rem;font-family:Arial,sans-serif">📷 Transcrever fotos do caderno<input type="file" accept="image/*" multiple style="display:none" onchange="transcreverFotos(this,\''+id+'\')"></label></div>'
+   +'<p style="font-size:.78rem;color:var(--cinza);font-family:Arial,sans-serif;margin-top:-4px">Escreveu à mão? Tire fotos nítidas das páginas (na ordem) e a IA transforma em texto aqui embaixo, para você conferir e editar antes de enviar.</p>'
+   +'<div id="al_ocr"></div>'
    +'<textarea id="al_texto" class="redacao" placeholder="EXCELENTÍSSIMO SENHOR...">'+esc(rasc)+'</textarea>'
    +'<div class="botoes"><button onclick="salvarRascunhoAluno(\''+id+'\')">💾 Salvar rascunho</button>'
    +'<button class="primario" onclick="enviarPeca(\''+id+'\')">📨 Enviar ao professor</button></div>'
@@ -659,6 +662,25 @@ function abrirPecaAluno(id){
   const t=document.getElementById('al_texto');if(t)t.addEventListener('input',()=>sset('peca_'+id,t.value));
 }
 function salvarRascunhoAluno(id){sset('peca_'+id,document.getElementById('al_texto').value);document.getElementById('al_fb').innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif;font-size:.85rem">Rascunho salvo.</p>';}
+// Reduz a foto no navegador (fotos de celular são grandes demais para enviar inteiras)
+function redimensionarFoto(file){return new Promise((ok,err)=>{const img=new Image();const url=URL.createObjectURL(file);
+  img.onload=()=>{try{const esc2=Math.min(1,1800/Math.max(img.width,img.height));const c=document.createElement('canvas');c.width=Math.round(img.width*esc2);c.height=Math.round(img.height*esc2);c.getContext('2d').drawImage(img,0,0,c.width,c.height);URL.revokeObjectURL(url);ok(c.toDataURL('image/jpeg',0.85));}catch(e){err(e)}};
+  img.onerror=()=>{URL.revokeObjectURL(url);err(new Error('imagem inválida'))};img.src=url;})}
+async function transcreverFotos(inp,id){
+  const files=Array.from(inp.files||[]).slice(0,6);inp.value='';if(!files.length)return;
+  const fb=document.getElementById('al_ocr');
+  fb.innerHTML='<p style="font-family:Arial,sans-serif;font-size:.85rem"><span class="spinner"></span>Preparando '+files.length+' foto(s) e transcrevendo com IA... (pode levar até 1 minuto)</p>';
+  try{
+    const imagens=[];for(const f of files)imagens.push(await redimensionarFoto(f));
+    const r=await apiPost('/api/aluno/transcrever',{imagens});const d=await r.json();
+    if(!r.ok){let m=d.erro||'Erro';if(m==='LIMITE_CREDITOS')m='⛔ Limite mensal de uso da IA atingido. Avise o professor.';fb.innerHTML='<p class="erro-ia">'+m+'</p>';return}
+    const t=document.getElementById('al_texto');
+    t.value=(t.value.trim()?t.value.trim()+'\n\n':'')+d.texto;
+    sset('peca_'+id,t.value);
+    fb.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif;font-size:.85rem">✅ Transcrição pronta! <b>Confira o texto abaixo e corrija o que precisar</b> — trechos que a IA não conseguiu ler estão marcados como [ilegível]. Só envie depois de revisar.</p>';
+    t.scrollIntoView({behavior:'smooth',block:'center'});
+  }catch(e){fb.innerHTML='<p class="erro-ia">Falha ao processar as fotos: '+e.message+'</p>';}
+}
 async function enviarPeca(id){
   const texto=document.getElementById('al_texto').value.trim();const fb=document.getElementById('al_fb');
   if(texto.length<80){fb.innerHTML='<p class="erro-ia">Escreva sua peça antes de enviar.</p>';return}
