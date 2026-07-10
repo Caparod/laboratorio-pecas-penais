@@ -588,12 +588,22 @@ async function profGastos(mes){
 // ---- Notas / planilha ----
 function profNotas(){
   conteudo.innerHTML='<h2 class="titulo-peca">Notas</h2>'
-   +'<div class="card"><p>Baixe a planilha com todos os alunos e as notas de cada peça (formato CSV, abre no Excel).</p>'
-   +'<div class="botoes"><button class="primario" onclick="baixarPlanilha()">📊 Baixar planilha de notas (.csv)</button></div>'
-   +'<p class="aviso">Colunas: Aluno · Matrícula · Peça 1 · Peça 2 · … com a nota validada de cada um.</p></div>';
+   +'<div class="card"><p>Baixe a planilha de notas <b>por turma</b> (formato CSV, abre no Excel). Cada professor só tem acesso às turmas dele; administração e coordenação, a todas.</p>'
+   +'<div class="botoes" style="align-items:center"><span style="font-family:Arial,sans-serif;font-size:.9rem">Turma: <select id="nt_turma" style="padding:7px;border:1px solid #cfc9b8;border-radius:6px"><option value="">Carregando...</option></select></span>'
+   +'<button class="primario" onclick="baixarPlanilha()">📊 Baixar planilha de notas (.csv)</button></div>'
+   +'<p class="aviso">Colunas: Aluno · Matrícula · e uma coluna por peça da turma, com a nota validada.</p><div id="nt_fb"></div></div>';
+  carregarTurmasSelect('nt_turma');
 }
 async function baixarPlanilha(){
-  try{const r=await apiGet('/api/notas.csv');const blob=await r.blob();const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='notas.csv';a.click();}catch(e){alert('Falha ao baixar.')}
+  const tid=(document.getElementById('nt_turma')||{}).value;
+  const fb=document.getElementById('nt_fb');
+  if(!tid){fb.innerHTML='<p class="erro-ia">Escolha a turma.</p>';return}
+  try{const r=await apiGet('/api/notas.csv?turma='+encodeURIComponent(tid));
+    if(!r.ok){fb.innerHTML='<p class="erro-ia">'+(await r.text())+'</p>';return}
+    const blob=await r.blob();const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+    const tNome=((window.__turmas||[]).find(t=>t.id===tid)||{}).nome||'turma';
+    a.download='notas-'+tNome.toLowerCase().replace(/[^a-z0-9]+/g,'-')+'.csv';a.click();fb.innerHTML='';
+  }catch(e){alert('Falha ao baixar.')}
 }
 
 // ---- Sistema (zerar) ----

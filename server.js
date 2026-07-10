@@ -575,6 +575,11 @@ async function alunoTurma(req, res) {
   let d; try { d = await lerJson(req, 5000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
   const a = db.alunos[String(d.matricula || '').trim()];
   if (!a) return json(res, 404, { erro: 'Aluno não encontrado.' });
+  if (!podeGerirProfessores(sess.usuario)) {
+    const minhas = new Set(Object.values(db.turmas || {}).filter(t => (t.professores || []).includes(sess.usuario)).map(t => t.id));
+    if (!minhas.has(a.turmaId)) return json(res, 403, { erro: 'Este aluno não é de uma turma sua.' });
+    if (d.turmaId && !minhas.has(d.turmaId)) return json(res, 403, { erro: 'Você não é professor(a) da turma de destino.' });
+  }
   a.turmaId = (d.turmaId && db.turmas[d.turmaId]) ? d.turmaId : null;
   salvarDb();
   json(res, 200, { ok: true });
@@ -584,7 +589,12 @@ async function apiAdmin(req, res) {
   let d; try { d = await lerJson(req, 200000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
   if (d.turma && (d.turma === 'Estágio I' || d.turma === 'Estágio II')) { db.turmaAtiva = d.turma; }
   let contNovas = 0, contExistentes = 0;
-  const turmaNova = (d.turmaId && db.turmas[d.turmaId]) ? d.turmaId : null;
+  // Professor comum só enxerga/gerencia alunos das turmas DELE; administração/coordenação, de todas.
+  const podeTudo = podeGerirProfessores(sess.usuario);
+  const minhasTurmas = new Set(Object.values(db.turmas || {}).filter(t => (t.professores || []).includes(sess.usuario)).map(t => t.id));
+  const veAluno = (m) => podeTudo || (db.alunos[m] && minhasTurmas.has(db.alunos[m].turmaId));
+  let turmaNova = (d.turmaId && db.turmas[d.turmaId]) ? d.turmaId : null;
+  if (turmaNova && !podeTudo && !minhasTurmas.has(turmaNova)) return json(res, 403, { erro: 'Você não é professor(a) desta turma.' });
   if (Array.isArray(d.matriculas)) {
     const norm = d.matriculas.map(item => {
       if (typeof item === 'string') { const m = item.match(/^\s*([0-9]{4,15})\s*[-–—,;:.]?\s*(.*)$/); return m ? { matricula: m[1], nome: (m[2] || '').trim() } : null; }
@@ -608,12 +618,15 @@ async function apiAdmin(req, res) {
       }
     }
   }
-  if (d.excluirTodos === true) { db.alunos = {}; }
-  if (d.excluirAluno) { delete db.alunos[String(d.excluirAluno).trim()]; }
-  if (d.resetarSenha) { const a = db.alunos[String(d.resetarSenha).trim()]; if (a) { a.senha = hashSenha(String(d.resetarSenha).trim()); a.mudouSenha = false; } }
+  if (d.excluirTodos === true) {
+    if (!podeTudo) return json(res, 403, { erro: 'Só administração/coordenação excluem todos os alunos.' });
+    db.alunos = {};
+  }
+  if (d.excluirAluno) { const m = String(d.excluirAluno).trim(); if (veAluno(m)) delete db.alunos[m]; }
+  if (d.resetarSenha) { const m = String(d.resetarSenha).trim(); const a = db.alunos[m]; if (a && veAluno(m)) { a.senha = hashSenha(m); a.mudouSenha = false; } }
   salvarDb();
   const sem = semanaAtual();
-  const resumo = Object.keys(db.alunos).sort().map(m => ({ matricula: m, nome: db.alunos[m].nome || '', trocouSenha: !!db.alunos[m].mudouSenha, usosSemana: (db.alunos[m].usos && db.alunos[m].usos[sem]) || 0, turmaId: db.alunos[m].turmaId || null, turmaNome: (db.alunos[m].turmaId && db.turmas[db.alunos[m].turmaId]) ? db.turmas[db.alunos[m].turmaId].nome : '' }));
+  const resumo = Object.keys(db.alunos).filter(veAluno).sort().map(m => ({ matricula: m, nome: db.alunos[m].nome || '', trocouSenha: !!db.alunos[m].mudouSenha, usosSemana: (db.alunos[m].usos && db.alunos[m].usos[sem]) || 0, turmaId: db.alunos[m].turmaId || null, turmaNome: (db.alunos[m].turmaId && db.turmas[db.alunos[m].turmaId]) ? db.turmas[db.alunos[m].turmaId].nome : '' }));
   json(res, 200, { ok: true, turmaAtiva: db.turmaAtiva, totalAlunos: resumo.length, alunos: resumo, limiteSemana: LIMITE_SEMANAL, novas: contNovas, existentes: contExistentes });
 }
 
@@ -1153,14 +1166,21 @@ async function pecaLiberarPrazo(req, res) {
   salvarDb(); json(res, 200, { ok: true, foraDoPrazoGeral: !!p.foraDoPrazoGeral, liberados: p.liberados || {} });
 }
 
-// Professor: planilha CSV de notas
+// Professor: planilha CSV de notas — POR TURMA; professor só acessa as turmas dele
 async function notasPlanilha(req, res) {
   const sess = sessaoDe(req); if (!sess) { res.writeHead(401); return res.end('SESSAO'); } if (sess.tipo !== 'professor') { res.writeHead(403); return res.end('restrito'); }
-  const pecas = Object.values(db.pecas).sort((a, b) => a.num - b.num);
+  const q = new URLSearchParams((req.url.split('?')[1]) || '');
+  const turmaId = q.get('turma') || '';
+  const t = db.turmas[turmaId];
+  if (!t) { res.writeHead(400, { 'content-type': 'text/plain; charset=utf-8' }); return res.end('Informe a turma.'); }
+  if (!podeGerirProfessores(sess.usuario) && !(t.professores || []).includes(sess.usuario)) {
+    res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' }); return res.end('Sem acesso a esta turma.');
+  }
+  const pecas = Object.values(db.pecas).filter(p => p.turmaId === turmaId).sort((a, b) => a.num - b.num);
   const linhas = [];
   const cab = ['Aluno', 'Matrícula'].concat(pecas.map(p => 'Peça ' + p.num + ' (' + p.nomePeca.replace(/;/g, ' ') + ')'));
   linhas.push(cab.join(';'));
-  const mats = Object.keys(db.alunos).sort((m1, m2) => (db.alunos[m1].nome || '').localeCompare(db.alunos[m2].nome || ''));
+  const mats = Object.keys(db.alunos).filter(m => db.alunos[m].turmaId === turmaId).sort((m1, m2) => (db.alunos[m1].nome || '').localeCompare(db.alunos[m2].nome || ''));
   for (const mat of mats) {
     const a = db.alunos[mat];
     const row = [(a.nome || '').replace(/;/g, ' '), mat];
@@ -1168,7 +1188,8 @@ async function notasPlanilha(req, res) {
     linhas.push(row.join(';'));
   }
   const csv = '﻿' + linhas.join('\r\n');
-  res.writeHead(200, { 'content-type': 'text/csv; charset=utf-8', 'content-disposition': 'attachment; filename="notas.csv"' });
+  const nomeArq = 'notas-' + String(t.nome).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9]+/g, '-').toLowerCase() + '.csv';
+  res.writeHead(200, { 'content-type': 'text/csv; charset=utf-8', 'content-disposition': 'attachment; filename="' + nomeArq + '"' });
   res.end(csv);
 }
 // Professor: ZERAR todo o sistema (mantém contas de professores)
@@ -1216,7 +1237,7 @@ const server = http.createServer((req, res) => {
   if (req.method === 'POST' && req.url === '/api/entrega/validar') return entregaValidar(req, res);
   if (req.method === 'POST' && req.url === '/api/peca/renovar-prazo') return pecaRenovarPrazo(req, res);
   if (req.method === 'POST' && req.url === '/api/peca/liberar-prazo') return pecaLiberarPrazo(req, res);
-  if (req.method === 'GET' && req.url === '/api/notas.csv') return notasPlanilha(req, res);
+  if (req.method === 'GET' && req.url.startsWith('/api/notas.csv')) return notasPlanilha(req, res);
   if (req.method === 'POST' && req.url === '/api/zerar') return zerarSistema(req, res);
   if (req.method === 'POST' && req.url === '/api/gerar-caso') return gerarCaso(req, res);
   // página única: qualquer GET serve o index.html
