@@ -324,22 +324,44 @@ async function abrirPeca(id){
    +(souAutor?'<button style="border-color:var(--vermelho);color:var(--vermelho)" onclick="excluirPeca(\''+id+'\')">🗑 Excluir peça</button>':'')+'</div>'
    +'<span class="badge">Peça '+p.num+' · '+esc(p.disc)+'</span><h2 class="titulo-peca">'+esc(p.nomePeca)+'</h2>'
    +'<p style="color:var(--cinza);font-family:Arial,sans-serif;font-size:.85rem">Autor: '+esc((p.autor===AUTH.usuario)?'você':(p.autor||'—'))+' · Prazo: '+(p.prazo?dataHoraBR(p.prazo):'sem prazo')+' · '+(p.publicada?'publicada':'rascunho')+'</p>'
-   +'<div class="card"><h3>Prazo de entrega</h3>'
-   +'<div style="font-family:Arial,sans-serif;font-size:.9rem">Novo prazo (dia e hora): <input type="datetime-local" id="pz_novo" value="'+esc(p.prazo||'')+'" style="padding:7px;border:1px solid #cfc9b8;border-radius:6px"> <button onclick="renovarPrazo(\''+id+'\')">🔄 Renovar prazo</button></div>'
-   +'<div style="margin-top:10px;font-family:Arial,sans-serif;font-size:.9rem"><label><input type="checkbox" id="pz_geral" '+(d.foraDoPrazoGeral?'checked':'')+' onchange="liberarGeral(\''+id+'\',this.checked)"> Aceitar entregas <b>fora do prazo</b> para TODA a turma nesta peça</label>'+(liberadosCount?(' <span style="color:var(--cinza)">· '+liberadosCount+' aluno(s) liberado(s) individualmente</span>'):'')+'</div>'
-   +'<div id="pz_fb"></div></div>'
-   +'<div class="card"><h3>📌 Publicar esta peça para uma turma</h3>'
-   +'<p style="font-size:.85rem;color:var(--cinza);font-family:Arial,sans-serif">Cria uma cópia independente desta peça (enunciado + gabarito) publicada para a turma escolhida, com o prazo definido. As entregas de cada turma ficam separadas.</p>'
-   +'<div style="font-family:Arial,sans-serif;font-size:.9rem;display:flex;gap:8px;flex-wrap:wrap;align-items:center">Turma: <select id="vt_turma" style="padding:7px;border:1px solid #cfc9b8;border-radius:6px"></select> Prazo (dia e hora): <input type="datetime-local" id="vt_prazo" style="padding:7px;border:1px solid #cfc9b8;border-radius:6px"> <button class="primario" onclick="vincularTurma()">🚀 Publicar para a turma</button></div><div id="vt_fb"></div></div>'
+   +(p.publicada
+     ?('<div class="card"><h3>Prazo de entrega</h3>'
+      +'<div style="font-family:Arial,sans-serif;font-size:.9rem">Novo prazo (dia e hora): <input type="datetime-local" id="pz_novo" value="'+esc(p.prazo||'')+'" style="padding:7px;border:1px solid #cfc9b8;border-radius:6px"> <button onclick="renovarPrazo(\''+id+'\')">🔄 Renovar prazo</button></div>'
+      +'<div style="margin-top:10px;font-family:Arial,sans-serif;font-size:.9rem"><label><input type="checkbox" id="pz_geral" '+(d.foraDoPrazoGeral?'checked':'')+' onchange="liberarGeral(\''+id+'\',this.checked)"> Aceitar entregas <b>fora do prazo</b> para TODA a turma nesta peça</label>'+(liberadosCount?(' <span style="color:var(--cinza)">· '+liberadosCount+' aluno(s) liberado(s) individualmente</span>'):'')+'</div>'
+      +'<div id="pz_fb"></div></div>'
+      +'<div class="card"><h3>📌 Reaproveitar em outra turma</h3>'
+      +'<p style="font-size:.85rem;color:var(--cinza);font-family:Arial,sans-serif">Cria uma cópia independente desta peça (enunciado + gabarito) publicada para outra turma, com prazo próprio. As entregas de cada turma ficam separadas.</p>'
+      +'<div style="font-family:Arial,sans-serif;font-size:.9rem;display:flex;gap:8px;flex-wrap:wrap;align-items:center">Turma: <select id="vt_turma" style="padding:7px;border:1px solid #cfc9b8;border-radius:6px"></select> Prazo (dia e hora): <input type="datetime-local" id="vt_prazo" style="padding:7px;border:1px solid #cfc9b8;border-radius:6px"> <button onclick="vincularTurma()">📌 Publicar cópia para a turma</button></div><div id="vt_fb"></div></div>')
+     :('<div class="card"><h3>🚀 Publicar esta peça</h3>'
+      +'<p style="font-size:.85rem;color:var(--cinza);font-family:Arial,sans-serif">Esta peça ainda é um rascunho — os alunos não a veem. Escolha a turma e o prazo de entrega para publicá-la.</p>'
+      +'<div style="font-family:Arial,sans-serif;font-size:.9rem;display:flex;gap:8px;flex-wrap:wrap;align-items:center">Turma: <select id="vt_turma" style="padding:7px;border:1px solid #cfc9b8;border-radius:6px"></select> Prazo (dia e hora): <input type="datetime-local" id="vt_prazo" style="padding:7px;border:1px solid #cfc9b8;border-radius:6px"> <button class="primario" onclick="publicarRascunho(\''+id+'\')">🚀 Publicar para a turma</button></div><div id="vt_fb"></div></div>'))
    +'<div class="card"><h3>Enunciado</h3><div class="caso">'+esc(p.caso)+'</div></div>'
    +'<div class="card"><h3>Gabarito</h3><div class="bloco" style="background:#eef5ee;border:1px solid #cfe3cf;border-radius:8px;padding:14px">'+linkCitacoesHtml(md2html(p.gab||'(sem gabarito)'))+'</div></div>'
-   +'<div class="card painel"><h3>Entregas dos alunos</h3>'+ent+'</div>'
-   +'<div class="card"><h3>Liberar entrega fora do prazo para um aluno</h3>'
-   +'<p style="font-size:.85rem;color:var(--cinza)">Digite a matrícula do aluno que poderá enviar mesmo após o prazo.</p>'
-   +'<div style="font-family:Arial,sans-serif"><input id="pz_mat" placeholder="Matrícula" style="padding:8px;border:1px solid #cfc9b8;border-radius:6px"> <button onclick="liberarAluno(\''+id+'\')">✅ Liberar este aluno</button></div>'
-   +(liberadosCount?('<p class="aviso">Liberados: '+Object.keys(d.liberados).map(m=>m+' <a style=\'cursor:pointer;color:var(--vermelho)\' onclick=\'liberarAluno("'+id+'","'+m+'",false)\'>×</a>').join(' · ')+'</p>'):'')
-   +'<div id="pz_fb2"></div></div>';
+   +(p.publicada
+     ?('<div class="card painel"><h3>Entregas dos alunos</h3>'+ent+'</div>'
+      +'<div class="card"><h3>Liberar entrega fora do prazo para um aluno</h3>'
+      +'<p style="font-size:.85rem;color:var(--cinza)">Digite a matrícula do aluno que poderá enviar mesmo após o prazo.</p>'
+      +'<div style="font-family:Arial,sans-serif"><input id="pz_mat" placeholder="Matrícula" style="padding:8px;border:1px solid #cfc9b8;border-radius:6px"> <button onclick="liberarAluno(\''+id+'\')">✅ Liberar este aluno</button></div>'
+      +(liberadosCount?('<p class="aviso">Liberados: '+Object.keys(d.liberados).map(m=>m+' <a style=\'cursor:pointer;color:var(--vermelho)\' onclick=\'liberarAluno("'+id+'","'+m+'",false)\'>×</a>').join(' · ')+'</p>'):'')
+      +'<div id="pz_fb2"></div></div>')
+     :'');
   carregarTurmasSelect('vt_turma',p.turmaId);
+}
+async function publicarRascunho(id){
+  const p=window.__peca;if(!p)return;
+  const turmaId=(document.getElementById('vt_turma')||{}).value;
+  const prazo=(document.getElementById('vt_prazo')||{}).value;
+  const fb=document.getElementById('vt_fb');
+  if(!turmaId){fb.innerHTML='<p class="erro-ia">Escolha a turma.</p>';return}
+  if(!prazo){fb.innerHTML='<p class="erro-ia">Defina a data e o horário de entrega.</p>';return}
+  const tNome=((window.__turmas||[]).find(t=>t.id===turmaId)||{}).nome||'a turma';
+  if(!confirm('Publicar "'+p.nomePeca+'" para '+tNome+' com prazo '+dataHoraBR(prazo)+'? Os alunos da turma serão avisados por e-mail.'))return;
+  fb.innerHTML='<p style="font-family:Arial,sans-serif;font-size:.85rem"><span class="spinner"></span>Publicando...</p>';
+  try{const r=await apiPost('/api/peca/salvar',{id,nomePeca:p.nomePeca,turmaId,caso:p.caso,gab:p.gab,prazo,publicar:true});
+    const d=await r.json();
+    if(!r.ok){fb.innerHTML='<p class="erro-ia">'+(d.erro||'Erro')+'</p>';return}
+    abrirPeca(id);
+  }catch(e){fb.innerHTML='<p class="erro-ia">Falha: '+e.message+'</p>';}
 }
 async function vincularTurma(){
   const p=window.__peca;if(!p)return;
