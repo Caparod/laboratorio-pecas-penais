@@ -514,7 +514,7 @@ function mesBR(x){const p=x.split('-');const n=['jan','fev','mar','abr','mai','j
 function usdBR(v){return 'US$ '+v.toFixed(2).replace('.',',')}
 async function profGastos(mes){
   conteudo.innerHTML='<h2 class="titulo-peca">Gastos com IA</h2>'
-   +'<p style="color:var(--cinza);font-family:Arial,sans-serif;font-size:.88rem;margin-bottom:12px">Registro <b>permanente</b> do uso da IA, mês a mês — não é apagado nem quando alunos ou turmas são excluídos, nem ao zerar o sistema. Cada mês mostra apenas quem realmente usou. O valor cobrado por usuário é o custo real da API multiplicado pela taxa de manutenção; ao total do mês soma-se a assinatura do Claude.</p>'
+   +'<p style="color:var(--cinza);font-family:Arial,sans-serif;font-size:.88rem;margin-bottom:12px">Registro <b>permanente</b> do uso da IA, mês a mês — não é apagado nem quando alunos ou turmas são excluídos, nem ao zerar o sistema. Cada mês mostra apenas quem realmente usou o sistema. Ao total do mês soma-se a assinatura do Claude.</p>'
    +'<div id="gx"><p><span class="spinner"></span>Carregando...</p></div>';
   try{const r=await apiGet('/api/gastos');const d=await r.json();
     const gx=document.getElementById('gx');
@@ -522,15 +522,15 @@ async function profGastos(mes){
     if(!d.meses.length){gx.innerHTML='<div class="card"><p>Nenhum uso de IA registrado ainda. A partir de agora, cada chamada (correções, enunciados, gabaritos) fica registrada aqui.</p></div>';return}
     const m=(mes&&d.meses.includes(mes))?mes:d.meses[0];
     const abas='<div class="botoes" style="flex-wrap:wrap;margin-bottom:10px">'+d.meses.map(x=>'<button class="'+(x===m?'primario':'')+'" onclick="profGastos(\''+x+'\')">'+mesBR(x)+'</button>').join('')+'</div>';
-    const regs=Object.values(d.gastos[m]||{}).sort((a,b)=>b.usd-a.usd);
-    let totReal=0,totCobrado=0,totCham=0;
-    let h='<table><tr><th>Usuário</th><th>Perfil</th><th>Turma</th><th>Chamadas</th><th>Tokens</th><th>Custo real (API)</th><th>Cobrado (×'+d.fator+')</th></tr>';
-    for(const g of regs){const cob=g.usd*d.fator;totReal+=g.usd;totCobrado+=cob;totCham+=g.chamadas;
-      h+='<tr><td>'+esc(g.nome)+'</td><td>'+esc(g.tipo)+'</td><td>'+esc(g.turma||'—')+'</td><td>'+g.chamadas+'</td><td>'+((g.entrada||0)+(g.saida||0)).toLocaleString('pt-BR')+'</td><td>'+usdBR(g.usd)+'</td><td><b>'+usdBR(cob)+'</b></td></tr>';}
-    h+='<tr><td colspan="6" style="text-align:right">Subtotal de uso (cobrado ×'+d.fator+'):</td><td><b>'+usdBR(totCobrado)+'</b></td></tr>';
-    h+='<tr><td colspan="6" style="text-align:right">Assinatura Claude (plano intermediário):</td><td><b>'+usdBR(d.assinatura)+'</b></td></tr>';
-    h+='<tr style="background:#f2eee0"><td colspan="6" style="text-align:right"><b>TOTAL do mês:</b></td><td><b>'+usdBR(totCobrado+d.assinatura)+'</b></td></tr></table>';
-    gx.innerHTML=abas+'<div class="card painel">'+h+'<p class="aviso" style="margin-top:8px">Custo real somado da API neste mês: '+usdBR(totReal)+' · '+totCham+' chamadas. Fator e assinatura configuráveis no Render (FATOR_MANUTENCAO, ASSINATURA_MENSAL_USD).</p></div>';
+    const regs=Object.values(d.gastos[m]||{}).sort((a,b)=>b.valor-a.valor);
+    let totVal=0,totCham=0;
+    let h='<table><tr><th>Usuário</th><th>Perfil</th><th>Turma</th><th>Chamadas de IA</th><th>Tokens</th><th>Gasto com IA</th></tr>';
+    for(const g of regs){totVal+=g.valor;totCham+=g.chamadas;
+      h+='<tr><td>'+esc(g.nome)+'</td><td>'+esc(g.tipo)+'</td><td>'+esc(g.turma||'—')+'</td><td>'+g.chamadas+'</td><td>'+(g.tokens||0).toLocaleString('pt-BR')+'</td><td><b>'+usdBR(g.valor)+'</b></td></tr>';}
+    h+='<tr><td colspan="5" style="text-align:right">Subtotal de uso:</td><td><b>'+usdBR(totVal)+'</b></td></tr>';
+    h+='<tr><td colspan="5" style="text-align:right">Assinatura Claude:</td><td><b>'+usdBR(d.assinatura)+'</b></td></tr>';
+    h+='<tr style="background:#f2eee0"><td colspan="5" style="text-align:right"><b>TOTAL do mês:</b></td><td><b>'+usdBR(totVal+d.assinatura)+'</b></td></tr></table>';
+    gx.innerHTML=abas+'<div class="card painel">'+h+'<p class="aviso" style="margin-top:8px">'+totCham+' chamadas de IA neste mês. Somente quem usou o sistema aparece na lista.</p></div>';
   }catch(e){document.getElementById('gx').innerHTML='<p class="erro-ia">Falha ao carregar.</p>';}
 }
 

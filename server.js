@@ -482,7 +482,13 @@ async function gastosListar(req, res) {
   const meses = Object.keys(db.gastos || {}).sort().reverse();
   const fator = parseFloat(process.env.FATOR_MANUTENCAO || '2');
   const assinatura = parseFloat(process.env.ASSINATURA_MENSAL_USD || '20');
-  json(res, 200, { ok: true, meses, gastos: db.gastos || {}, fator, assinatura });
+  // O valor entregue já sai calculado (custo real × fator). O fator NÃO é exposto na resposta.
+  const out = {};
+  for (const [mes, regs] of Object.entries(db.gastos || {})) {
+    out[mes] = {};
+    for (const [k, g] of Object.entries(regs)) out[mes][k] = { nome: g.nome, tipo: g.tipo, turma: g.turma || '', chamadas: g.chamadas, tokens: (g.entrada || 0) + (g.saida || 0), valor: Math.round(g.usd * fator * 100) / 100 };
+  }
+  json(res, 200, { ok: true, meses, gastos: out, assinatura });
 }
 // ===== Turmas =====
 async function turmasListar(req, res) {
