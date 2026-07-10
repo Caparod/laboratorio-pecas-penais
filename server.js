@@ -52,6 +52,54 @@ function migrarDb() {
     db.professores['Karine'].mudouSenha = false;
     db.karineReset202607 = true;
   }
+  // ===== Turmas: cada professor pode ter várias; alunos e peças vinculados =====
+  if (!db.turmas) {
+    db.turmas = {
+      t1: { id: 't1', nome: 'Estágio I', professores: [OWNER_LOGIN], criadaEm: Date.now() },
+      t2: { id: 't2', nome: 'Estágio II', professores: [OWNER_LOGIN], criadaEm: Date.now() }
+    };
+    const tAtiva = (db.turmaAtiva === 'Estágio II') ? 't2' : 't1';
+    for (const a of Object.values(db.alunos)) if (!a.turmaId) a.turmaId = tAtiva;
+    for (const p of Object.values(db.pecas || {})) if (!p.turmaId) p.turmaId = (p.disc === 'Estágio II') ? 't2' : 't1';
+  }
+  if (!db.proximaTurma) db.proximaTurma = 3;
+  // ===== Gastos: livro-razão PERMANENTE (nunca é apagado, nem no zerar) =====
+  if (!db.gastos) db.gastos = {};
+}
+// Preço estimado por milhão de tokens [entrada, saída], em US$
+const PRECOS_MTOK = { 'claude-sonnet-5': [3, 15], 'claude-haiku-4-5-20251001': [1, 5], 'claude-opus-4-8': [15, 75] };
+function custoUSD(model, inTok, outTok) {
+  const p = PRECOS_MTOK[model] || [3, 15];
+  return (inTok * p[0] + outTok * p[1]) / 1e6;
+}
+// Registra o uso de IA de quem chamou, no mês corrente. Registro permanente e cumulativo.
+function registrarGasto(sess, model, usage) {
+  try {
+    if (!usage) return;
+    const inTok = usage.input_tokens || 0, outTok = usage.output_tokens || 0;
+    if (!inTok && !outTok) return;
+    const mes = new Date().toISOString().slice(0, 7); // ex.: 2026-07
+    db.gastos = db.gastos || {};
+    const m = db.gastos[mes] = db.gastos[mes] || {};
+    let chave, nome, tipo, turmaNome = '';
+    if (sess && sess.tipo === 'aluno') {
+      chave = 'aluno:' + sess.usuario;
+      const a = db.alunos[sess.usuario];
+      nome = ((a && a.nome) || '') || ('Matrícula ' + sess.usuario);
+      tipo = 'Aluno';
+      if (a && a.turmaId && db.turmas[a.turmaId]) turmaNome = db.turmas[a.turmaId].nome;
+    } else if (sess) {
+      chave = 'prof:' + sess.usuario;
+      const p = professorDe(sess.usuario);
+      nome = (p && p.nome) || sess.usuario;
+      tipo = papelDe(sess.usuario);
+    } else { chave = 'sistema'; nome = 'Sistema'; tipo = 'Sistema'; }
+    const g = m[chave] = m[chave] || { nome, tipo, turma: turmaNome, chamadas: 0, entrada: 0, saida: 0, usd: 0 };
+    g.nome = nome; g.tipo = tipo; if (turmaNome) g.turma = turmaNome; // snapshot: sobrevive à exclusão do aluno/turma
+    g.chamadas++; g.entrada += inTok; g.saida += outTok;
+    g.usd = Math.round((g.usd + custoUSD(model, inTok, outTok)) * 1e6) / 1e6;
+    salvarDb();
+  } catch (e) { try { console.error('[GASTOS] falha ao registrar: ' + e.message); } catch (e2) {} }
 }
 function carregarDb() {
   try { db = JSON.parse(fs.readFileSync(DB_PATH, 'utf8')); }
@@ -203,6 +251,7 @@ async function corrigir(req, res) {
       });
       d = await r.json().catch(() => null);
       if (!r.ok) break;
+      registrarGasto(sess, process.env.MODELO || 'claude-sonnet-5', d && d.usage);
       for (const b of (d.content || [])) if (b.type === 'text' && b.text) textos.push(b.text);
       if (d.stop_reason === 'pause_turn') {
         mensagens.push({ role: 'assistant', content: d.content });
@@ -238,6 +287,7 @@ async function corrigir(req, res) {
           body: JSON.stringify({ model: process.env.MODELO || 'claude-sonnet-5', max_tokens: 6000, system: SISTEMA + ' ATENÇÃO: a busca na web está indisponível nesta correção; na seção de verificação de citações, classifique como SUSPEITA (sem zerar) o que não puder confirmar de memória, e recomende conferência pelo professor.', messages: [{ role: 'user', content: usuario }] })
         });
         const df = await rf.json().catch(() => null);
+        if (rf.ok) registrarGasto(sess, process.env.MODELO || 'claude-sonnet-5', df && df.usage);
         const tf = rf.ok ? (df.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n').trim() : '';
         if (tf) { textos.push(tf); }
         else return json(res, 500, { erro: 'A correção não foi concluída. Clique em "Corrigir minha peça" novamente.' });
@@ -293,6 +343,7 @@ async function gerarCaso(req, res) {
       if (em.includes('credit') || em.includes('spend') || em.includes('billing')) return json(res, 402, { erro: 'LIMITE_CREDITOS' });
       return json(res, 500, { erro: 'Erro ao gerar o caso (' + r.status + ').' });
     }
+    registrarGasto(sess, process.env.MODELO_CASO || 'claude-haiku-4-5-20251001', d && d.usage);
     const texto = (d.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n');
     const m = texto.match(/CASO:\s*([\s\S]*?)\nGABARITO:\s*([\s\S]*)/);
     if (!m) return json(res, 500, { erro: 'Formato inesperado. Tente novamente.' });
@@ -424,11 +475,65 @@ async function apiReenviarCodigo(req, res) {
     '<p>Seu novo código é:</p><h2 style="letter-spacing:3px">' + a.codigoVerif + '</h2>');
   json(res, 200, { ok: true, emailEnviado: r.ok });
 }
+// ===== Gastos: consulta mês a mês (Administrador e Coordenação) =====
+async function gastosListar(req, res) {
+  const sess = sessaoDe(req); if (!sess) return json(res, 401, { erro: 'SESSAO' });
+  if (sess.tipo !== 'professor' || !podeGerirProfessores(sess.usuario)) return json(res, 403, { erro: 'Restrito à administração e coordenação.' });
+  const meses = Object.keys(db.gastos || {}).sort().reverse();
+  const fator = parseFloat(process.env.FATOR_MANUTENCAO || '2');
+  const assinatura = parseFloat(process.env.ASSINATURA_MENSAL_USD || '20');
+  json(res, 200, { ok: true, meses, gastos: db.gastos || {}, fator, assinatura });
+}
+// ===== Turmas =====
+async function turmasListar(req, res) {
+  const sess = sessaoDe(req); if (!sess || sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
+  const todas = podeGerirProfessores(sess.usuario);
+  const lista = Object.values(db.turmas).filter(t => todas || (t.professores || []).includes(sess.usuario))
+    .sort((a, b) => (a.nome || '').localeCompare(b.nome || ''))
+    .map(t => ({ id: t.id, nome: t.nome, professores: (t.professores || []).map(l => ({ login: l, nome: ((professorDe(l) || {}).nome) || l })), totalAlunos: Object.values(db.alunos).filter(a => a.turmaId === t.id).length }));
+  json(res, 200, { ok: true, turmas: lista, todas });
+}
+async function turmaSalvar(req, res) {
+  const sess = sessaoDe(req); if (!sess || sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
+  if (!podeGerirProfessores(sess.usuario)) return json(res, 403, { erro: 'Só administração/coordenação criam ou alteram turmas.' });
+  let d; try { d = await lerJson(req, 20000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
+  const nome = String(d.nome || '').trim();
+  if (!nome) return json(res, 400, { erro: 'Dê um nome à turma.' });
+  let profs = Array.isArray(d.professores) ? d.professores.map(String).filter(l => professorDe(l)) : [];
+  if (!profs.length) profs = [sess.usuario];
+  let t;
+  if (d.id && db.turmas[d.id]) { t = db.turmas[d.id]; t.nome = nome; t.professores = profs; }
+  else { const id = 't' + (db.proximaTurma++); t = db.turmas[id] = { id, nome, professores: profs, criadaEm: Date.now() }; }
+  salvarDb();
+  json(res, 200, { ok: true, id: t.id });
+}
+async function turmaExcluir(req, res) {
+  const sess = sessaoDe(req); if (!sess || sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
+  if (!podeGerirProfessores(sess.usuario)) return json(res, 403, { erro: 'Só administração/coordenação excluem turmas.' });
+  let d; try { d = await lerJson(req, 5000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
+  const id = String(d.id || '');
+  if (!db.turmas[id]) return json(res, 404, { erro: 'Turma não encontrada.' });
+  delete db.turmas[id];
+  // Alunos ficam sem turma (deixam de ver peças até serem realocados). GASTOS NÃO SÃO APAGADOS.
+  for (const a of Object.values(db.alunos)) if (a.turmaId === id) a.turmaId = null;
+  salvarDb();
+  json(res, 200, { ok: true });
+}
+async function alunoTurma(req, res) {
+  const sess = sessaoDe(req); if (!sess || sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
+  let d; try { d = await lerJson(req, 5000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
+  const a = db.alunos[String(d.matricula || '').trim()];
+  if (!a) return json(res, 404, { erro: 'Aluno não encontrado.' });
+  a.turmaId = (d.turmaId && db.turmas[d.turmaId]) ? d.turmaId : null;
+  salvarDb();
+  json(res, 200, { ok: true });
+}
 async function apiAdmin(req, res) {
   const sess = sessaoDe(req); if (!sess) return json(res, 401, { erro: 'SESSAO' }); if (sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito ao professor.' });
   let d; try { d = await lerJson(req, 200000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
   if (d.turma && (d.turma === 'Estágio I' || d.turma === 'Estágio II')) { db.turmaAtiva = d.turma; }
   let contNovas = 0, contExistentes = 0;
+  const turmaNova = (d.turmaId && db.turmas[d.turmaId]) ? d.turmaId : null;
   if (Array.isArray(d.matriculas)) {
     const norm = d.matriculas.map(item => {
       if (typeof item === 'string') { const m = item.match(/^\s*([0-9]{4,15})\s*[-–—,;:.]?\s*(.*)$/); return m ? { matricula: m[1], nome: (m[2] || '').trim() } : null; }
@@ -441,12 +546,13 @@ async function apiAdmin(req, res) {
         if (db.alunos[a.matricula]) { contExistentes++; continue; }
         db.alunos[a.matricula] = antigos[a.matricula] || { senha: hashSenha(a.matricula), mudouSenha: false, usos: {} };
         if (a.nome) db.alunos[a.matricula].nome = a.nome;
+        if (turmaNova) db.alunos[a.matricula].turmaId = turmaNova;
         if (antigos[a.matricula]) contExistentes++; else contNovas++;
       }
     } else {
       for (const a of norm) {
-        if (db.alunos[a.matricula]) { contExistentes++; if (a.nome && !db.alunos[a.matricula].nome) db.alunos[a.matricula].nome = a.nome; continue; }
-        db.alunos[a.matricula] = { senha: hashSenha(a.matricula), mudouSenha: false, usos: {}, nome: a.nome || '' };
+        if (db.alunos[a.matricula]) { contExistentes++; if (a.nome && !db.alunos[a.matricula].nome) db.alunos[a.matricula].nome = a.nome; if (turmaNova) db.alunos[a.matricula].turmaId = turmaNova; continue; }
+        db.alunos[a.matricula] = { senha: hashSenha(a.matricula), mudouSenha: false, usos: {}, nome: a.nome || '', turmaId: turmaNova };
         contNovas++;
       }
     }
@@ -456,7 +562,7 @@ async function apiAdmin(req, res) {
   if (d.resetarSenha) { const a = db.alunos[String(d.resetarSenha).trim()]; if (a) { a.senha = hashSenha(String(d.resetarSenha).trim()); a.mudouSenha = false; } }
   salvarDb();
   const sem = semanaAtual();
-  const resumo = Object.keys(db.alunos).sort().map(m => ({ matricula: m, nome: db.alunos[m].nome || '', trocouSenha: !!db.alunos[m].mudouSenha, usosSemana: (db.alunos[m].usos && db.alunos[m].usos[sem]) || 0 }));
+  const resumo = Object.keys(db.alunos).sort().map(m => ({ matricula: m, nome: db.alunos[m].nome || '', trocouSenha: !!db.alunos[m].mudouSenha, usosSemana: (db.alunos[m].usos && db.alunos[m].usos[sem]) || 0, turmaId: db.alunos[m].turmaId || null, turmaNome: (db.alunos[m].turmaId && db.turmas[db.alunos[m].turmaId]) ? db.turmas[db.alunos[m].turmaId].nome : '' }));
   json(res, 200, { ok: true, turmaAtiva: db.turmaAtiva, totalAlunos: resumo.length, alunos: resumo, limiteSemana: LIMITE_SEMANAL, novas: contNovas, existentes: contExistentes });
 }
 
@@ -505,6 +611,7 @@ async function extrairPdf(req, res) {
       if (em.includes('credit') || em.includes('spend') || em.includes('billing')) return json(res, 402, { erro: 'LIMITE_CREDITOS' });
       return json(res, 500, { erro: 'A IA não conseguiu ler a lista (' + rIA.status + '). Tente novamente.' });
     }
+    registrarGasto(sess, process.env.MODELO_CASO || 'claude-haiku-4-5-20251001', dIA && dIA.usage);
     const bruto = (dIA.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
     let parsed; try { parsed = JSON.parse(bruto.slice(bruto.indexOf('{'), bruto.lastIndexOf('}') + 1)); } catch { return json(res, 500, { erro: 'A IA respondeu em formato inesperado. Tente novamente.' }); }
     const vistos = new Set(); const alunos = [];
@@ -553,6 +660,7 @@ async function gabaritoIA(req, res) {
       });
       dd = await r.json().catch(() => null);
       if (!r.ok) break;
+      registrarGasto(sess, process.env.MODELO || 'claude-sonnet-5', dd && dd.usage);
       for (const b of (dd.content || [])) if (b.type === 'text' && b.text) textos.push(b.text);
       if (dd.stop_reason === 'pause_turn' || (dd.stop_reason === 'tool_use' && (dd.content || []).some(b => b.type === 'server_tool_use' || b.type === 'web_search_tool_result'))) {
         mensagens.push({ role: 'assistant', content: dd.content });
@@ -579,6 +687,7 @@ async function gabaritoIA(req, res) {
             messages: [{ role: 'user', content: usuario }, { role: 'assistant', content: texto }, { role: 'user', content: 'REVISÃO OBRIGATÓRIA: sua resposta ficou sem a seção "## Fontes e links" com URL oficial para CADA citação. Reescreva o gabarito COMPLETO agora, com nota [n] em toda súmula/julgado/lei e a seção final de fontes com todos os links (use o buscador oficial quando não tiver o link exato).' }] })
         });
         const dr = await rr.json().catch(() => null);
+        if (rr.ok) registrarGasto(sess, process.env.MODELO || 'claude-sonnet-5', dr && dr.usage);
         const tr = rr.ok ? (dr.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n').trim() : '';
         if (tr && /https?:\/\//.test(tr)) texto = tr;
       } catch (e) {}
@@ -592,7 +701,7 @@ async function gabaritoIA(req, res) {
 const SISTEMA_GABPECA = 'Você é o Professor Me. Rodrigo Silva Pereira (IESB), prática penal. Receberá o ENUNCIADO de uma peça (caso simulado). Elabore o GABARITO DEFINITIVO no PADRÃO DA 2ª FASE DA OAB (FGV) para o professor conferir, com estas seções em markdown (##), nesta ordem: 1. Peça cabível (seja direto: indique APENAS a peça correta e seu fundamento legal — NÃO justifique por que outras peças não cabem, sem listas de peças descartadas); 2. Endereçamento; 3. Prazo; 4. Teses principais e subsidiárias — TODAS, cada uma com os dispositivos legais e o INCISO exato quando a norma for casuística; 5. Pedidos; 6. ESPELHO DE CORREÇÃO (padrão OAB/FGV): tabela markdown com colunas Item | Pontuação distribuindo EXATAMENTE 5,00 pontos como a FGV — itens formais (endereçamento, estrutura, síntese dos fatos) valendo pouco (0,10 a 0,30) e cada tese com a pontuação decomposta em "tese desenvolvida" (≈60% do item) e "indicação do dispositivo legal com inciso" (≈40%); a última linha da tabela deve ser "**Total**" com a soma fechando EXATAMENTE em 5,00; logo após a tabela, as regras fixas: peça diversa da cabível = 0,00; dispositivo citado sem tese desenvolvida não pontua; tese sem dispositivo pontua a metade; nota da disciplina = pontuação × 2 (escala 0–10); 7. Erros frequentes esperados; 8. FONTES. REGRA ANTI-ALUCINAÇÃO (INEGOCIÁVEL): cite APENAS súmulas, julgados e dispositivos de cuja existência e teor você tem CERTEZA; na dúvida, NÃO cite — sustente a tese na lei seca. NUNCA invente número de súmula, de julgado ou teor. Na seção FONTES, liste CADA súmula/julgado/lei citada no gabarito com link oficial: legislação SEMPRE no Planalto (CP https://www.planalto.gov.br/ccivil_03/decreto-lei/del2848compilado.htm , CPP https://www.planalto.gov.br/ccivil_03/decreto-lei/del3689compilado.htm , CF https://www.planalto.gov.br/ccivil_03/constituicao/constituicao.htm , LEP https://www.planalto.gov.br/ccivil_03/leis/l7210.htm , Lei 9.099/95 https://www.planalto.gov.br/ccivil_03/leis/l9099.htm , Lei 11.343/06 https://www.planalto.gov.br/ccivil_03/_ato2004-2006/2006/lei/l11343.htm); súmulas e julgados SEMPRE pelo buscador oficial no formato https://jurisprudencia.stf.jus.br/pages/search?queryString=TERMO (STF) ou https://scon.stj.jus.br/SCON/pesquisar.jsp?b=ACOR&livre=TERMO (STJ), com o número/nome como TERMO e espaços como %20 — NUNCA link direto "adivinhado" de acórdão. Nenhuma citação pode ficar fora da seção FONTES. NÃO redija a peça pronta nem trechos-modelo — o gabarito orienta a correção do professor, não substitui a redação do aluno. Responda apenas com o gabarito, em markdown com títulos ##.';
 
 const TOOL_TJDFT = { name: 'consultar_tjdft', description: 'Pesquisa acórdãos na API pública oficial de jurisprudência do TJDFT (jurisdf.tjdft.jus.br). Use para verificar ou localizar acórdãos do TJDFT: pesquise por número do acórdão, número do processo ou termos da ementa. Retorna número, processo, órgão julgador, relator, datas, decisão e ementa.', input_schema: { type: 'object', properties: { consulta: { type: 'string', description: 'Termos da pesquisa (número do acórdão, processo ou palavras da ementa)' }, tamanho: { type: 'number', description: 'Quantidade de resultados (máx 5)' } }, required: ['consulta'] } };
-async function iaTexto(system, usuario, maxTokens, comBusca) {
+async function iaTexto(system, usuario, maxTokens, comBusca, sessGasto) {
   const body = { model: process.env.MODELO || 'claude-sonnet-5', max_tokens: maxTokens || 4000, system, messages: [{ role: 'user', content: usuario }] };
   if (comBusca) body.tools = [{ type: 'web_search_20250305', name: 'web_search', max_uses: 4, allowed_domains: ['jus.br', 'planalto.gov.br', 'jusbrasil.com.br'] }, TOOL_TJDFT];
   const mensagens = body.messages; const textos = []; let r = null, d = null; const ini = Date.now();
@@ -602,6 +711,7 @@ async function iaTexto(system, usuario, maxTokens, comBusca) {
     r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' }, body: JSON.stringify(Object.assign({}, body, { messages: mensagens })) });
     d = await r.json().catch(() => null);
     if (!r.ok) return { ok: false, status: r.status, erro: (d && d.error && d.error.message) || '' };
+    registrarGasto(sessGasto, body.model, d && d.usage);
     for (const b of (d.content || [])) if (b.type === 'text' && b.text) textos.push(b.text);
     if (d.stop_reason === 'pause_turn') {
       mensagens.push({ role: 'assistant', content: d.content });
@@ -650,7 +760,7 @@ async function pecaGerarIA(req, res) {
   const nivel = String(d.nivel || 'INTERMEDIÁRIO');
   if (!nomePeca) return json(res, 400, { erro: 'Informe a peça-alvo.' });
   const usuario = 'PEÇA-ALVO: ' + nomePeca + ' (' + disc + ')\nNÍVEL: ' + nivel + '\nData atual: ' + new Date().toLocaleDateString('pt-BR') + '\nGere APENAS o enunciado do caso, inédito, no padrão OAB.';
-  const r = await iaTexto(SISTEMA_ENUNCIADO, usuario, 8000, false);
+  const r = await iaTexto(SISTEMA_ENUNCIADO, usuario, 8000, false, sess);
   if (!r.ok) return erroIA(res, r);
   // O texto inteiro é o enunciado (só limpamos um eventual rótulo "CASO:" ou markdown no início).
   const caso = (r.texto || '').replace(/\*\*/g, '').replace(/^\s*#*\s*CASO\b\s*:?\s*/i, '').trim();
@@ -744,11 +854,11 @@ async function pecaGerarGabarito(req, res) {
   if (!process.env.ANTHROPIC_API_KEY) return json(res, 500, { erro: 'Servidor sem chave configurada.' });
   // Sem busca web (comBusca=false): o modelo monta as FONTES com os links oficiais de busca de forma determinística,
   // o que retorna texto de forma confiável (a busca web às vezes ficava em loop e devolvia gabarito vazio).
-  let r = await iaTexto(SISTEMA_GABPECA, 'ENUNCIADO DA PEÇA:\n\n' + caso.slice(0, 12000), 8000, false);
+  let r = await iaTexto(SISTEMA_GABPECA, 'ENUNCIADO DA PEÇA:\n\n' + caso.slice(0, 12000), 8000, false, sess);
   if (!r.ok) return erroIA(res, r);
   let gab = (r.texto || '').trim();
   if (gab.length < 20) { // 1 nova tentativa, caso venha vazio
-    r = await iaTexto(SISTEMA_GABPECA, 'ENUNCIADO DA PEÇA:\n\n' + caso.slice(0, 12000), 8000, false);
+    r = await iaTexto(SISTEMA_GABPECA, 'ENUNCIADO DA PEÇA:\n\n' + caso.slice(0, 12000), 8000, false, sess);
     if (!r.ok) return erroIA(res, r);
     gab = (r.texto || '').trim();
   }
@@ -761,7 +871,7 @@ async function pecaGerarGabarito(req, res) {
     const rr = await iaTexto(SISTEMA_GABPECA,
       'ENUNCIADO DA PEÇA:\n\n' + caso.slice(0, 12000) +
       '\n\nGABARITO ANTERIOR (INCOMPLETO — faltou o espelho):\n\n' + gab.slice(0, 12000) +
-      '\n\nREVISÃO OBRIGATÓRIA: o gabarito acima veio SEM a seção "## Espelho de correção (padrão OAB/FGV)". Reescreva o gabarito COMPLETO agora, incluindo obrigatoriamente o espelho em tabela markdown (Item | Pontuação) com a soma fechando EXATAMENTE em 5,00 e a linha final "**Total: 5,00**". Sem o espelho o gabarito é inválido.', 8000, false);
+      '\n\nREVISÃO OBRIGATÓRIA: o gabarito acima veio SEM a seção "## Espelho de correção (padrão OAB/FGV)". Reescreva o gabarito COMPLETO agora, incluindo obrigatoriamente o espelho em tabela markdown (Item | Pontuação) com a soma fechando EXATAMENTE em 5,00 e a linha final "**Total: 5,00**". Sem o espelho o gabarito é inválido.', 8000, false, sess);
     if (rr.ok && (rr.texto || '').trim().length > 20) gab = rr.texto.trim();
   }
   if (!temEspelho(gab)) return json(res, 502, { erro: 'A IA não incluiu o espelho de correção obrigatório. Tente novamente.' });
@@ -772,7 +882,7 @@ async function pecaGerarGabarito(req, res) {
   if (/S[úu]mula|REsp|AREsp|EREsp|\bHC\s+\d|\bRHC\s+\d|\bRE\s+\d|\bARE\s+\d|\bADI\s+\d|\bADPF\s+\d/i.test(gab)) {
     auditou = false;
     try {
-      const ra = await iaTexto(SISTEMA_AUDITOR, 'GABARITO A AUDITAR:\n\n' + gab.slice(0, 20000), 8000, true);
+      const ra = await iaTexto(SISTEMA_AUDITOR, 'GABARITO A AUDITAR:\n\n' + gab.slice(0, 20000), 8000, true, sess);
       const audit = ra.ok ? (ra.texto || '').trim() : '';
       if (audit.length > gab.length * 0.6 && /##/.test(audit) && temEspelho(audit)) { gab = audit; auditou = true; }
       else try { console.error('[GABARITO IA] auditoria descartada (len=' + audit.length + ')'); } catch (e) {}
@@ -803,24 +913,27 @@ async function pecaSalvar(req, res) {
   const sess = sessaoDe(req); if (!sess) return json(res, 401, { erro: 'SESSAO' }); if (sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
   let d; try { d = await lerJson(req, 300000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
   const caso = String(d.caso || '').trim(); const gab = String(d.gab || '').trim();
-  const nomePeca = String(d.nomePeca || 'Peça').trim(); const disc = (d.disc === 'Estágio II') ? 'Estágio II' : 'Estágio I';
+  const turmaId = (d.turmaId && db.turmas[d.turmaId]) ? d.turmaId : null;
+  const disc = turmaId ? db.turmas[turmaId].nome : ((d.disc === 'Estágio II') ? 'Estágio II' : 'Estágio I');
+  const nomePeca = String(d.nomePeca || 'Peça').trim();
   const prazo = String(d.prazo || '').trim();
   if (!caso) return json(res, 400, { erro: 'A peça precisa de enunciado.' });
   let id = d.id && db.pecas[d.id] ? d.id : null;
   if (id) {
     const p = db.pecas[id]; p.nomePeca = nomePeca; p.disc = disc; p.caso = caso; p.gab = gab; p.prazo = prazo; p.publicada = d.publicar !== false;
+    if (turmaId) p.turmaId = turmaId;
     if (typeof d.foraDoPrazoGeral === 'boolean') p.foraDoPrazoGeral = d.foraDoPrazoGeral;
   } else {
     const num = db.proximoNum++; id = 'p' + num;
-    db.pecas[id] = { id, num, nomePeca, disc, caso, gab, prazo, criadoEm: Date.now(), publicada: d.publicar !== false, autor: sess.usuario };
+    db.pecas[id] = { id, num, nomePeca, disc, turmaId, caso, gab, prazo, criadoEm: Date.now(), publicada: d.publicar !== false, autor: sess.usuario };
     db.entregas[id] = db.entregas[id] || {};
   }
   salvarDb();
   // Avisa os alunos por e-mail quando a peça é publicada (apenas uma vez por peça)
   const pp = db.pecas[id];
-  if (pp.publicada && !pp.avisadoAlunos && pp.disc === db.turmaAtiva) {
+  if (pp.publicada && !pp.avisadoAlunos && (pp.turmaId || pp.disc === db.turmaAtiva)) {
     const prazoTxt = pp.prazo ? new Date(pp.prazo + (/\d{2}:\d{2}/.test(pp.prazo) ? '' : 'T23:59')).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'sem prazo definido';
-    const alvo = Object.entries(db.alunos).filter(([m, a]) => a && a.email && a.emailVerificado);
+    const alvo = Object.entries(db.alunos).filter(([m, a]) => a && a.email && a.emailVerificado && (!pp.turmaId || a.turmaId === pp.turmaId));
     // Só marca como avisado se houver ao menos um destinatário — senão, alunos que verificarem
     // o e-mail depois ainda receberão o aviso quando a peça for salva/publicada novamente.
     if (alvo.length) { pp.avisadoAlunos = Date.now(); salvarDb(); }
@@ -864,7 +977,7 @@ async function pecaExcluir(req, res) {
 async function pecasAluno(req, res) {
   const sess = sessaoDe(req); if (!sess || sess.tipo !== 'aluno') return json(res, 401, { erro: 'SESSAO' });
   const a = db.alunos[sess.usuario]; if (!a) return json(res, 401, { erro: 'SESSAO' });
-  const lista = Object.values(db.pecas).filter(p => p.publicada && p.disc === db.turmaAtiva).sort((a2, b2) => b2.num - a2.num).map(p => {
+  const lista = Object.values(db.pecas).filter(p => p.publicada && (p.turmaId ? p.turmaId === a.turmaId : p.disc === db.turmaAtiva)).sort((a2, b2) => b2.num - a2.num).map(p => {
     const e = (db.entregas[p.id] || {})[sess.usuario];
     let noPrazo = true;
     let gabLiberado = false;
@@ -945,7 +1058,7 @@ async function entregaCorrigirIA(req, res) {
   if (!e) return json(res, 404, { erro: 'Entrega não encontrada.' });
   if (!process.env.ANTHROPIC_API_KEY) return json(res, 500, { erro: 'Servidor sem chave configurada.' });
   const usuario = 'PEÇA ESPERADA: ' + p.nomePeca + ' (' + p.disc + ')\n\nCASO DADO AO ALUNO:\n' + (p.caso||'') + '\n\nGABARITO DO PROFESSOR:\n' + (p.gab||'') + '\n\nPEÇA DO ALUNO (corrija-a e dê a nota):\n' + String(e.texto||'').slice(0,60000);
-  const r = await iaTexto(SISTEMA, usuario, 6000, true);
+  const r = await iaTexto(SISTEMA, usuario, 6000, true, sess);
   if (!r.ok) return erroIA(res, r);
   const mN = r.texto.match(/NOTA SUGERIDA:\s*([0-9]+(?:[\.,][0-9]+)?)/i);
   e.relatorio = r.texto; e.notaSugerida = mN ? mN[1].replace(',', '.') : ''; salvarDb();
@@ -1012,6 +1125,7 @@ async function zerarSistema(req, res) {
   const sess = sessaoDe(req); if (!sess) return json(res, 401, { erro: 'SESSAO' }); if (sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
   let d; try { d = await lerJson(req, 5000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
   if (d.confirmacao !== 'ZERAR') return json(res, 400, { erro: 'Confirmação inválida.' });
+  // O livro-razão de GASTOS (db.gastos) e as TURMAS são preservados — registro permanente.
   db.alunos = {}; db.pecas = {}; db.entregas = {}; db.proximoNum = 1; salvarDb();
   json(res, 200, { ok: true });
 }
@@ -1020,6 +1134,11 @@ const server = http.createServer((req, res) => {
   if (req.method === 'POST' && req.url === '/api/login') return apiLogin(req, res);
   if (req.method === 'POST' && req.url === '/api/trocar-senha') return apiTrocarSenha(req, res);
   if (req.method === 'POST' && req.url === '/api/admin') return apiAdmin(req, res);
+  if (req.method === 'GET' && req.url === '/api/gastos') return gastosListar(req, res);
+  if (req.method === 'GET' && req.url === '/api/turmas') return turmasListar(req, res);
+  if (req.method === 'POST' && req.url === '/api/turmas/salvar') return turmaSalvar(req, res);
+  if (req.method === 'POST' && req.url === '/api/turmas/excluir') return turmaExcluir(req, res);
+  if (req.method === 'POST' && req.url === '/api/aluno/turma') return alunoTurma(req, res);
   if (req.method === 'POST' && req.url === '/api/extrair-pdf') return extrairPdf(req, res);
   if (req.method === 'POST' && req.url === '/api/gabarito') return gabaritoIA(req, res);
   if (req.method === 'POST' && req.url === '/api/corrigir') return corrigir(req, res);

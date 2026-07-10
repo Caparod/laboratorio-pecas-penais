@@ -275,12 +275,14 @@ function telaProfessor(){
    +botaoMenu('alunos','👥 Alunos')
    +botaoMenu('notas','📊 Notas / planilha')
    +(AUTH&&AUTH.gereProf?botaoMenu('professores','🧑‍🏫 Professores'):'')
+   +(AUTH&&AUTH.gereProf?botaoMenu('gastos','💰 Gastos'):'')
    +botaoMenu('config','⚙️ Sistema');
   if(ABA_PROF==='pecas')profPecas();
   else if(ABA_PROF==='nova')profNova();
   else if(ABA_PROF==='alunos')profAlunos();
   else if(ABA_PROF==='notas')profNotas();
   else if(ABA_PROF==='professores')profProfessores();
+  else if(ABA_PROF==='gastos')profGastos();
   else if(ABA_PROF==='config')profConfig();
 }
 function botaoMenu(id,txt){return '<button class="item'+(ABA_PROF===id?' ativo':'')+'" onclick="irAba(\''+id+'\')">'+txt+'</button>'}
@@ -384,12 +386,11 @@ async function salvarEntrega(validar){
 // ---- Nova peça (IA ou PDF ou manual) ----
 let RASCUNHO={nomePeca:'',disc:'',caso:'',gab:''};
 function profNova(){
-  const disc=AUTH.turmaAtiva;
-  const opts=(disc==='Estágio II'?PECAS_ESTAGIO_II:PECAS_ESTAGIO_I).map(x=>'<option>'+x+'</option>').join('');
+  const opts=PECAS_ESTAGIO_I.concat(PECAS_ESTAGIO_II).map(x=>'<option>'+x+'</option>').join('');
   conteudo.innerHTML='<h2 class="titulo-peca">Nova peça</h2>'
    +'<div class="card"><h3>1) Crie o enunciado</h3>'
-   +'<p style="font-size:.88rem;color:var(--cinza)">Turma ativa: <b>'+esc(disc)+'</b> (mude em Alunos, se preciso). Gere por IA, suba um PDF ou escreva/cole você mesmo.</p>'
-   +'<div style="font-family:Arial,sans-serif;margin:8px 0">Tipo de peça: <select id="np_nome">'+opts+'</select> '
+   +'<p style="font-size:.88rem;color:var(--cinza)">Gere por IA, suba um PDF ou escreva/cole você mesmo.</p>'
+   +'<div style="font-family:Arial,sans-serif;margin:8px 0">Turma: <select id="np_turma"><option value="">Carregando...</option></select> · Tipo de peça: <select id="np_nome">'+opts+'</select> '
    +'<select id="np_nivel"><option value="BÁSICO">Básico</option><option value="INTERMEDIÁRIO" selected>Intermediário</option><option value="AVANÇADO">Avançado (OAB raiz)</option></select></div>'
    +'<div class="botoes"><button class="primario" onclick="gerarPecaIA()">🎲 1) Gerar enunciado por IA</button>'
    +'<label class="primario" style="padding:9px 18px;border-radius:6px;background:var(--azul);color:#fff;cursor:pointer;font-size:.85rem;font-family:Arial,sans-serif">📄 Subir peça em PDF<input type="file" accept="application/pdf" style="display:none" onchange="subirPecaPdf(this)"></label></div>'
@@ -402,8 +403,17 @@ function profNova(){
    +'<div class="botoes" style="margin-top:12px"><button onclick="salvarPeca(false)">💾 Salvar rascunho</button>'
    +'<button class="primario" onclick="salvarPeca(true)">🚀 Publicar para a turma</button></div><div id="np_salvarfb"></div></div>';
   const s=document.getElementById('np_nome');if(s&&RASCUNHO.nomePeca)s.value=RASCUNHO.nomePeca;
+  carregarTurmasSelect('np_turma',RASCUNHO.turmaId);
   atualizarBotaoGabarito();
 }
+async function carregarTurmasSelect(elId,sel){
+  try{const r=await apiGet('/api/turmas');const d=await r.json();const s=document.getElementById(elId);if(!s||!r.ok)return;
+    window.__turmas=d.turmas||[];
+    s.innerHTML=(d.turmas||[]).map(t=>'<option value="'+t.id+'">'+esc(t.nome)+'</option>').join('')||'<option value="">(crie uma turma em Alunos)</option>';
+    if(sel)s.value=sel;
+  }catch(e){}
+}
+function turmaSelecionadaNome(){const s=document.getElementById('np_turma');if(!s)return AUTH.turmaAtiva;const t=(window.__turmas||[]).find(x=>x.id===s.value);return t?t.nome:AUTH.turmaAtiva}
 // O botão "Gerar gabarito" só aparece quando há enunciado mas ainda não há gabarito
 // (ex.: peça subida em PDF ou digitada). Após gerar por IA, o gabarito já vem pronto e o botão some.
 function atualizarBotaoGabarito(){
@@ -415,10 +425,10 @@ const ETAPAS_CASO=[[0,'🎲 Sorteando os fatos...'],[8,'✍️ Escrevendo o enun
 async function gerarPecaIA(){
   const fb=document.getElementById('np_fb');const nome=document.getElementById('np_nome').value;const nivel=document.getElementById('np_nivel').value;
   const prog=progresso(fb,ETAPAS_CASO,30);
-  try{const r=await apiPost('/api/peca/gerar-ia',{nomePeca:nome,disc:AUTH.turmaAtiva,nivel});const d=await r.json();prog.fim();
+  try{const r=await apiPost('/api/peca/gerar-ia',{nomePeca:nome,disc:turmaSelecionadaNome(),nivel});const d=await r.json();prog.fim();
     if(!r.ok){let m=(d&&d.erro)||'Erro';if(m==='LIMITE_CREDITOS')m='⛔ Limite mensal de uso da IA atingido. '+((d&&d.detalhe)?('('+d.detalhe+') '):'')+'A IA volta quando o limite for renovado ou aumentado no painel da Anthropic.';fb.innerHTML='<p class="erro-ia">'+m+'</p>'+((d&&d.bruto)?('<pre style="white-space:pre-wrap;font-size:.72rem;color:var(--cinza);background:#faf8f2;border:1px solid #eee4c8;border-radius:6px;padding:8px;margin-top:6px">Resposta recebida da IA: '+esc(d.bruto)+'</pre>'):'');return}
     document.getElementById('np_caso').value=d.caso;document.getElementById('np_gab').value=d.gab||'';atualizarBotaoGabarito();
-    RASCUNHO={nomePeca:nome,disc:AUTH.turmaAtiva,caso:d.caso,gab:d.gab||''};
+    RASCUNHO={nomePeca:nome,disc:turmaSelecionadaNome(),turmaId:(document.getElementById('np_turma')||{}).value,caso:d.caso,gab:d.gab||''};
     fb.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif;font-size:.85rem">✅ Enunciado gerado. Revise abaixo e clique em <b>“⚖️ Gerar gabarito para este enunciado”</b> (passo 2).</p>';
   }catch(e){prog.fim();fb.innerHTML='<p class="erro-ia">Falha: '+e.message+'</p>';}
 }
@@ -448,7 +458,8 @@ async function salvarPeca(publicar){
   const fb=document.getElementById('np_salvarfb');
   if(caso.length<40){fb.innerHTML='<p class="erro-ia">A peça precisa de um enunciado.</p>';return}
   if(publicar&&!gab){if(!confirm('Publicar SEM gabarito? Você não conseguirá corrigir com IA depois sem um gabarito.'))return;}
-  try{const r=await apiPost('/api/peca/salvar',{id:RASCUNHO.id,nomePeca:nome,disc:AUTH.turmaAtiva,caso,gab,prazo,publicar});
+  const turmaId=(document.getElementById('np_turma')||{}).value||null;
+  try{const r=await apiPost('/api/peca/salvar',{id:RASCUNHO.id,nomePeca:nome,disc:turmaSelecionadaNome(),turmaId,caso,gab,prazo,publicar});
   const d=await r.json();if(!r.ok){fb.innerHTML='<p class="erro-ia">'+(d.erro||'Erro')+'</p>';return}
   RASCUNHO={nomePeca:'',disc:'',caso:'',gab:''};
   fb.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif">'+(publicar?'🚀 Peça '+d.num+' publicada para a turma!':'💾 Rascunho salvo (Peça '+d.num+').')+'</p>';
@@ -457,7 +468,7 @@ async function salvarPeca(publicar){
 }
 async function editarPeca(id){
   const r=await apiGet('/api/peca/get?id='+id);const d=await r.json();const p=d.peca;
-  RASCUNHO={id:p.id,nomePeca:p.nomePeca,disc:p.disc,caso:p.caso,gab:p.gab};
+  RASCUNHO={id:p.id,nomePeca:p.nomePeca,disc:p.disc,turmaId:p.turmaId,caso:p.caso,gab:p.gab};
   ABA_PROF='nova';telaProfessor();
   setTimeout(()=>{document.getElementById('np_caso').value=p.caso;document.getElementById('np_gab').value=p.gab;if(p.prazo)document.getElementById('np_prazo').value=p.prazo;const s=document.getElementById('np_nome');if(s)s.value=p.nomePeca;},50);
 }
@@ -465,26 +476,63 @@ async function editarPeca(id){
 async function profAlunos(dadosPrev){
   let dados=dadosPrev;
   if(!dados){conteudo.innerHTML='<p><span class="spinner"></span>Carregando...</p>';try{const r=await apiPost('/api/admin',{});dados=await r.json();}catch(e){return}}
+  let turmas=[];try{const rt=await apiGet('/api/turmas');const dt=await rt.json();if(rt.ok)turmas=dt.turmas||[]}catch(e){}
+  window.__turmas=turmas;
+  const optsTurma=turmas.map(t=>'<option value="'+t.id+'">'+esc(t.nome)+'</option>').join('');
+  const selTurma=(cur,mat)=>'<select onchange="moverAluno(\''+mat+'\',this.value)" style="padding:4px 6px;border:1px solid #cfc9b8;border-radius:5px;font-size:.8rem"><option value="">— sem turma</option>'+turmas.map(t=>'<option value="'+t.id+'"'+(cur===t.id?' selected':'')+'>'+esc(t.nome)+'</option>').join('')+'</select>';
   let linhas='';
-  for(const a of (dados.alunos||[]))linhas+='<tr><td>'+a.matricula+'</td><td>'+esc(a.nome||'—')+'</td><td>'+(a.trocouSenha?'✓':'inicial')+'</td><td><a style="cursor:pointer;color:var(--azul)" onclick="resetSenha(\''+a.matricula+'\')">reset senha</a> · <a style="cursor:pointer;color:var(--vermelho)" onclick="excluirAl(\''+a.matricula+'\')">excluir</a></td></tr>';
-  conteudo.innerHTML='<h2 class="titulo-peca">Alunos</h2>'
-   +'<div class="card"><h3>Turma ativa</h3><div class="botoes">'
-   +'<button class="'+(dados.turmaAtiva==='Estágio I'?'primario':'')+'" onclick="setTurma(\'Estágio I\')">Estágio I</button>'
-   +'<button class="'+(dados.turmaAtiva==='Estágio II'?'primario':'')+'" onclick="setTurma(\'Estágio II\')">Estágio II</button></div>'
-   +'<p class="aviso">Alunos só veem as peças da turma ativa. Atual: <b>'+esc(dados.turmaAtiva)+'</b></p></div>'
+  for(const a of (dados.alunos||[]))linhas+='<tr><td>'+a.matricula+'</td><td>'+esc(a.nome||'—')+'</td><td>'+selTurma(a.turmaId,a.matricula)+'</td><td>'+(a.trocouSenha?'✓':'inicial')+'</td><td><a style="cursor:pointer;color:var(--azul)" onclick="resetSenha(\''+a.matricula+'\')">reset senha</a> · <a style="cursor:pointer;color:var(--vermelho)" onclick="excluirAl(\''+a.matricula+'\')">excluir</a></td></tr>';
+  let turmasHtml='';
+  for(const t of turmas)turmasHtml+='<tr><td><b>'+esc(t.nome)+'</b></td><td>'+t.professores.map(p=>esc(p.nome)).join(', ')+'</td><td>'+t.totalAlunos+'</td><td>'+(AUTH.gereProf?'<a style="cursor:pointer;color:var(--azul)" onclick="renomearTurma(\''+t.id+'\')">editar</a> · <a style="cursor:pointer;color:var(--vermelho)" onclick="excluirTurma(\''+t.id+'\')">excluir</a>':'')+'</td></tr>';
+  conteudo.innerHTML='<h2 class="titulo-peca">Alunos e turmas</h2>'
+   +'<div class="card painel"><h3>Turmas</h3>'
+   +'<p style="font-size:.85rem;color:var(--cinza);font-family:Arial,sans-serif">Cada turma é vinculada a um ou mais professores — um professor pode ter várias turmas. Excluir uma turma não apaga os alunos (ficam “sem turma”) e <b>não apaga o registro de gastos</b>.</p>'
+   +'<table><tr><th>Turma</th><th>Professor(es)</th><th>Alunos</th><th></th></tr>'+(turmasHtml||'<tr><td colspan="4">Nenhuma turma criada.</td></tr>')+'</table>'
+   +(AUTH.gereProf?'<div style="margin-top:10px;font-family:Arial,sans-serif;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input id="tur_nome" placeholder="Nome da nova turma" style="padding:8px;border:1px solid #cfc9b8;border-radius:6px"><select id="tur_prof" style="padding:8px;border:1px solid #cfc9b8;border-radius:6px"></select><button class="primario" onclick="criarTurma()">➕ Criar turma</button></div><div id="tur_fb"></div>':'')
+   +'</div>'
    +'<div class="card painel"><h3>Matrículas ('+(dados.totalAlunos||0)+')</h3>'
-   +'<p style="font-size:.88rem;color:var(--cinza)">Cole matrículas (uma por linha; pode ser "matrícula - nome") ou importe do PDF do diário.</p>'
+   +'<p style="font-size:.88rem;color:var(--cinza)">Cole matrículas (uma por linha; pode ser "matrícula - nome") ou importe do PDF do diário. Escolha a turma de destino antes de adicionar.</p>'
    +'<div class="botoes" style="margin-bottom:8px"><label class="primario" style="padding:9px 18px;border-radius:6px;background:var(--azul);color:#fff;cursor:pointer;font-size:.85rem;font-family:Arial,sans-serif">📄 Importar PDF<input type="file" accept="application/pdf" style="display:none" onchange="importarPdfAlunos(this)"></label></div>'
    +'<textarea id="adm_mats" placeholder="500123 - Fulano"></textarea>'
-   +'<div class="botoes"><button class="primario" onclick="salvarAlunos(false)">Adicionar</button><button onclick="if(confirm(\'Substituir TODA a lista?\'))salvarAlunos(true)">Substituir lista</button><button style="border-color:var(--vermelho);color:var(--vermelho)" onclick="excluirTodosAl()">🗑 Excluir todos</button></div><div id="adm_msg"></div>'
-   +'<table><tr><th>Matrícula</th><th>Nome</th><th>Senha</th><th></th></tr>'+(linhas||'<tr><td colspan="4">Nenhum aluno.</td></tr>')+'</table></div>';
+   +'<div class="botoes" style="align-items:center"><span style="font-family:Arial,sans-serif;font-size:.85rem">Turma de destino: <select id="adm_turma" style="padding:6px;border:1px solid #cfc9b8;border-radius:6px">'+(optsTurma||'<option value="">— sem turma</option>')+'</select></span><button class="primario" onclick="salvarAlunos(false)">Adicionar</button><button onclick="if(confirm(\'Substituir TODA a lista?\'))salvarAlunos(true)">Substituir lista</button><button style="border-color:var(--vermelho);color:var(--vermelho)" onclick="excluirTodosAl()">🗑 Excluir todos</button></div><div id="adm_msg"></div>'
+   +'<table><tr><th>Matrícula</th><th>Nome</th><th>Turma</th><th>Senha</th><th></th></tr>'+(linhas||'<tr><td colspan="5">Nenhum aluno.</td></tr>')+'</table></div>';
+  if(AUTH.gereProf)carregarProfsSelect();
 }
-async function setTurma(t){const r=await apiPost('/api/admin',{turma:t});const d=await r.json();if(r.ok){AUTH.turmaAtiva=t;sset('auth',JSON.stringify(AUTH));profAlunos(d)}}
-async function salvarAlunos(sub){const txt=document.getElementById('adm_mats').value;const mats=txt.split(/\n+/).map(x=>x.trim()).filter(x=>x);if(!mats.length){document.getElementById('adm_msg').innerHTML='<p class="erro-ia">Cole ao menos uma matrícula.</p>';return}const r=await apiPost('/api/admin',{matriculas:mats,substituir:!!sub});const d=await r.json();if(r.ok){profAlunos(d);setTimeout(()=>{const m=document.getElementById('adm_msg');if(m)m.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif;font-size:.85rem"><b>'+(d.novas||0)+' novo(s).</b> '+((d.existentes||0)?d.existentes+' já existiam (ignorados).':'')+'</p>'},80)}}
+async function carregarProfsSelect(){try{const r=await apiGet('/api/professores');const d=await r.json();const s=document.getElementById('tur_prof');if(!s||!r.ok)return;s.innerHTML=(d.professores||[]).map(p=>'<option value="'+p.login+'"'+(p.login===AUTH.usuario?' selected':'')+'>'+esc(p.nome||p.login)+'</option>').join('');}catch(e){}}
+async function criarTurma(){const n=(document.getElementById('tur_nome')||{}).value.trim();const p=(document.getElementById('tur_prof')||{}).value;if(!n){alert('Dê um nome à turma.');return}const r=await apiPost('/api/turmas/salvar',{nome:n,professores:p?[p]:[]});const d=await r.json();if(!r.ok){alert(d.erro||'Erro');return}profAlunos();}
+async function renomearTurma(id){const t=(window.__turmas||[]).find(x=>x.id===id);if(!t)return;const n=prompt('Nome da turma:',t.nome);if(!n)return;const pr=prompt('Login(s) do(s) professor(es) responsável(is), separados por vírgula:',t.professores.map(p=>p.login).join(', '));const profs=(pr||'').split(',').map(x=>x.trim()).filter(x=>x);const r=await apiPost('/api/turmas/salvar',{id,nome:n,professores:profs});const d=await r.json();if(!r.ok){alert(d.erro||'Erro');return}profAlunos();}
+async function excluirTurma(id){if(!confirm('Excluir esta turma? Os alunos dela ficarão “sem turma” até serem realocados. Os GASTOS registrados NÃO são apagados.'))return;const r=await apiPost('/api/turmas/excluir',{id});const d=await r.json();if(!r.ok){alert(d.erro||'Erro');return}profAlunos();}
+async function moverAluno(mat,tid){try{await apiPost('/api/aluno/turma',{matricula:mat,turmaId:tid||null});}catch(e){}}
+async function salvarAlunos(sub){const txt=document.getElementById('adm_mats').value;const mats=txt.split(/\n+/).map(x=>x.trim()).filter(x=>x);if(!mats.length){document.getElementById('adm_msg').innerHTML='<p class="erro-ia">Cole ao menos uma matrícula.</p>';return}const turmaId=(document.getElementById('adm_turma')||{}).value||null;const r=await apiPost('/api/admin',{matriculas:mats,substituir:!!sub,turmaId});const d=await r.json();if(r.ok){profAlunos(d);setTimeout(()=>{const m=document.getElementById('adm_msg');if(m)m.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif;font-size:.85rem"><b>'+(d.novas||0)+' novo(s).</b> '+((d.existentes||0)?d.existentes+' já existiam (ignorados).':'')+'</p>'},80)}}
 async function resetSenha(m){if(!confirm('Resetar senha de '+m+' para a matrícula?'))return;const r=await apiPost('/api/admin',{resetarSenha:m});profAlunos(await r.json());}
 async function excluirAl(m){if(!confirm('Excluir '+m+'?'))return;const r=await apiPost('/api/admin',{excluirAluno:m});profAlunos(await r.json());}
 async function excluirTodosAl(){if(!confirm('Excluir TODOS os alunos?'))return;if(!confirm('Tem certeza? Não há retorno.'))return;const r=await apiPost('/api/admin',{excluirTodos:true});profAlunos(await r.json());}
 function importarPdfAlunos(inp){const f=inp.files&&inp.files[0];if(!f)return;const msg=document.getElementById('adm_msg');msg.innerHTML='<p style="font-family:Arial,sans-serif;font-size:.85rem"><span class="spinner"></span>Lendo o PDF com IA...</p>';const fr=new FileReader();fr.onload=async function(){try{const r=await apiPost('/api/extrair-pdf',{pdf:fr.result});const d=await r.json();if(!r.ok){msg.innerHTML='<p class="erro-ia">'+(d.erro||'Erro')+'</p>';return}document.getElementById('adm_mats').value=d.alunos.map(a=>a.matricula+(a.nome?' - '+a.nome:'')).join('\n');msg.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif;font-size:.85rem"><b>'+d.alunos.length+' alunos encontrados.</b> Revise e clique em Adicionar ou Substituir.</p>';}catch(e){msg.innerHTML='<p class="erro-ia">Falha: '+e.message+'</p>';}};fr.readAsDataURL(f);inp.value='';}
+
+// ---- Gastos (Administrador e Coordenação) ----
+function mesBR(x){const p=x.split('-');const n=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];return n[parseInt(p[1],10)-1]+'/'+p[0]}
+function usdBR(v){return 'US$ '+v.toFixed(2).replace('.',',')}
+async function profGastos(mes){
+  conteudo.innerHTML='<h2 class="titulo-peca">Gastos com IA</h2>'
+   +'<p style="color:var(--cinza);font-family:Arial,sans-serif;font-size:.88rem;margin-bottom:12px">Registro <b>permanente</b> do uso da IA, mês a mês — não é apagado nem quando alunos ou turmas são excluídos, nem ao zerar o sistema. Cada mês mostra apenas quem realmente usou. O valor cobrado por usuário é o custo real da API multiplicado pela taxa de manutenção; ao total do mês soma-se a assinatura do Claude.</p>'
+   +'<div id="gx"><p><span class="spinner"></span>Carregando...</p></div>';
+  try{const r=await apiGet('/api/gastos');const d=await r.json();
+    const gx=document.getElementById('gx');
+    if(!r.ok){gx.innerHTML='<p class="erro-ia">'+(d.erro||'Erro')+'</p>';return}
+    if(!d.meses.length){gx.innerHTML='<div class="card"><p>Nenhum uso de IA registrado ainda. A partir de agora, cada chamada (correções, enunciados, gabaritos) fica registrada aqui.</p></div>';return}
+    const m=(mes&&d.meses.includes(mes))?mes:d.meses[0];
+    const abas='<div class="botoes" style="flex-wrap:wrap;margin-bottom:10px">'+d.meses.map(x=>'<button class="'+(x===m?'primario':'')+'" onclick="profGastos(\''+x+'\')">'+mesBR(x)+'</button>').join('')+'</div>';
+    const regs=Object.values(d.gastos[m]||{}).sort((a,b)=>b.usd-a.usd);
+    let totReal=0,totCobrado=0,totCham=0;
+    let h='<table><tr><th>Usuário</th><th>Perfil</th><th>Turma</th><th>Chamadas</th><th>Tokens</th><th>Custo real (API)</th><th>Cobrado (×'+d.fator+')</th></tr>';
+    for(const g of regs){const cob=g.usd*d.fator;totReal+=g.usd;totCobrado+=cob;totCham+=g.chamadas;
+      h+='<tr><td>'+esc(g.nome)+'</td><td>'+esc(g.tipo)+'</td><td>'+esc(g.turma||'—')+'</td><td>'+g.chamadas+'</td><td>'+((g.entrada||0)+(g.saida||0)).toLocaleString('pt-BR')+'</td><td>'+usdBR(g.usd)+'</td><td><b>'+usdBR(cob)+'</b></td></tr>';}
+    h+='<tr><td colspan="6" style="text-align:right">Subtotal de uso (cobrado ×'+d.fator+'):</td><td><b>'+usdBR(totCobrado)+'</b></td></tr>';
+    h+='<tr><td colspan="6" style="text-align:right">Assinatura Claude (plano intermediário):</td><td><b>'+usdBR(d.assinatura)+'</b></td></tr>';
+    h+='<tr style="background:#f2eee0"><td colspan="6" style="text-align:right"><b>TOTAL do mês:</b></td><td><b>'+usdBR(totCobrado+d.assinatura)+'</b></td></tr></table>';
+    gx.innerHTML=abas+'<div class="card painel">'+h+'<p class="aviso" style="margin-top:8px">Custo real somado da API neste mês: '+usdBR(totReal)+' · '+totCham+' chamadas. Fator e assinatura configuráveis no Render (FATOR_MANUTENCAO, ASSINATURA_MENSAL_USD).</p></div>';
+  }catch(e){document.getElementById('gx').innerHTML='<p class="erro-ia">Falha ao carregar.</p>';}
+}
 
 // ---- Notas / planilha ----
 function profNotas(){
