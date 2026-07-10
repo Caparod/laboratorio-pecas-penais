@@ -557,10 +557,18 @@ async function turmaExcluir(req, res) {
   const id = String(d.id || '');
   if (!db.turmas[id]) return json(res, 404, { erro: 'Turma não encontrada.' });
   delete db.turmas[id];
-  // Alunos ficam sem turma (deixam de ver peças até serem realocados). GASTOS NÃO SÃO APAGADOS.
-  for (const a of Object.values(db.alunos)) if (a.turmaId === id) a.turmaId = null;
+  // Excluir a turma APAGA todos os alunos dela (cadastro, entregas, liberações e sessões).
+  // O livro-razão de GASTOS NÃO é apagado (registro permanente).
+  let apagados = 0;
+  for (const [mat, a] of Object.entries(db.alunos)) {
+    if (a.turmaId !== id) continue;
+    delete db.alunos[mat]; apagados++;
+    for (const pid of Object.keys(db.entregas || {})) { if (db.entregas[pid] && db.entregas[pid][mat]) delete db.entregas[pid][mat]; }
+    for (const p of Object.values(db.pecas || {})) { if (p.liberados && p.liberados[mat]) delete p.liberados[mat]; }
+    for (const [t2, s2] of Array.from(sessoes)) { if (s2.tipo === 'aluno' && s2.usuario === mat) encerrarSessao(t2); }
+  }
   salvarDb();
-  json(res, 200, { ok: true });
+  json(res, 200, { ok: true, alunosApagados: apagados });
 }
 async function alunoTurma(req, res) {
   const sess = sessaoDe(req); if (!sess || sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });

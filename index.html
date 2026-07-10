@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Laboratório de Peças Penais — Estágio I e II · Prof. Rodrigo Silva</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='13' fill='%231b2a4a'/%3E%3Cg stroke='%23d8b64a' stroke-width='3.4' stroke-linecap='round' fill='none'%3E%3Cpath d='M32 12v38'/%3E%3Cpath d='M18 20h28'/%3E%3Cpath d='M18 20l-7 15'/%3E%3Cpath d='M18 20l7 15'/%3E%3Cpath d='M46 20l-7 15'/%3E%3Cpath d='M46 20l7 15'/%3E%3Cpath d='M24 50h16'/%3E%3C/g%3E%3Cpath d='M11 35a7 7 0 0 0 14 0z' fill='%23d8b64a'/%3E%3Cpath d='M39 35a7 7 0 0 0 14 0z' fill='%23d8b64a'/%3E%3Ccircle cx='32' cy='12' r='2.6' fill='%23d8b64a'/%3E%3C/svg%3E">
 <style>
 :root{
   --azul:#1e3a5f; --azul-esc:#152a46; --dourado:#c9a227; --dourado-claro:#f3e7c3;
@@ -327,6 +328,9 @@ async function abrirPeca(id){
    +'<div style="font-family:Arial,sans-serif;font-size:.9rem">Novo prazo (dia e hora): <input type="datetime-local" id="pz_novo" value="'+esc(p.prazo||'')+'" style="padding:7px;border:1px solid #cfc9b8;border-radius:6px"> <button onclick="renovarPrazo(\''+id+'\')">🔄 Renovar prazo</button></div>'
    +'<div style="margin-top:10px;font-family:Arial,sans-serif;font-size:.9rem"><label><input type="checkbox" id="pz_geral" '+(d.foraDoPrazoGeral?'checked':'')+' onchange="liberarGeral(\''+id+'\',this.checked)"> Aceitar entregas <b>fora do prazo</b> para TODA a turma nesta peça</label>'+(liberadosCount?(' <span style="color:var(--cinza)">· '+liberadosCount+' aluno(s) liberado(s) individualmente</span>'):'')+'</div>'
    +'<div id="pz_fb"></div></div>'
+   +'<div class="card"><h3>📌 Publicar esta peça para uma turma</h3>'
+   +'<p style="font-size:.85rem;color:var(--cinza);font-family:Arial,sans-serif">Cria uma cópia independente desta peça (enunciado + gabarito) publicada para a turma escolhida, com o prazo definido. As entregas de cada turma ficam separadas.</p>'
+   +'<div style="font-family:Arial,sans-serif;font-size:.9rem;display:flex;gap:8px;flex-wrap:wrap;align-items:center">Turma: <select id="vt_turma" style="padding:7px;border:1px solid #cfc9b8;border-radius:6px"></select> Prazo (dia e hora): <input type="datetime-local" id="vt_prazo" style="padding:7px;border:1px solid #cfc9b8;border-radius:6px"> <button class="primario" onclick="vincularTurma()">🚀 Publicar para a turma</button></div><div id="vt_fb"></div></div>'
    +'<div class="card"><h3>Enunciado</h3><div class="caso">'+esc(p.caso)+'</div></div>'
    +'<div class="card"><h3>Gabarito</h3><div class="bloco" style="background:#eef5ee;border:1px solid #cfe3cf;border-radius:8px;padding:14px">'+linkCitacoesHtml(md2html(p.gab||'(sem gabarito)'))+'</div></div>'
    +'<div class="card painel"><h3>Entregas dos alunos</h3>'+ent+'</div>'
@@ -335,6 +339,23 @@ async function abrirPeca(id){
    +'<div style="font-family:Arial,sans-serif"><input id="pz_mat" placeholder="Matrícula" style="padding:8px;border:1px solid #cfc9b8;border-radius:6px"> <button onclick="liberarAluno(\''+id+'\')">✅ Liberar este aluno</button></div>'
    +(liberadosCount?('<p class="aviso">Liberados: '+Object.keys(d.liberados).map(m=>m+' <a style=\'cursor:pointer;color:var(--vermelho)\' onclick=\'liberarAluno("'+id+'","'+m+'",false)\'>×</a>').join(' · ')+'</p>'):'')
    +'<div id="pz_fb2"></div></div>';
+  carregarTurmasSelect('vt_turma',p.turmaId);
+}
+async function vincularTurma(){
+  const p=window.__peca;if(!p)return;
+  const turmaId=(document.getElementById('vt_turma')||{}).value;
+  const prazo=(document.getElementById('vt_prazo')||{}).value;
+  const fb=document.getElementById('vt_fb');
+  if(!turmaId){fb.innerHTML='<p class="erro-ia">Escolha a turma.</p>';return}
+  if(!prazo){fb.innerHTML='<p class="erro-ia">Defina a data e o horário de entrega.</p>';return}
+  const tNome=((window.__turmas||[]).find(t=>t.id===turmaId)||{}).nome||'a turma';
+  if(!confirm('Publicar uma cópia de "'+p.nomePeca+'" para '+tNome+' com prazo '+dataHoraBR(prazo)+'? Os alunos da turma serão avisados por e-mail.'))return;
+  fb.innerHTML='<p style="font-family:Arial,sans-serif;font-size:.85rem"><span class="spinner"></span>Publicando...</p>';
+  try{const r=await apiPost('/api/peca/salvar',{nomePeca:p.nomePeca,turmaId,caso:p.caso,gab:p.gab,prazo,publicar:true});
+    const d=await r.json();
+    if(!r.ok){fb.innerHTML='<p class="erro-ia">'+(d.erro||'Erro')+'</p>';return}
+    fb.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif">🚀 Publicada como Peça '+d.num+' para '+esc(tNome)+' — prazo '+dataHoraBR(prazo)+'.</p>';
+  }catch(e){fb.innerHTML='<p class="erro-ia">Falha: '+e.message+'</p>';}
 }
 async function renovarPrazo(id){const v=document.getElementById('pz_novo').value;if(!v){alert('Escolha o novo prazo.');return}const r=await apiPost('/api/peca/renovar-prazo',{id,prazo:v});const d=await r.json();document.getElementById('pz_fb').innerHTML=r.ok?'<p style="color:var(--verde);font-family:Arial,sans-serif;font-size:.85rem">Prazo renovado para '+dataHoraBR(v)+'.</p>':'<p class="erro-ia">'+(d.erro||'Erro')+'</p>';}
 async function liberarGeral(id,val){const r=await apiPost('/api/peca/liberar-prazo',{id,liberar:val});const d=await r.json();document.getElementById('pz_fb').innerHTML=r.ok?'<p style="color:var(--verde);font-family:Arial,sans-serif;font-size:.85rem">'+(val?'Entregas fora do prazo LIBERADAS para a turma.':'Bloqueio de prazo reativado.')+'</p>':'<p class="erro-ia">'+(d.erro||'Erro')+'</p>';}
@@ -486,7 +507,7 @@ async function profAlunos(dadosPrev){
   for(const t of turmas)turmasHtml+='<tr><td><b>'+esc(t.nome)+'</b></td><td>'+t.professores.map(p=>esc(p.nome)).join(', ')+'</td><td>'+t.totalAlunos+'</td><td>'+(AUTH.gereProf?'<a style="cursor:pointer;color:var(--azul)" onclick="renomearTurma(\''+t.id+'\')">editar</a> · <a style="cursor:pointer;color:var(--vermelho)" onclick="excluirTurma(\''+t.id+'\')">excluir</a>':'')+'</td></tr>';
   conteudo.innerHTML='<h2 class="titulo-peca">Alunos e turmas</h2>'
    +'<div class="card painel"><h3>Turmas</h3>'
-   +'<p style="font-size:.85rem;color:var(--cinza);font-family:Arial,sans-serif">Cada turma é vinculada a um ou mais professores — um professor pode ter várias turmas. Excluir uma turma não apaga os alunos (ficam “sem turma”) e <b>não apaga o registro de gastos</b>.</p>'
+   +'<p style="font-size:.85rem;color:var(--cinza);font-family:Arial,sans-serif">Cada turma é vinculada a um ou mais professores — um professor pode ter várias turmas. <b>Excluir uma turma apaga todos os alunos dela</b> (cadastros e entregas); o registro de gastos é sempre preservado.</p>'
    +'<table><tr><th>Turma</th><th>Professor(es)</th><th>Alunos</th><th></th></tr>'+(turmasHtml||'<tr><td colspan="4">Nenhuma turma criada.</td></tr>')+'</table>'
    +(AUTH.gereProf?'<div style="margin-top:10px;font-family:Arial,sans-serif;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input id="tur_nome" placeholder="Nome da nova turma" style="padding:8px;border:1px solid #cfc9b8;border-radius:6px"><select id="tur_prof" style="padding:8px;border:1px solid #cfc9b8;border-radius:6px"></select><button class="primario" onclick="criarTurma()">➕ Criar turma</button></div><div id="tur_fb"></div>':'')
    +'</div>'
@@ -501,8 +522,16 @@ async function profAlunos(dadosPrev){
 async function carregarProfsSelect(){try{const r=await apiGet('/api/professores');const d=await r.json();const s=document.getElementById('tur_prof');if(!s||!r.ok)return;s.innerHTML=(d.professores||[]).map(p=>'<option value="'+p.login+'"'+(p.login===AUTH.usuario?' selected':'')+'>'+esc(p.nome||p.login)+'</option>').join('');}catch(e){}}
 async function criarTurma(){const n=(document.getElementById('tur_nome')||{}).value.trim();const p=(document.getElementById('tur_prof')||{}).value;if(!n){alert('Dê um nome à turma.');return}const r=await apiPost('/api/turmas/salvar',{nome:n,professores:p?[p]:[]});const d=await r.json();if(!r.ok){alert(d.erro||'Erro');return}profAlunos();}
 async function renomearTurma(id){const t=(window.__turmas||[]).find(x=>x.id===id);if(!t)return;const n=prompt('Nome da turma:',t.nome);if(!n)return;const pr=prompt('Login(s) do(s) professor(es) responsável(is), separados por vírgula:',t.professores.map(p=>p.login).join(', '));const profs=(pr||'').split(',').map(x=>x.trim()).filter(x=>x);const r=await apiPost('/api/turmas/salvar',{id,nome:n,professores:profs});const d=await r.json();if(!r.ok){alert(d.erro||'Erro');return}profAlunos();}
-async function excluirTurma(id){if(!confirm('Excluir esta turma? Os alunos dela ficarão “sem turma” até serem realocados. Os GASTOS registrados NÃO são apagados.'))return;const r=await apiPost('/api/turmas/excluir',{id});const d=await r.json();if(!r.ok){alert(d.erro||'Erro');return}profAlunos();}
-async function moverAluno(mat,tid){try{await apiPost('/api/aluno/turma',{matricula:mat,turmaId:tid||null});}catch(e){}}
+async function excluirTurma(id){
+  const t=(window.__turmas||[]).find(x=>x.id===id);
+  if(!confirm('EXCLUIR a turma "'+(t?t.nome:id)+'"?\n\n⚠️ Isso APAGA TODOS os '+(t?t.totalAlunos:'')+' aluno(s) dela: cadastros, entregas e notas. NÃO há retorno.\n(O registro de gastos é preservado.)'))return;
+  const c=prompt('Para confirmar, digite EXCLUIR (em maiúsculas):');
+  if(c!=='EXCLUIR'){alert('Cancelado.');return}
+  const r=await apiPost('/api/turmas/excluir',{id});const d=await r.json();
+  if(!r.ok){alert(d.erro||'Erro');return}
+  alert('Turma excluída. '+(d.alunosApagados||0)+' aluno(s) apagado(s).');
+  profAlunos();}
+async function moverAluno(mat,tid){try{const r=await apiPost('/api/aluno/turma',{matricula:mat,turmaId:tid||null});if(r.ok)profAlunos();}catch(e){}}
 async function salvarAlunos(sub){const txt=document.getElementById('adm_mats').value;const mats=txt.split(/\n+/).map(x=>x.trim()).filter(x=>x);if(!mats.length){document.getElementById('adm_msg').innerHTML='<p class="erro-ia">Cole ao menos uma matrícula.</p>';return}const turmaId=(document.getElementById('adm_turma')||{}).value||null;const r=await apiPost('/api/admin',{matriculas:mats,substituir:!!sub,turmaId});const d=await r.json();if(r.ok){profAlunos(d);setTimeout(()=>{const m=document.getElementById('adm_msg');if(m)m.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif;font-size:.85rem"><b>'+(d.novas||0)+' novo(s).</b> '+((d.existentes||0)?d.existentes+' já existiam (ignorados).':'')+'</p>'},80)}}
 async function resetSenha(m){if(!confirm('Resetar senha de '+m+' para a matrícula?'))return;const r=await apiPost('/api/admin',{resetarSenha:m});profAlunos(await r.json());}
 async function excluirAl(m){if(!confirm('Excluir '+m+'?'))return;const r=await apiPost('/api/admin',{excluirAluno:m});profAlunos(await r.json());}
