@@ -687,7 +687,7 @@ function bannerOAB(){
    +'</div>';
 }
 async function telaAluno(){
-  menu.innerHTML='<div class="grupo">Minhas peças</div><div class="grupo" style="margin-top:18px">Minha conta</div><button class="item" onclick="sair()">Sair</button>'+ctaOAB();
+  menu.innerHTML=menuAluno('pecas');
   conteudo.innerHTML='<h2 class="titulo-peca">Peças para entregar</h2><div id="la"><p><span class="spinner"></span>Carregando...</p></div>';
   try{const r=await apiGet('/api/pecas-aluno');const d=await r.json();
     if(!r.ok){document.getElementById('la').innerHTML='<p class="erro-ia">'+(d.erro||'Erro')+'</p>';return}
@@ -706,15 +706,45 @@ async function telaAluno(){
     window.__pecasAluno=d.pecas;
   }catch(e){document.getElementById('la').innerHTML='<p class="erro-ia">Falha ao carregar.</p>';}
 }
-async function descadastrar(){
-  if(!confirm('Tem certeza que deseja SAIR do sistema?\n\nSeu nome será APAGADO da lista da turma e você perderá o acesso às peças e correções já enviadas. Esta ação NÃO pode ser desfeita.'))return;
-  const txt=prompt('Para confirmar, digite SAIR (em maiúsculas):');
-  if(txt!=='SAIR'){alert('Descadastro cancelado.');return}
+// Menu do aluno. "Sair" = logout (volta ao login). "Descadastrar-me" = sai da turma e perde o acesso.
+function menuAluno(ativo){
+  return '<div class="grupo">Minhas peças</div>'
+   +'<button class="item'+(ativo==='pecas'?' ativo':'')+'" onclick="telaAluno()">Peças para entregar</button>'
+   +'<div class="grupo" style="margin-top:18px">Minha conta</div>'
+   +'<button class="item" onclick="sair()">Sair</button>'
+   +'<button class="item'+(ativo==='desc'?' ativo':'')+'" style="color:#e08a8a" onclick="telaDescadastro()">Descadastrar-me</button>'
+   +ctaOAB();
+}
+function telaDescadastro(){
+  menu.innerHTML=menuAluno('desc');
+  conteudo.innerHTML='<h2 class="titulo-peca" style="color:var(--vermelho)">Descadastrar-me da turma</h2>'
+   +'<div class="card" style="border:1px solid #e6b4b0;background:#fbeceb">'
+   +'<h3 style="color:var(--vermelho)">⚠️ Atenção: esta ação é irreversível</h3>'
+   +'<p style="font-family:Arial,sans-serif;font-size:.92rem;margin-bottom:6px">Ao se descadastrar:</p>'
+   +'<ul style="font-family:Arial,sans-serif;font-size:.92rem;margin:0 0 14px 20px;line-height:1.75">'
+   +'<li>você <b>sai da turma</b> e seu nome é apagado da lista do(a) professor(a);</li>'
+   +'<li>você <b>perde o acesso ao sistema</b> — não conseguirá mais entrar com a sua matrícula;</li>'
+   +'<li>você perde o acesso às <b>peças enviadas</b> e às <b>correções</b> já recebidas.</li>'
+   +'</ul>'
+   +'<div style="background:#fff;border:1px solid #e3ded2;border-radius:8px;padding:12px 14px;margin-bottom:16px">'
+   +'<p style="font-family:Arial,sans-serif;font-size:.9rem;margin:0;color:var(--cinza)">Só quer fechar a sessão neste computador? Use <b>Sair</b> — você continua na turma e pode entrar de novo depois.</p>'
+   +'</div>'
+   +'<p style="font-family:Arial,sans-serif;font-size:.9rem;margin-bottom:6px">Para confirmar, digite <b>DESCADASTRAR</b> abaixo:</p>'
+   +'<input id="dc_conf" placeholder="DESCADASTRAR" style="padding:9px;border:1px solid #cfc9b8;border-radius:6px;font-family:Arial,sans-serif;width:230px">'
+   +'<div class="botoes" style="margin-top:16px">'
+   +'<button onclick="telaAluno()">← Cancelar e voltar</button>'
+   +'<button style="background:var(--vermelho);color:#fff;border:none" onclick="confirmarDescadastro()">Confirmar descadastro</button>'
+   +'</div><div id="dc_fb"></div></div>';
+}
+async function confirmarDescadastro(){
+  const fb=document.getElementById('dc_fb');
+  const v=((document.getElementById('dc_conf')||{}).value||'').trim().toUpperCase();
+  if(v!=='DESCADASTRAR'){fb.innerHTML='<p class="erro-ia">Digite DESCADASTRAR para confirmar.</p>';return}
+  fb.innerHTML='<p style="font-family:Arial,sans-serif;font-size:.88rem"><span class="spinner"></span>Processando...</p>';
   try{const r=await apiPost('/api/descadastrar',{});const d=await r.json();
-    if(!r.ok){alert(d.erro||'Não foi possível concluir o descadastro.');return}
-    alert('Você foi descadastrado(a). Seu nome foi apagado da lista da turma.');
-    sair('Cadastro removido. Até logo!');
-  }catch(e){alert('Falha de conexão. Tente novamente.');}
+    if(!r.ok){fb.innerHTML='<p class="erro-ia">'+(d.erro||'Não foi possível concluir o descadastro.')+'</p>';return}
+    sair('Você foi descadastrado(a) da turma e não tem mais acesso ao sistema.');
+  }catch(e){fb.innerHTML='<p class="erro-ia">Falha de conexão. Tente novamente.</p>';}
 }
 function abrirPecaAluno(id){
   const p=(window.__pecasAluno||[]).find(x=>x.id===id);if(!p)return;
