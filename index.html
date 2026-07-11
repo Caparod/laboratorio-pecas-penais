@@ -671,12 +671,27 @@ async function resetProfessor(login){
 }
 
 // ================= ALUNO =================
+// Chamada para a Mentoria OAB (barra lateral do aluno)
+function ctaOAB(){
+  return '<div style="margin:26px 12px 0;padding:14px 12px;background:linear-gradient(135deg,#c9a227,#b08d1c);border-radius:10px;text-align:center">'
+   +'<p style="font-family:Arial,sans-serif;font-size:.83rem;font-weight:bold;color:#20304a;line-height:1.35;margin:0 0 10px">Quer estudo completo para a OAB?</p>'
+   +'<a href="https://www.oabmentoria.com.br" target="_blank" rel="noopener" style="display:block;background:#152a46;color:#fff;padding:9px 10px;border-radius:6px;text-decoration:none;font-family:Arial,sans-serif;font-size:.82rem;font-weight:bold">Conheça a Mentoria OAB →</a>'
+   +'</div>';
+}
+// Banner da Mentoria OAB (área de conteúdo do aluno)
+function bannerOAB(){
+  return '<div class="card" style="margin-top:20px;background:linear-gradient(135deg,#1e3a5f,#152a46);border:none;text-align:center;padding:24px">'
+   +'<h3 style="color:var(--dourado);margin:0 0 6px">Quer estudo completo para a OAB?</h3>'
+   +'<p style="color:#dfe6ef;font-family:Arial,sans-serif;font-size:.9rem;margin:0 0 14px">Mentoria completa, plano de estudos e treino de peças da 2ª fase.</p>'
+   +'<a href="https://www.oabmentoria.com.br" target="_blank" rel="noopener" style="display:inline-block;background:var(--dourado);color:#20304a;padding:11px 26px;border-radius:6px;text-decoration:none;font-family:Arial,sans-serif;font-weight:bold;font-size:.9rem">www.oabmentoria.com.br →</a>'
+   +'</div>';
+}
 async function telaAluno(){
-  menu.innerHTML='<div class="grupo">Minhas peças</div><div class="grupo" style="margin-top:18px">Minha conta</div><button class="item" style="color:#e08a8a" onclick="descadastrar()">Sair do sistema e apagar meus dados</button>';
+  menu.innerHTML='<div class="grupo">Minhas peças</div><div class="grupo" style="margin-top:18px">Minha conta</div><button class="item" style="color:#e08a8a" onclick="descadastrar()">Sair do sistema e apagar meus dados</button>'+ctaOAB();
   conteudo.innerHTML='<h2 class="titulo-peca">Peças para entregar</h2><div id="la"><p><span class="spinner"></span>Carregando...</p></div>';
   try{const r=await apiGet('/api/pecas-aluno');const d=await r.json();
     if(!r.ok){document.getElementById('la').innerHTML='<p class="erro-ia">'+(d.erro||'Erro')+'</p>';return}
-    if(!d.pecas.length){document.getElementById('la').innerHTML='<div class="card" style="text-align:center;padding:40px"><h3 style="color:var(--azul)">⏳ Aguarde o envio do(a) Professor(a)</h3><p style="color:var(--cinza)">Nenhuma peça foi publicada ainda para a sua turma. Assim que o(a) professor(a) enviar uma peça, ela aparecerá aqui com o prazo de entrega.</p></div>';return}
+    if(!d.pecas.length){document.getElementById('la').innerHTML='<div class="card" style="text-align:center;padding:40px"><h3 style="color:var(--azul)">⏳ Aguarde o envio do(a) Professor(a)</h3><p style="color:var(--cinza)">Nenhuma peça foi publicada ainda para a sua turma. Assim que o(a) professor(a) enviar uma peça, ela aparecerá aqui com o prazo de entrega.</p></div>'+bannerOAB();return}
     let cards='';
     for(const p of d.pecas){
       const st=p.validado?('✅ Corrigida — nota '+(p.nota!=null?String(p.nota).replace('.',','):'—')):(p.enviado?'📤 Enviada — aguardando correção':(p.noPrazo?'⏳ A fazer':'🔴 Prazo encerrado'));
@@ -687,7 +702,7 @@ async function telaAluno(){
        +(p.gabLiberado?'<button onclick="abrirPecaAluno(\''+p.id+'\')">📖 Gabarito</button>':'')
        +(p.temRelatorio?'<button onclick="verMinhaCorrecao(\''+p.id+'\')">Ver correção</button>':'')+'</div></div>';
     }
-    document.getElementById('la').innerHTML=cards;
+    document.getElementById('la').innerHTML=cards+bannerOAB();
     window.__pecasAluno=d.pecas;
   }catch(e){document.getElementById('la').innerHTML='<p class="erro-ia">Falha ao carregar.</p>';}
 }
