@@ -687,7 +687,7 @@ function bannerOAB(){
    +'</div>';
 }
 async function telaAluno(){
-  menu.innerHTML='<div class="grupo">Minhas peças</div><div class="grupo" style="margin-top:18px">Minha conta</div><button class="item" style="color:#e08a8a" onclick="descadastrar()">Sair do sistema e apagar meus dados</button>'+ctaOAB();
+  menu.innerHTML='<div class="grupo">Minhas peças</div><div class="grupo" style="margin-top:18px">Minha conta</div><button class="item" onclick="sair()">Sair</button>'+ctaOAB();
   conteudo.innerHTML='<h2 class="titulo-peca">Peças para entregar</h2><div id="la"><p><span class="spinner"></span>Carregando...</p></div>';
   try{const r=await apiGet('/api/pecas-aluno');const d=await r.json();
     if(!r.ok){document.getElementById('la').innerHTML='<p class="erro-ia">'+(d.erro||'Erro')+'</p>';return}
