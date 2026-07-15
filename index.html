@@ -121,9 +121,20 @@ function sget(k,d){try{return localStorage.getItem(k)??d}catch(e){return store[k
 function sset(k,v){try{localStorage.setItem(k,v)}catch(e){store[k]=v}}
 const menu=document.getElementById('menu'),conteudo=document.getElementById('conteudo');
 let AUTH=null; try{AUTH=JSON.parse(sget('auth','null'))}catch(e){AUTH=null}
+let MODO_VISAO=sget('modo_visao','');
+let TURMA_ATUACAO=sget('turma_atuacao','');
+let TURMAS_ATUACAO=[];
+function professorEmVisaoAluno(){return !!(AUTH&&AUTH.tipo==='professor'&&MODO_VISAO==='aluno');}
+function aplicarCabecalhosVisao(h){
+  if(professorEmVisaoAluno()){
+    h['x-modo-atuacao']='aluno';
+    if(TURMA_ATUACAO)h['x-turma-atuacao']=TURMA_ATUACAO;
+  }
+}
 async function apiPost(u,b){
   const h={'content-type':'application/json'};
   if(AUTH&&AUTH.token)h['authorization']='Bearer '+AUTH.token;
+  aplicarCabecalhosVisao(h);
   const r=await fetch(u,{method:'POST',headers:h,body:JSON.stringify(b)});
   if(r.status===401){let d=null;try{d=await r.clone().json()}catch(e){}
     if(d&&d.erro==='SESSAO'){sair('Sua sessão expirou. Entre novamente.');throw new Error('sessao')}}
@@ -131,6 +142,7 @@ async function apiPost(u,b){
 }
 async function apiGet(u){
   const h={};if(AUTH&&AUTH.token)h['authorization']='Bearer '+AUTH.token;
+  aplicarCabecalhosVisao(h);
   const r=await fetch(u,{headers:h});
   if(r.status===401){let d=null;try{d=await r.clone().json()}catch(e){}
     if(d&&d.erro==='SESSAO'){sair('Sua sessão expirou. Entre novamente.');throw new Error('sessao')}}
@@ -184,14 +196,15 @@ function barra(){
   const el=document.getElementById('progresso');if(!el)return;
   if(!AUTH){el.innerHTML='';return}
   const nome=AUTH.nome?AUTH.nome.split(' ')[0]:'';
-  const papelVis=(AUTH.admin&&typeof MODO_VISAO!=='undefined'&&MODO_VISAO==='professor')?'Professor (visão)':(AUTH.papel||'Professor');
+  const papelBase=AUTH.papel||'Professor';
+  const papelVis=AUTH.tipo==='professor'&&MODO_VISAO==='aluno'?'Aluno(a) (visão)':(AUTH.tipo==='professor'&&MODO_VISAO==='professor'&&AUTH.gereProf?'Professor(a) (visão)':papelBase);
   const quem=AUTH.tipo==='professor'?(esc(papelVis)+' · '+esc(AUTH.nome||'')):('Olá, '+esc(nome||('Matrícula '+AUTH.usuario)));
   el.innerHTML='<span class="userbar">'+quem+'<a onclick="trocarMinhaSenha()">trocar senha</a><button class="btn-sair" onclick="sair()">🚪 Sair</button></span>';
 }
 // Volta à tela inicial do painel (título clicável) — sempre há um caminho de volta.
 function irInicio(){
   if(!AUTH||!AUTH.token){renderLogin();return}
-  if(AUTH.tipo==='professor'){ABA_PROF='pecas';telaProfessor();}
+  if(AUTH.tipo==='professor'){if(MODO_VISAO==='aluno')telaAluno();else{ABA_PROF='pecas';telaProfessor();}}
   else telaAluno();
 }
 function renderLogin(msg){
@@ -214,6 +227,8 @@ async function fazerLogin(){
     const d=await r.json();
     if(!r.ok){e.innerHTML='<p class="erro-ia">'+(d.erro||'Falha no login.')+'</p>';return}
     AUTH={token:d.token,tipo:d.tipo,usuario:u,nome:d.nome||'',papel:d.papel||'',admin:!!d.admin,gereProf:!!d.gereProf,gereCoord:!!d.gereCoord,turmaAtiva:d.turmaAtiva,precisaTrocarSenha:d.precisaTrocarSenha,emailVerificado:d.emailVerificado,email:d.email||''};
+    if(AUTH.tipo==='professor')MODO_VISAO=modoPadraoProfessor(); else MODO_VISAO='';
+    sset('modo_visao',MODO_VISAO);
     sset('auth',JSON.stringify(AUTH));iniciar();
   }catch(err){e.innerHTML='<p class="erro-ia">Erro de conexão: '+err.message+'</p>'}
 }
@@ -262,36 +277,40 @@ async function reenviarCodigo(){try{await apiPost('/api/reenviar-codigo',{});ale
 function trocarMinhaSenha(){AUTH.precisaTrocarSenha=true;renderTroca();}
 function iniciar(){
   if(!AUTH||!AUTH.token){renderLogin();return}
+  if(AUTH.tipo==='professor'&&(!MODO_VISAO||!modoPermitido(MODO_VISAO))){MODO_VISAO=modoPadraoProfessor();sset('modo_visao',MODO_VISAO);}
   if(AUTH.precisaTrocarSenha){renderTroca();return}
   if(AUTH.tipo==='aluno'&&!AUTH.emailVerificado){renderVerificarEmail();return}
   barra();
-  if(AUTH.tipo==='professor')telaProfessor();
+  if(AUTH.tipo==='professor'){if(MODO_VISAO==='aluno')telaAluno();else telaProfessor();}
   else telaAluno();
 }
 // ================= PROFESSOR =================
 let ABA_PROF='pecas';
-// ===== Visão do ADMINISTRADOR =====
-// Só o administrador (dono) pode alternar entre ver o sistema como Administrador ou como Professor comum.
-// Em "Professor", as ferramentas administrativas somem e ele enxerga apenas as próprias turmas.
-let MODO_VISAO='admin';
 function souAdminAgora(){return !!(AUTH&&AUTH.admin)&&MODO_VISAO==='admin';}
-function podeGerirAgora(){return !!(AUTH&&AUTH.gereProf)&&!((AUTH&&AUTH.admin)&&MODO_VISAO==='professor');}
+function modoPadraoProfessor(){return AUTH&&AUTH.admin?'admin':(AUTH&&AUTH.gereProf?'coordenador':'professor');}
+function modoPermitido(m){const p=modoPadraoProfessor();return m===p||m==='aluno'||(AUTH&&AUTH.gereProf&&m==='professor');}
+function podeGerirAgora(){return !!(AUTH&&AUTH.gereProf)&&(MODO_VISAO==='admin'||MODO_VISAO==='coordenador');}
 function seletorVisao(){
-  if(!(AUTH&&AUTH.admin))return '';
-  const adm=MODO_VISAO==='admin';
+  if(!(AUTH&&AUTH.tipo==='professor'))return '';
+  const principal=modoPadraoProfessor();
+  const principalRotulo=AUTH.admin?'Administrador':(AUTH.gereProf?'Coordenadora':'Professor');
   const base='flex:1;padding:7px 4px;border:none;cursor:pointer;font-family:Arial,sans-serif;font-size:.78rem;font-weight:bold;';
+  function b(m,txt){const on=MODO_VISAO===m;return '<button onclick="trocarVisao(\''+m+'\')" style="'+base+'background:'+(on?'var(--dourado)':'transparent')+';color:'+(on?'#20304a':'#cfd8e3')+'">'+txt+'</button>'}
   return '<div class="grupo">Ver o sistema como</div>'
    +'<div style="margin:2px 12px 14px;display:flex;border:1px solid #3a5478;border-radius:6px;overflow:hidden">'
-   +'<button onclick="trocarVisao(\'admin\')" style="'+base+'background:'+(adm?'var(--dourado)':'transparent')+';color:'+(adm?'#20304a':'#cfd8e3')+'">Administrador</button>'
-   +'<button onclick="trocarVisao(\'professor\')" style="'+base+'background:'+(!adm?'var(--dourado)':'transparent')+';color:'+(!adm?'#20304a':'#cfd8e3')+'">Professor</button>'
+   +b(principal,principalRotulo)
+   +(AUTH.gereProf?b('professor','Professora'): '')
+   +b('aluno',AUTH.gereProf?'Aluna':'Aluno')
    +'</div>';
 }
 function trocarVisao(m){
-  if(!(AUTH&&AUTH.admin))return;
-  MODO_VISAO=(m==='professor')?'professor':'admin';
+  if(!(AUTH&&AUTH.tipo==='professor'))return;
+  const principal=modoPadraoProfessor();
+  MODO_VISAO=(m==='aluno')?'aluno':(m==='professor'?'professor':principal);
+  sset('modo_visao',MODO_VISAO);
   if(!podeGerirAgora()&&(ABA_PROF==='professores'||ABA_PROF==='gastos'))ABA_PROF='pecas';
   try{barra()}catch(e){}
-  telaProfessor();
+  if(MODO_VISAO==='aluno')telaAluno();else telaProfessor();
 }
 function telaProfessor(){
   if(!podeGerirAgora()&&(ABA_PROF==='professores'||ABA_PROF==='gastos'))ABA_PROF='pecas';
@@ -718,8 +737,13 @@ function bannerOAB(){
    +'</div>';
 }
 async function telaAluno(){
+  if(professorEmVisaoAluno()){
+    await carregarTurmasAtuacao();
+    if(!TURMA_ATUACAO&&TURMAS_ATUACAO.length){TURMA_ATUACAO=TURMAS_ATUACAO[0].id;sset('turma_atuacao',TURMA_ATUACAO);}
+  }
   menu.innerHTML=menuAluno('pecas');
-  conteudo.innerHTML='<h2 class="titulo-peca">Peças para entregar</h2><div id="la"><p><span class="spinner"></span>Carregando...</p></div>';
+  conteudo.innerHTML='<h2 class="titulo-peca">Peças para entregar'+(professorEmVisaoAluno()?' <span class="badge">visão aluno</span>':'')+'</h2><div id="la"><p><span class="spinner"></span>Carregando...</p></div>';
+  if(professorEmVisaoAluno()&&!TURMA_ATUACAO){document.getElementById('la').innerHTML='<p class="erro-ia">Selecione uma turma para ver o sistema como aluno(a).</p>';return}
   try{const r=await apiGet('/api/pecas-aluno');const d=await r.json();
     if(!r.ok){document.getElementById('la').innerHTML='<p class="erro-ia">'+(d.erro||'Erro')+'</p>';return}
     if(!d.pecas.length){document.getElementById('la').innerHTML='<div class="card" style="text-align:center;padding:40px"><h3 style="color:var(--azul)">⏳ Aguarde o envio do(a) Professor(a)</h3><p style="color:var(--cinza)">Nenhuma peça foi publicada ainda para a sua turma. Assim que o(a) professor(a) enviar uma peça, ela aparecerá aqui com o prazo de entrega.</p></div>'+bannerOAB();return}
@@ -737,13 +761,28 @@ async function telaAluno(){
     window.__pecasAluno=d.pecas;
   }catch(e){document.getElementById('la').innerHTML='<p class="erro-ia">Falha ao carregar.</p>';}
 }
+async function carregarTurmasAtuacao(){
+  if(TURMAS_ATUACAO.length)return;
+  try{
+    const r=await apiGet('/api/turmas');const d=await r.json();
+    if(r.ok)TURMAS_ATUACAO=d.turmas||[];
+  }catch(e){TURMAS_ATUACAO=[];}
+}
+function seletorTurmaAtuacao(){
+  if(!professorEmVisaoAluno())return '';
+  const opts=TURMAS_ATUACAO.map(t=>'<option value="'+esc(t.id)+'" '+(t.id===TURMA_ATUACAO?'selected':'')+'>'+esc(t.nome)+'</option>').join('');
+  return '<div class="grupo">Turma da visão aluno</div>'
+   +'<div style="margin:2px 12px 14px"><select onchange="trocarTurmaAtuacao(this.value)" style="width:100%;padding:8px;border-radius:6px;border:1px solid #3a5478;background:#fff;color:#20304a;font-family:Arial,sans-serif">'+opts+'</select></div>';
+}
+function trocarTurmaAtuacao(id){TURMA_ATUACAO=id;sset('turma_atuacao',id);telaAluno();}
 // Menu do aluno. "Sair" = logout (volta ao login). "Descadastrar-me" = sai da turma e perde o acesso.
 function menuAluno(ativo){
-  return '<div class="grupo">Minhas peças</div>'
+  return (AUTH&&AUTH.tipo==='professor'?seletorVisao()+seletorTurmaAtuacao():'')
+   +'<div class="grupo">Minhas peças</div>'
    +'<button class="item'+(ativo==='pecas'?' ativo':'')+'" onclick="telaAluno()">Peças para entregar</button>'
    +'<div class="grupo" style="margin-top:18px">Minha conta</div>'
    +'<button class="item" onclick="sair()">Sair</button>'
-   +'<button class="item'+(ativo==='desc'?' ativo':'')+'" style="color:#e08a8a" onclick="telaDescadastro()">Descadastrar-me</button>'
+   +(AUTH&&AUTH.tipo==='professor'?'':'<button class="item'+(ativo==='desc'?' ativo':'')+'" style="color:#e08a8a" onclick="telaDescadastro()">Descadastrar-me</button>')
    +ctaOAB();
 }
 function telaDescadastro(){

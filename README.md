@@ -1,27 +1,60 @@
-# Laboratório de Peças Penais — versão para o Render
+# Laboratório de Peças Penais - Render/Supabase
 
-A chave da API NÃO fica no código: ela é lida da variável de ambiente `ANTHROPIC_API_KEY` no servidor.
-O aluno acessa o site e o servidor faz a correção — ninguém consegue extrair a chave.
+A chave de IA fica apenas no servidor, pela variável `ANTHROPIC_API_KEY`. O navegador dos alunos e professores nunca recebe essa chave.
 
-## Como publicar no Render (uma vez)
+## Publicação no Render
 
-1. Crie uma conta em https://render.com (pode entrar com Google).
-2. Suba esta pasta `render-app` (4 arquivos) para um repositório no GitHub (ou use "Deploy from Git" do Render).
-3. No Render: **New → Web Service** → conecte o repositório.
+1. Crie um Web Service no Render apontando para esta pasta.
+2. Use:
    - Runtime: Node
-   - Build Command: `npm install` (não há dependências — termina na hora)
+   - Build Command: `npm install`
    - Start Command: `npm start`
-   - Plano: Free
-4. Em **Environment → Add Environment Variable**:
-   - `ANTHROPIC_API_KEY` = a chave criada no console da Anthropic (workspace Estagio-IESB, limite US$ 5/mês)
-   - (opcional) `MODELO` = claude-sonnet-5
-5. Deploy. O Render dá um endereço tipo `https://laboratorio-pecas.onrender.com` — é esse link que você passa aos alunos.
+3. Configure as variáveis de ambiente:
+   - `ANTHROPIC_API_KEY`: chave da Anthropic.
+   - `APP_URL`: URL pública do sistema no Render.
+   - `MODELO`: opcional, padrão definido no servidor.
+   - `PROF_LOGIN`: login do administrador principal, se quiser mudar o padrão.
+   - `PROF_SENHA`: senha inicial do administrador principal, se quiser mudar o padrão.
+   - `GMAIL_USER` e `GMAIL_APP_PASSWORD`: opcionais, para avisos por e-mail.
+   - `SESSAO_DIAS`: opcional, padrão 30.
+
+## Supabase
+
+O sistema usa Supabase como banco principal quando as variáveis abaixo existem. O arquivo `db.json` continua sendo salvo como contingência local.
+
+Variáveis no Render:
+
+- `SUPABASE_URL`: URL do projeto Supabase.
+- `SUPABASE_SERVICE_ROLE_KEY`: chave service role do Supabase. Use apenas no servidor.
+- `SUPABASE_STATE_TABLE`: opcional, padrão `app_state`.
+- `SUPABASE_STATE_ID`: opcional, padrão `main`.
+
+Crie a tabela no SQL Editor do Supabase:
+
+```sql
+create table if not exists public.app_state (
+  id text primary key,
+  data jsonb not null,
+  updated_at timestamptz not null default now()
+);
+```
+
+Como a escrita é feita pelo servidor com `SUPABASE_SERVICE_ROLE_KEY`, não exponha essa chave no front-end.
+
+## Contas padrão
+
+- Administrador principal: definido por `PROF_LOGIN`/`PROF_SENHA`, ou o padrão legado do sistema.
+- Any: login `Any`, senha inicial `123456`, papel `Coordenadora do Curso de Direito`.
+- Karine: login `Karine`, senha inicial `123456`, papel `Coordenadora do NPJ`.
 
 ## Proteções incluídas
-- Chave só no servidor (variável de ambiente).
-- Limite de 8 correções por minuto por aluno (IP).
-- Quando o limite mensal de créditos é atingido, o aluno vê: "LIMITE DE CRÉDITOS EXCEDIDO — avise o professor".
-- Limite de gasto de US$ 5/mês configurado no console da Anthropic (camada extra de segurança).
+
+- Acesso de professores limitado às próprias turmas, exceto administração/coordenação.
+- Aluno só visualiza e entrega peças da própria turma.
+- Sessões expiram após o prazo configurado.
+- CSV de notas tratado para reduzir risco de fórmula maliciosa no Excel.
+- Prazos calculados em horário de Brasília.
 
 ## Observação
-No plano Free do Render o serviço "dorme" após inatividade e a primeira visita do dia pode demorar ~1 min para carregar.
+
+No plano Free do Render o serviço pode dormir após inatividade; a primeira visita após pausa pode demorar cerca de 1 minuto.
