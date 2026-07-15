@@ -196,7 +196,7 @@ function barra(){
   const el=document.getElementById('progresso');if(!el)return;
   if(!AUTH){el.innerHTML='';return}
   const nome=AUTH.nome?AUTH.nome.split(' ')[0]:'';
-  const papelBase=AUTH.papel||'Professor';
+  const papelBase=rotuloPapel(AUTH.papel||'Professor');
   const papelVis=AUTH.tipo==='professor'&&MODO_VISAO==='aluno'?'Aluno(a) (visão)':(AUTH.tipo==='professor'&&MODO_VISAO==='professor'&&AUTH.gereProf?'Professor(a) (visão)':papelBase);
   const quem=AUTH.tipo==='professor'?(esc(papelVis)+' · '+esc(AUTH.nome||'')):('Olá, '+esc(nome||('Matrícula '+AUTH.usuario)));
   el.innerHTML='<span class="userbar">'+quem+'<a onclick="trocarMinhaSenha()">trocar senha</a><button class="btn-sair" onclick="sair()">🚪 Sair</button></span>';
@@ -210,7 +210,7 @@ function irInicio(){
 function renderLogin(msg){
   menu.innerHTML='';document.getElementById('progresso').innerHTML='';
   conteudo.innerHTML='<div class="loginwrap"><h2>⚖️ Laboratório de Peças Penais</h2>'
-  +'<p>Entre com seu login. Alunos: use a matrícula (senha inicial = matrícula).</p>'
+  +'<p>Entre com seu login. Aluno(a): use a matrícula (senha inicial = matrícula).</p>'
   +'<input id="lg_user" placeholder="Login / Matrícula" autocomplete="username">'
   +'<input id="lg_pass" type="password" placeholder="Senha" autocomplete="current-password">'
   +'<button onclick="fazerLogin()">Entrar</button>'
@@ -290,17 +290,25 @@ function souAdminAgora(){return !!(AUTH&&AUTH.admin)&&MODO_VISAO==='admin';}
 function modoPadraoProfessor(){return AUTH&&AUTH.admin?'admin':(AUTH&&AUTH.gereProf?'coordenador':'professor');}
 function modoPermitido(m){const p=modoPadraoProfessor();return m===p||m==='aluno'||(AUTH&&AUTH.gereProf&&m==='professor');}
 function podeGerirAgora(){return !!(AUTH&&AUTH.gereProf)&&(MODO_VISAO==='admin'||MODO_VISAO==='coordenador');}
+function rotuloPapel(p){
+  p=String(p||'');
+  if(/administrador/i.test(p))return 'Administrador(a)';
+  if(/coorden/i.test(p))return p.replace(/Coordenadora|Coordenador/gi,'Coordenador(a)');
+  if(/professor/i.test(p))return p.replace(/Professora|Professor/gi,'Professor(a)');
+  if(/alun/i.test(p))return p.replace(/Aluna|Aluno/gi,'Aluno(a)');
+  return p;
+}
 function seletorVisao(){
   if(!(AUTH&&AUTH.tipo==='professor'))return '';
   const principal=modoPadraoProfessor();
-  const principalRotulo=AUTH.admin?'Administrador':(AUTH.gereProf?'Coordenadora':'Professor');
+  const principalRotulo=AUTH.admin?'Administrador(a)':(AUTH.gereProf?'Coordenador(a)':'Professor(a)');
   const base='flex:1;padding:7px 4px;border:none;cursor:pointer;font-family:Arial,sans-serif;font-size:.78rem;font-weight:bold;';
   function b(m,txt){const on=MODO_VISAO===m;return '<button onclick="trocarVisao(\''+m+'\')" style="'+base+'background:'+(on?'var(--dourado)':'transparent')+';color:'+(on?'#20304a':'#cfd8e3')+'">'+txt+'</button>'}
   return '<div class="grupo">Ver o sistema como</div>'
    +'<div style="margin:2px 12px 14px;display:flex;border:1px solid #3a5478;border-radius:6px;overflow:hidden">'
    +b(principal,principalRotulo)
-   +(AUTH.gereProf?b('professor','Professora'): '')
-   +b('aluno',AUTH.gereProf?'Aluna':'Aluno')
+   +(AUTH.gereProf?b('professor','Professor(a)'): '')
+   +b('aluno','Aluno(a)')
    +'</div>';
 }
 function trocarVisao(m){
@@ -670,13 +678,13 @@ async function zerarTudo(){
   try{const r=await apiPost('/api/zerar',{confirmacao:'ZERAR'});const d=await r.json();if(r.ok)document.getElementById('zfb').innerHTML='<p style="color:var(--verde)">Sistema zerado.</p>';else document.getElementById('zfb').innerHTML='<p class="erro-ia">'+(d.erro||'Erro')+'</p>';}catch(e){}
 }
 
-// ---- Professores / Coordenadores ----
+// ---- Professores(as) / Coordenadores(as) ----
 async function profProfessores(){
-  conteudo.innerHTML='<h2 class="titulo-peca">Professores</h2><div id="lpr"><p><span class="spinner"></span>Carregando...</p></div>';
+  conteudo.innerHTML='<h2 class="titulo-peca">Professores(as)</h2><div id="lpr"><p><span class="spinner"></span>Carregando...</p></div>';
   try{const r=await apiGet('/api/professores');const d=await r.json();
     if(!r.ok){document.getElementById('lpr').innerHTML='<p class="erro-ia">'+(d.erro||'Erro')+'</p>';return}
     const admin=!!d.souAdmin;
-    let form='<div class="card"><h3>Cadastrar '+(admin?'professor(a) ou coordenador(a)':'professor(a)')+'</h3>'
+    let form='<div class="card"><h3>Cadastrar '+(admin?'Professor(a) ou Coordenador(a)':'Professor(a)')+'</h3>'
       +'<p style="font-size:.85rem;color:var(--cinza)">A senha inicial é o próprio login; a pessoa troca no primeiro acesso.</p>'
       +'<div style="display:flex;gap:8px;flex-wrap:wrap;font-family:Arial,sans-serif;align-items:center">'
       +'<input id="pr_login" placeholder="Login (sem espaços)" style="padding:8px;border:1px solid #cfc9b8;border-radius:6px">'
@@ -685,11 +693,11 @@ async function profProfessores(){
       +'<button class="primario" onclick="salvarProfessor()">Cadastrar</button></div><div id="pr_fb"></div></div>';
     let tab='<div class="card painel"><h3>Cadastrados ('+d.professores.length+')</h3><table class="painel"><tr><th>Login</th><th>Nome</th><th>Papel</th><th>Senha</th><th></th></tr>';
     for(const p of d.professores){
-      const podeMexer=!p.admin && p.login!==d.meuLogin && (admin || p.papel!=='Coordenador');
+      const podeMexer=!p.admin && p.login!==d.meuLogin && (admin || !/coorden/i.test(p.papel||''));
       let acoes='<span style="color:var(--cinza)">—</span>';
       if(p.login===d.meuLogin) acoes='<span style="color:var(--dourado)">você</span>';
       else if(podeMexer) acoes='<a style="cursor:pointer;color:var(--azul)" onclick="resetProfessor(\''+p.login+'\')">resetar senha</a> · <a style="cursor:pointer;color:var(--vermelho)" onclick="excluirProfessor(\''+p.login+'\')">excluir</a>';
-      tab+='<tr><td>'+esc(p.login)+'</td><td>'+esc(p.nome||'—')+'</td><td>'+esc(p.papel)+(p.admin?' 👑':'')+'</td><td>'+(p.mudouSenha?'✓ trocada':'inicial')+'</td><td>'+acoes+'</td></tr>';
+      tab+='<tr><td>'+esc(p.login)+'</td><td>'+esc(p.nome||'—')+'</td><td>'+esc(rotuloPapel(p.papel))+(p.admin?' 👑':'')+'</td><td>'+(p.mudouSenha?'✓ trocada':'inicial')+'</td><td>'+acoes+'</td></tr>';
     }
     tab+='</table></div>';
     document.getElementById('lpr').innerHTML=form+tab;

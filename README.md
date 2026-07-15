@@ -44,13 +44,13 @@ Como a escrita é feita pelo servidor com `SUPABASE_SERVICE_ROLE_KEY`, não expo
 ## Contas padrão
 
 - Administrador principal: definido por `PROF_LOGIN`/`PROF_SENHA`, ou o padrão legado do sistema.
-- Any: login `Any`, senha inicial `123456`, papel `Coordenadora do Curso de Direito`.
-- Karine: login `Karine`, senha inicial `123456`, papel `Coordenadora do NPJ`.
+- Any: login `Any`, senha inicial `123456`, papel `Coordenador(a) do Curso de Direito`.
+- Karine: login `Karine`, senha inicial `123456`, papel `Coordenador(a) do NPJ`.
 
 ## Proteções incluídas
 
 - Acesso de professores limitado às próprias turmas, exceto administração/coordenação.
-- Aluno só visualiza e entrega peças da própria turma.
+- Aluno(a) só visualiza e entrega peças da própria turma.
 - Sessões expiram após o prazo configurado.
 - CSV de notas tratado para reduzir risco de fórmula maliciosa no Excel.
 - Prazos calculados em horário de Brasília.

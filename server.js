@@ -41,9 +41,9 @@ function migrarDb() {
   db.professores[db.professor.login] = db.professor; // espelha o principal na coleção
   db.professor.nome = db.professor.nome || 'Prof. Rodrigo Silva Pereira';
   db.professor.papel = 'Administrador';
-  // Coordenadora Karine (mesmos poderes de professora) — cria uma vez
+  // Coordenador(a) Karine (mesmos poderes de Professor(a)) — cria uma vez
   if (!db.professores['Karine'] && !db.karineCriada) {
-    db.professores['Karine'] = { login: 'Karine', senha: hashSenha('123456'), mudouSenha: false, nome: 'Karine Morais', papel: 'Coordenadora do NPJ' };
+    db.professores['Karine'] = { login: 'Karine', senha: hashSenha('123456'), mudouSenha: false, nome: 'Karine Morais', papel: 'Coordenador(a) do NPJ' };
     db.karineCriada = true;
   }
   // Reset único (jul/2026, a pedido do professor): senha da Karine volta a ser 123456
@@ -52,11 +52,12 @@ function migrarDb() {
     db.professores['Karine'].mudouSenha = false;
     db.karineReset202607 = true;
   }
-  // Coordenadora Any: cria quando faltar e mantém o papel atualizado.
+  if (db.professores['Karine']) db.professores['Karine'].papel = 'Coordenador(a) do NPJ';
+  // Coordenador(a) Any: cria quando faltar e mantém o papel atualizado.
   if (!db.professores['Any']) {
-    db.professores['Any'] = { login: 'Any', senha: hashSenha('123456'), mudouSenha: false, nome: 'Any', papel: 'Coordenadora do Curso de Direito' };
+    db.professores['Any'] = { login: 'Any', senha: hashSenha('123456'), mudouSenha: false, nome: 'Any', papel: 'Coordenador(a) do Curso de Direito' };
   } else {
-    db.professores['Any'].papel = 'Coordenadora do Curso de Direito';
+    db.professores['Any'].papel = 'Coordenador(a) do Curso de Direito';
     if (!db.professores['Any'].nome) db.professores['Any'].nome = 'Any';
   }
   db.anyCriada = true;
@@ -94,7 +95,7 @@ function registrarGasto(sess, model, usage) {
       chave = 'aluno:' + sess.usuario;
       const a = db.alunos[sess.usuario];
       nome = ((a && a.nome) || '') || ('Matrícula ' + sess.usuario);
-      tipo = 'Aluno';
+      tipo = 'Aluno(a)';
       if (a && a.turmaId && db.turmas[a.turmaId]) turmaNome = db.turmas[a.turmaId].nome;
     } else if (sess) {
       chave = 'prof:' + sess.usuario;
@@ -184,7 +185,7 @@ function professorDe(login) { if (!login) return null; if (db.professores && db.
 const OWNER_LOGIN = (process.env.PROF_LOGIN || '500686');
 function ehAdmin(login) { return !!login && login === OWNER_LOGIN; }
 function ehCoordenador(login) { const p = professorDe(login); return !!(p && /coorden/i.test(p.papel || '')); }
-function papelDe(login) { if (ehAdmin(login)) return 'Administrador'; const p = professorDe(login); if (p && /coorden/i.test(p.papel || '')) return 'Coordenador'; return 'Professor'; }
+function papelDe(login) { if (ehAdmin(login)) return 'Administrador(a)'; const p = professorDe(login); if (p && /coorden/i.test(p.papel || '')) return 'Coordenador(a)'; return 'Professor(a)'; }
 function podeGerirProfessores(login) { return ehAdmin(login) || ehCoordenador(login); }
 function salvarDb() {
   try { fs.writeFileSync(DB_PATH, JSON.stringify(db)); } catch (e) { console.error('Falha ao salvar db:', e.message); }
