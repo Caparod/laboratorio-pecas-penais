@@ -61,6 +61,20 @@ function migrarDb() {
     if (!db.professores['Any'].nome) db.professores['Any'].nome = 'Any';
   }
   db.anyCriada = true;
+  // Reset solicitado em 15/07/2026: administrador volta para 500686 e Any para 123456.
+  if (!db.resetSenhas20260715) {
+    db.professores[OWNER_LOGIN] = db.professores[OWNER_LOGIN] || db.professor;
+    db.professores[OWNER_LOGIN].login = OWNER_LOGIN;
+    db.professores[OWNER_LOGIN].nome = db.professores[OWNER_LOGIN].nome || 'Prof. Rodrigo Silva Pereira';
+    db.professores[OWNER_LOGIN].papel = 'Administrador';
+    db.professores[OWNER_LOGIN].senha = hashSenha(OWNER_LOGIN);
+    db.professores[OWNER_LOGIN].mudouSenha = false;
+    db.professor = db.professores[OWNER_LOGIN];
+    db.professores['Any'].senha = hashSenha('123456');
+    db.professores['Any'].mudouSenha = false;
+    db.sessoes = {};
+    db.resetSenhas20260715 = true;
+  }
   // ===== Turmas: cada professor pode ter várias; alunos e peças vinculados =====
   if (!db.turmas) {
     db.turmas = {
