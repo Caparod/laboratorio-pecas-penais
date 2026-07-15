@@ -126,6 +126,10 @@ async function carregarDbSupabase() {
   if (!SUPABASE_ATIVO) return false;
   const url = `${SUPABASE_URL}/rest/v1/${SUPABASE_STATE_TABLE}?select=data&id=eq.${encodeURIComponent(SUPABASE_STATE_ID)}&limit=1`;
   const resp = await fetch(url, { headers: { apikey: SUPABASE_KEY, authorization: `Bearer ${SUPABASE_KEY}` } });
+  if (resp.status === 404) {
+    console.error(`[SUPABASE] Tabela ${SUPABASE_STATE_TABLE} nao encontrada pela API; iniciando com base local.`);
+    return false;
+  }
   if (!resp.ok) throw new Error(`Supabase retornou HTTP ${resp.status} ao carregar estado`);
   const linhas = await resp.json();
   if (!Array.isArray(linhas) || !linhas[0] || !linhas[0].data) return false;
@@ -165,8 +169,12 @@ function agendarSalvarSupabase() {
 async function carregarDb() {
   db = carregarDbLocal();
   if (SUPABASE_ATIVO) {
-    const remoto = await carregarDbSupabase();
-    console.log(remoto ? '[SUPABASE] Banco carregado do Supabase.' : '[SUPABASE] Sem estado remoto; usando base local/padrao.');
+    try {
+      const remoto = await carregarDbSupabase();
+      console.log(remoto ? '[SUPABASE] Banco carregado do Supabase.' : '[SUPABASE] Sem estado remoto; usando base local/padrao.');
+    } catch (e) {
+      console.error('[SUPABASE] Falha ao carregar; usando base local/padrao:', e.message);
+    }
   }
   migrarDb();
   salvarDb();
