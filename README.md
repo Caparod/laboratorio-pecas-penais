@@ -50,10 +50,16 @@ Como a escrita é feita pelo servidor com `SUPABASE_SERVICE_ROLE_KEY`, não expo
 ## Proteções incluídas
 
 - Acesso de professores limitado às próprias turmas, exceto administração/coordenação.
+- Um aluno pode participar de várias turmas e recebe as peças de todas elas; remover/zerar uma turma preserva sua conta quando houver outro vínculo.
 - Professor(a) pode zerar somente as turmas em que leciona; coordenação pode zerar qualquer turma e apenas a administração pode zerar o sistema inteiro.
-- Ao zerar uma turma, alunos, peças, entregas, notas e sessões dos alunos são apagados, mas o cadastro da turma e seus professores são preservados.
-- Aluno(a) só visualiza e entrega peças da própria turma.
-- Sessões expiram após o prazo configurado.
+- Ao zerar uma turma, vínculos, peças, entregas e notas dela são apagados; contas sem outra turma também são removidas, mas o cadastro da turma e seus professores são preservados.
+- Aluno(a) só visualiza e entrega peças das turmas das quais participa.
+- A senha inicial precisa ser trocada antes de acessar as demais APIs; troca/reset de senha invalida sessões antigas.
+- Logout encerra a sessão também no servidor, e sessões expiram após o prazo configurado.
+- Login possui limitação de tentativas e mensagens que não revelam se uma conta existe.
+- Exclusões removem entregas, liberações e sessões relacionadas, evitando dados órfãos.
+- Respostas incluem cabeçalhos de proteção do navegador e não armazenam dados de API em cache.
+- A leitura de PDF mantém a execução dinâmica do PDF.js desativada (`isEvalSupported: false`) e o envio de e-mail usa Nodemailer 7.0.7 ou superior.
 - CSV de notas tratado para reduzir risco de fórmula maliciosa no Excel.
 - Prazos calculados em horário de Brasília.
 
