@@ -5,5 +5,5 @@
   "main": "server.js",
   "scripts": { "start": "node server.js", "test": "node test/zerar-permissoes.test.js && node test/seguranca-permissoes.test.js" },
   "engines": { "node": "20.x" },
-  "dependencies": { "pdfjs-dist": "3.11.174", "nodemailer": "7.0.7" }
+  "dependencies": { "pdfjs-dist": "4.10.38", "nodemailer": "7.0.7" }
 }

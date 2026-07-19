@@ -59,7 +59,7 @@ Como a escrita é feita pelo servidor com `SUPABASE_SERVICE_ROLE_KEY`, não expo
 - Login possui limitação de tentativas e mensagens que não revelam se uma conta existe.
 - Exclusões removem entregas, liberações e sessões relacionadas, evitando dados órfãos.
 - Respostas incluem cabeçalhos de proteção do navegador e não armazenam dados de API em cache.
-- A leitura de PDF mantém a execução dinâmica do PDF.js desativada (`isEvalSupported: false`) e o envio de e-mail usa Nodemailer 7.0.7 ou superior.
+- A leitura de PDF usa PDF.js 4.10.38 com execução dinâmica desativada (`isEvalSupported: false`), e o envio de e-mail usa Nodemailer 7.0.7 ou superior.
 - CSV de notas tratado para reduzir risco de fórmula maliciosa no Excel.
 - Prazos calculados em horário de Brasília.
 
