@@ -50,6 +50,8 @@ Como a escrita é feita pelo servidor com `SUPABASE_SERVICE_ROLE_KEY`, não expo
 ## Proteções incluídas
 
 - Acesso de professores limitado às próprias turmas, exceto administração/coordenação.
+- Professor(a) pode zerar somente as turmas em que leciona; coordenação pode zerar qualquer turma e apenas a administração pode zerar o sistema inteiro.
+- Ao zerar uma turma, alunos, peças, entregas, notas e sessões dos alunos são apagados, mas o cadastro da turma e seus professores são preservados.
 - Aluno(a) só visualiza e entrega peças da própria turma.
 - Sessões expiram após o prazo configurado.
 - CSV de notas tratado para reduzir risco de fórmula maliciosa no Excel.
