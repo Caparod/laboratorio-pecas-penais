@@ -1184,6 +1184,14 @@ async function pecaSalvar(req, res) {
   const disc = turmaId ? db.turmas[turmaId].nome : ((d.disc === 'Estágio II') ? 'Estágio II' : 'Estágio I');
   const nomePeca = String(d.nomePeca || 'Peça').trim();
   const prazo = String(d.prazo || '').trim();
+  const classificacaoInformada = ['tpuClasse', 'tpuAssunto', 'tpuDocumento', 'faseProcessual', 'orgaoReferencia'].some(k => Object.prototype.hasOwnProperty.call(d, k));
+  const classificacao = {
+    classe: String(d.tpuClasse || '').trim().slice(0, 200),
+    assunto: String(d.tpuAssunto || '').trim().slice(0, 200),
+    documento: String(d.tpuDocumento || '').trim().slice(0, 200),
+    fase: String(d.faseProcessual || '').trim().slice(0, 200),
+    orgao: String(d.orgaoReferencia || '').trim().slice(0, 200)
+  };
   if (!caso) return json(res, 400, { erro: 'A peça precisa de enunciado.' });
   let id = d.id && db.pecas[d.id] ? d.id : null;
   if (!id && !podeGerirProfessores(sess.usuario) && !turmaId) return json(res, 400, { erro: 'Informe a turma da peça.' });
@@ -1192,11 +1200,12 @@ async function pecaSalvar(req, res) {
     const p = db.pecas[id];
     if (!podeEditarPeca(sess.usuario, p)) return json(res, 403, { erro: 'Sem acesso a esta peça.' });
     p.nomePeca = nomePeca; p.disc = disc; p.caso = caso; p.gab = gab; p.prazo = prazo; p.publicada = d.publicar !== false;
+    if (classificacaoInformada) p.classificacao = classificacao;
     if (turmaId) p.turmaId = turmaId;
     if (typeof d.foraDoPrazoGeral === 'boolean') p.foraDoPrazoGeral = d.foraDoPrazoGeral;
   } else {
     const num = db.proximoNum++; id = 'p' + num;
-    db.pecas[id] = { id, num, nomePeca, disc, turmaId, caso, gab, prazo, criadoEm: Date.now(), publicada: d.publicar !== false, autor: sess.usuario };
+    db.pecas[id] = { id, num, nomePeca, disc, turmaId, caso, gab, prazo, classificacao, criadoEm: Date.now(), publicada: d.publicar !== false, autor: sess.usuario };
     db.entregas[id] = db.entregas[id] || {};
   }
   salvarDb();
@@ -1261,7 +1270,7 @@ async function pecasAluno(req, res) {
       const liberadoIndividualSemEntrega = !!(p.liberados && p.liberados[ctx.id]) && !e;
       gabLiberado = !Number.isNaN(limite) && Date.now() > limite && !liberadoIndividualSemEntrega;
     }
-    return { id: p.id, num: p.num, nomePeca: p.nomePeca, disc: p.disc, prazo: p.prazo, caso: p.caso, enviado: !!e, enviadoEm: e ? e.enviadoEm : null, validado: e ? !!e.validado : false, nota: (e && e.validado) ? e.nota : null, temRelatorio: e ? !!(e.validado && e.relatorio) : false, noPrazo: noPrazo, gabLiberado: gabLiberado, gab: gabLiberado ? (p.gab || '') : undefined };
+    return { id: p.id, num: p.num, nomePeca: p.nomePeca, disc: p.disc, prazo: p.prazo, caso: p.caso, classificacao: p.classificacao || {}, enviado: !!e, enviadoEm: e ? e.enviadoEm : null, validado: e ? !!e.validado : false, nota: (e && e.validado) ? e.nota : null, temRelatorio: e ? !!(e.validado && e.relatorio) : false, noPrazo: noPrazo, gabLiberado: gabLiberado, gab: gabLiberado ? (p.gab || '') : undefined };
   });
   json(res, 200, { ok: true, pecas: lista });
 }
@@ -1382,6 +1391,95 @@ async function pecaLiberarPrazo(req, res) {
   salvarDb(); json(res, 200, { ok: true, foraDoPrazoGeral: !!p.foraDoPrazoGeral, liberados: p.liberados || {} });
 }
 
+// Professor: indicadores pedagógicos por turma, calculados apenas com notas validadas.
+// Quando o relatório contém pontuação "obtida/possível", agrega também os critérios.
+function numeroRelatorio(v) { const n = parseFloat(String(v || '').replace(',', '.')); return Number.isFinite(n) ? n : null; }
+function arred1(v) { return Math.round(v * 10) / 10; }
+function extrairCriteriosRelatorio(texto) {
+  const definicoes = [
+    ['cabimento', 'Cabimento e endereçamento', /cabimento|endere[cç]amento/i],
+    ['tempestividade', 'Tempestividade e legitimidade', /tempestividade|legitimidade|capacidade postulat[oó]ria|prazo/i],
+    ['fatos', 'Síntese e fidelidade aos fatos', /s[ií]ntese|fidelidade aos fatos|fatos/i],
+    ['fundamentacao', 'Fundamentação e teses', /fundamenta[cç][aã]o|teses?|dispositivos?|do direito/i],
+    ['pedidos', 'Pedidos', /pedidos?/i],
+    ['tecnica', 'Técnica, linguagem e forma', /t[eé]cnica|linguagem|forma/i]
+  ];
+  const encontrados = {};
+  for (const linha of String(texto || '').split(/\r?\n/)) {
+    const pontos = linha.match(/([0-9]+(?:[.,][0-9]+)?)\s*(?:pontos?\s*)?(?:\/|de)\s*([0-9]+(?:[.,][0-9]+)?)/i);
+    if (!pontos) continue;
+    const obtido = numeroRelatorio(pontos[1]), possivel = numeroRelatorio(pontos[2]);
+    if (obtido == null || possivel == null || possivel <= 0 || obtido < 0 || obtido > possivel) continue;
+    for (const [id, nome, padrao] of definicoes) {
+      if (!encontrados[id] && padrao.test(linha)) { encontrados[id] = { id, nome, obtido, possivel }; break; }
+    }
+  }
+  return Object.values(encontrados);
+}
+async function painelPedagogico(req, res) {
+  const sess = sessaoDe(req);
+  if (!sess) return json(res, 401, { erro: 'SESSAO' });
+  if (sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
+  const q = new URLSearchParams((req.url.split('?')[1]) || '');
+  const turmaId = q.get('turma') || '';
+  const turma = db.turmas[turmaId];
+  if (!turma) return json(res, 400, { erro: 'Informe a turma.' });
+  if (!podeGerirProfessores(sess.usuario) && !(turma.professores || []).includes(sess.usuario)) return json(res, 403, { erro: 'Sem acesso a esta turma.' });
+
+  const mats = Object.keys(db.alunos).filter(m => db.alunos[m] && db.alunos[m].turmaId === turmaId);
+  const matSet = new Set(mats);
+  const pecas = Object.values(db.pecas).filter(p => p.publicada && p.turmaId === turmaId).sort((a, b) => a.num - b.num);
+  const criteriosMapa = {};
+  let totalEntregas = 0, totalCorrigidas = 0;
+
+  const pecasOut = pecas.map(p => {
+    const entregas = db.entregas[p.id] || {};
+    const lista = Object.entries(entregas).filter(([mat]) => matSet.has(mat));
+    const corrigidas = lista.filter(([, e]) => e && e.validado && Number.isFinite(Number(e.nota)));
+    const notas = corrigidas.map(([, e]) => Number(e.nota));
+    totalEntregas += lista.length; totalCorrigidas += corrigidas.length;
+    for (const [, e] of corrigidas) for (const c of extrairCriteriosRelatorio(e.relatorio)) {
+      const ac = criteriosMapa[c.id] = criteriosMapa[c.id] || { id: c.id, nome: c.nome, obtido: 0, possivel: 0, avaliacoes: 0 };
+      ac.obtido += c.obtido; ac.possivel += c.possivel; ac.avaliacoes++;
+    }
+    return {
+      id: p.id, num: p.num, nomePeca: p.nomePeca, alunos: mats.length,
+      entregas: lista.length, corrigidas: corrigidas.length, pendentes: lista.length - corrigidas.length,
+      taxaEntrega: mats.length ? arred1(lista.length * 100 / mats.length) : 0,
+      media: notas.length ? arred1(notas.reduce((a, b) => a + b, 0) / notas.length) : null,
+      menor: notas.length ? Math.min(...notas) : null, maior: notas.length ? Math.max(...notas) : null
+    };
+  });
+
+  const alunosOut = mats.map(mat => {
+    const aluno = db.alunos[mat] || {};
+    const notas = [], entregues = [];
+    for (const p of pecas) {
+      const e = (db.entregas[p.id] || {})[mat];
+      if (e) entregues.push(p.num);
+      if (e && e.validado && Number.isFinite(Number(e.nota))) notas.push({ num: p.num, nota: Number(e.nota) });
+    }
+    notas.sort((a, b) => a.num - b.num);
+    return {
+      matricula: mat, nome: aluno.nome || '', entregas: entregues.length, corrigidas: notas.length,
+      media: notas.length ? arred1(notas.reduce((s, n) => s + n.nota, 0) / notas.length) : null,
+      evolucao: notas.length >= 2 ? arred1(notas[notas.length - 1].nota - notas[0].nota) : null
+    };
+  }).sort((a, b) => (a.nome || a.matricula).localeCompare(b.nome || b.matricula, 'pt-BR'));
+
+  const todasNotas = alunosOut.filter(a => a.media != null).flatMap(a => {
+    const ns = [];
+    for (const p of pecas) { const e = (db.entregas[p.id] || {})[a.matricula]; if (e && e.validado && Number.isFinite(Number(e.nota))) ns.push(Number(e.nota)); }
+    return ns;
+  });
+  const criterios = Object.values(criteriosMapa).map(c => ({ id: c.id, nome: c.nome, avaliacoes: c.avaliacoes, aproveitamento: c.possivel ? arred1(c.obtido * 100 / c.possivel) : null })).sort((a, b) => a.aproveitamento - b.aproveitamento);
+  json(res, 200, {
+    ok: true, turma: { id: turma.id, nome: turma.nome, alunos: mats.length },
+    resumo: { pecas: pecas.length, entregas: totalEntregas, corrigidas: totalCorrigidas, pendentes: totalEntregas - totalCorrigidas, media: todasNotas.length ? arred1(todasNotas.reduce((a, b) => a + b, 0) / todasNotas.length) : null },
+    pecas: pecasOut, alunos: alunosOut, criterios
+  });
+}
+
 // Professor: planilha CSV de notas — POR TURMA; professor só acessa as turmas dele
 async function notasPlanilha(req, res) {
   const sess = sessaoDe(req); if (!sess) { res.writeHead(401); return res.end('SESSAO'); } if (sess.tipo !== 'professor') { res.writeHead(403); return res.end('restrito'); }
@@ -1453,6 +1551,7 @@ const server = http.createServer((req, res) => {
   if (req.method === 'POST' && req.url === '/api/entrega/validar') return entregaValidar(req, res);
   if (req.method === 'POST' && req.url === '/api/peca/renovar-prazo') return pecaRenovarPrazo(req, res);
   if (req.method === 'POST' && req.url === '/api/peca/liberar-prazo') return pecaLiberarPrazo(req, res);
+  if (req.method === 'GET' && req.url.startsWith('/api/painel?')) return painelPedagogico(req, res);
   if (req.method === 'GET' && req.url.startsWith('/api/notas.csv')) return notasPlanilha(req, res);
   if (req.method === 'POST' && req.url === '/api/zerar') return zerarSistema(req, res);
   if (req.method === 'POST' && req.url === '/api/gerar-caso') return gerarCaso(req, res);

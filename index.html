@@ -42,8 +42,9 @@ h2.titulo-peca{color:var(--azul);font-size:1.5rem;margin-bottom:2px}
 textarea.redacao{width:100%;min-height:340px;margin-top:14px;padding:16px;font-family:'Times New Roman',serif;font-size:1rem;border:1px solid #cfc9b8;border-radius:8px;resize:vertical;line-height:1.7}
 .botoes{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;font-family:Arial,sans-serif}
 .botoes button{padding:9px 18px;border-radius:6px;border:1px solid var(--azul);background:#fff;color:var(--azul);cursor:pointer;font-size:.85rem}
+.botoes .btn-link{display:inline-block;padding:9px 18px;border-radius:6px;border:1px solid var(--azul);background:#fff;color:var(--azul);cursor:pointer;font-size:.85rem;text-decoration:none}
 .botoes button.primario{background:var(--azul);color:#fff}
-.botoes button:hover{opacity:.88}
+.botoes button:hover,.botoes .btn-link:hover{opacity:.88}
 .check{margin-top:10px}
 .check label{display:flex;gap:10px;align-items:flex-start;padding:7px 4px;font-size:.93rem;cursor:pointer;border-bottom:1px dashed #eee}
 .check input{margin-top:4px;accent-color:var(--azul)}
@@ -99,6 +100,12 @@ textarea.redacao{width:100%;min-height:340px;margin-top:14px;padding:16px;font-f
 .md-tab tr:first-child td{background:#f2eee0;font-weight:bold}
 .md-tab tr:last-child td{background:#eef5ee;font-weight:bold}
 .painel textarea{width:100%;min-height:140px;padding:10px;border:1px solid #cfc9b8;border-radius:6px;font-family:monospace}
+.metricas{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:12px;margin:14px 0 18px}
+.metrica{background:#fff;border:1px solid #e3ded2;border-radius:9px;padding:14px 16px;font-family:Arial,sans-serif}
+.metrica b{display:block;color:var(--azul);font-size:1.45rem;line-height:1.2}.metrica span{color:var(--cinza);font-size:.78rem}
+.barra-ind{height:9px;background:#e8e4d8;border-radius:6px;overflow:hidden;min-width:110px}.barra-ind span{display:block;height:100%;background:var(--azul);border-radius:6px}
+.campo-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-top:10px;font-family:Arial,sans-serif}
+.campo-grid label{font-size:.8rem;color:var(--cinza)}.campo-grid input{display:block;width:100%;margin-top:4px;padding:8px;border:1px solid #cfc9b8;border-radius:6px;font-family:Arial,sans-serif}
 @media(max-width:820px){.layout{flex-direction:column}nav{width:100%;display:flex;flex-wrap:wrap}nav .grupo{width:100%}nav button.item{width:auto;border-left:none}main{padding:18px}}
 </style>
 </head>
@@ -149,6 +156,7 @@ async function apiGet(u){
   return r;
 }
 function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function escAttr(t){return esc(t).replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
 function md2html(t){
   t=esc(t);
   t=t.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');
@@ -172,6 +180,13 @@ function md2html(t){
 }
 function urlSTF(q){return 'https://jurisprudencia.stf.jus.br/pages/search?queryString='+encodeURIComponent(q)}
 function urlSTJ(q){return 'https://scon.stj.jus.br/SCON/pesquisar.jsp?b=ACOR&livre='+encodeURIComponent(q)}
+function botaoBNP(){return '<a class="btn-link" href="https://bnp.pdpj.jus.br/" target="_blank" rel="noopener">🔎 Pesquisar no Banco Nacional de Precedentes</a>'}
+function classificacaoHtml(c){
+  c=c||{};const itens=[['Classe processual',c.classe],['Assunto',c.assunto],['Documento processual',c.documento],['Fase processual',c.fase],['Órgão de referência',c.orgao]].filter(x=>x[1]);
+  if(!itens.length)return '';
+  return '<div class="card"><h3>Classificação processual</h3><div class="ficha">'+itens.map(x=>'<div class="f"><b>'+x[0]+'</b><span>'+esc(x[1])+'</span></div>').join('')+'</div></div>';
+}
+function classificacaoPayload(p){const c=(p&&p.classificacao)||{};return {tpuClasse:c.classe||'',tpuAssunto:c.assunto||'',tpuDocumento:c.documento||'',faseProcessual:c.fase||'',orgaoReferencia:c.orgao||''}}
 function linkCitacoesHtml(html){
   return html.split(/(<a\b[^>]*>[\s\S]*?<\/a>)/g).map(function(seg){
     if(/^<a\b/.test(seg))return seg;
@@ -327,7 +342,7 @@ function telaProfessor(){
    +botaoMenu('pecas','📚 Banco de peças')
    +botaoMenu('nova','➕ Nova peça')
    +botaoMenu('alunos','👥 Alunos')
-   +botaoMenu('notas','📊 Notas / planilha')
+   +botaoMenu('notas','📊 Painel / notas')
    +(podeGerirAgora()?botaoMenu('professores','🧑‍🏫 Professores'):'')
    +(podeGerirAgora()?botaoMenu('gastos','💰 Gastos'):'')
    +botaoMenu('config','⚙️ Sistema');
@@ -340,7 +355,7 @@ function telaProfessor(){
   else if(ABA_PROF==='config')profConfig();
 }
 function botaoMenu(id,txt){return '<button class="item'+(ABA_PROF===id?' ativo':'')+'" onclick="irAba(\''+id+'\')">'+txt+'</button>'}
-function irAba(id){if(id==='nova')RASCUNHO={nomePeca:'',disc:'',caso:'',gab:''};ABA_PROF=id;telaProfessor();}
+function irAba(id){if(id==='nova')RASCUNHO={nomePeca:'',disc:'',caso:'',gab:'',classificacao:{}};ABA_PROF=id;telaProfessor();}
 
 // ---- Lista de peças + entregas ----
 async function profPecas(){
@@ -377,6 +392,7 @@ async function abrirPeca(id){
    +(souAutor?'<button style="border-color:var(--vermelho);color:var(--vermelho)" onclick="excluirPeca(\''+id+'\')">🗑 Excluir peça</button>':'')+'</div>'
    +'<span class="badge">Peça '+p.num+' · '+esc(p.disc)+'</span><h2 class="titulo-peca">'+esc(p.nomePeca)+'</h2>'
    +'<p style="color:var(--cinza);font-family:Arial,sans-serif;font-size:.85rem">Autor: '+esc((p.autor===AUTH.usuario)?'você':(p.autor||'—'))+' · Prazo: '+(p.prazo?dataHoraBR(p.prazo):'sem prazo')+' · '+(p.publicada?'publicada':'rascunho')+'</p>'
+   +classificacaoHtml(p.classificacao)
    +(p.publicada
      ?('<div class="card"><h3>Prazo de entrega</h3>'
       +'<div style="font-family:Arial,sans-serif;font-size:.9rem">Novo prazo (dia e hora): <input type="datetime-local" id="pz_novo" value="'+esc(p.prazo||'')+'" style="padding:7px;border:1px solid #cfc9b8;border-radius:6px"> <button onclick="renovarPrazo(\''+id+'\')">🔄 Renovar prazo</button></div>'
@@ -389,7 +405,7 @@ async function abrirPeca(id){
       +'<p style="font-size:.85rem;color:var(--cinza);font-family:Arial,sans-serif">Esta peça ainda é um rascunho — os alunos não a veem. Escolha a turma e o prazo de entrega para publicá-la.</p>'
       +'<div style="font-family:Arial,sans-serif;font-size:.9rem;display:flex;gap:8px;flex-wrap:wrap;align-items:center">Turma: <select id="vt_turma" style="padding:7px;border:1px solid #cfc9b8;border-radius:6px"></select> Prazo (dia e hora): <input type="datetime-local" id="vt_prazo" style="padding:7px;border:1px solid #cfc9b8;border-radius:6px"> <button class="primario" onclick="publicarRascunho(\''+id+'\')">🚀 Publicar para a turma</button></div><div id="vt_fb"></div></div>'))
    +'<div class="card"><h3>Enunciado</h3><div class="caso">'+esc(p.caso)+'</div></div>'
-   +'<div class="card"><h3>Gabarito</h3><div class="bloco" style="background:#eef5ee;border:1px solid #cfe3cf;border-radius:8px;padding:14px">'+linkCitacoesHtml(md2html(p.gab||'(sem gabarito)'))+'</div></div>'
+   +'<div class="card"><h3>Gabarito</h3><div class="botoes" style="margin-bottom:12px">'+botaoBNP()+'</div><div class="bloco" style="background:#eef5ee;border:1px solid #cfe3cf;border-radius:8px;padding:14px">'+linkCitacoesHtml(md2html(p.gab||'(sem gabarito)'))+'</div></div>'
    +(p.publicada
      ?('<div class="card painel"><h3>Entregas dos alunos</h3>'+ent+'</div>'
       +'<div class="card"><h3>Liberar entrega fora do prazo para um aluno</h3>'
@@ -410,7 +426,7 @@ async function publicarRascunho(id){
   const tNome=((window.__turmas||[]).find(t=>t.id===turmaId)||{}).nome||'a turma';
   if(!confirm('Publicar "'+p.nomePeca+'" para '+tNome+' com prazo '+dataHoraBR(prazo)+'? Os alunos da turma serão avisados por e-mail.'))return;
   fb.innerHTML='<p style="font-family:Arial,sans-serif;font-size:.85rem"><span class="spinner"></span>Publicando...</p>';
-  try{const r=await apiPost('/api/peca/salvar',{id,nomePeca:p.nomePeca,turmaId,caso:p.caso,gab:p.gab,prazo,publicar:true});
+  try{const r=await apiPost('/api/peca/salvar',Object.assign({id,nomePeca:p.nomePeca,turmaId,caso:p.caso,gab:p.gab,prazo,publicar:true},classificacaoPayload(p)));
     const d=await r.json();
     if(!r.ok){fb.innerHTML='<p class="erro-ia">'+(d.erro||'Erro')+'</p>';return}
     abrirPeca(id);
@@ -426,7 +442,7 @@ async function vincularTurma(){
   const tNome=((window.__turmas||[]).find(t=>t.id===turmaId)||{}).nome||'a turma';
   if(!confirm('Publicar uma cópia de "'+p.nomePeca+'" para '+tNome+' com prazo '+dataHoraBR(prazo)+'? Os alunos da turma serão avisados por e-mail.'))return;
   fb.innerHTML='<p style="font-family:Arial,sans-serif;font-size:.85rem"><span class="spinner"></span>Publicando...</p>';
-  try{const r=await apiPost('/api/peca/salvar',{nomePeca:p.nomePeca,turmaId,caso:p.caso,gab:p.gab,prazo,publicar:true});
+  try{const r=await apiPost('/api/peca/salvar',Object.assign({nomePeca:p.nomePeca,turmaId,caso:p.caso,gab:p.gab,prazo,publicar:true},classificacaoPayload(p)));
     const d=await r.json();
     if(!r.ok){fb.innerHTML='<p class="erro-ia">'+(d.erro||'Erro')+'</p>';return}
     fb.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif">🚀 Publicada como Peça '+d.num+' para '+esc(tNome)+' — prazo '+dataHoraBR(prazo)+'.</p>';
@@ -448,7 +464,7 @@ async function abrirEntrega(id,mat){
    +'<span class="badge">Peça '+d.peca.num+'</span><h2 class="titulo-peca">'+esc(d.aluno.nome)+' · '+d.aluno.matricula+'</h2>'
    +'<div class="card"><h3>Peça enviada pelo aluno</h3><div class="caso" style="max-height:340px;overflow:auto">'+esc(d.texto)+'</div></div>'
    +'<div class="card"><h3>Relatório de correção</h3>'
-   +'<div class="botoes"><button class="primario" onclick="corrigirEntregaIA()">🤖 Corrigir com IA</button></div>'
+   +'<div class="botoes"><button class="primario" onclick="corrigirEntregaIA()">🤖 Corrigir com IA</button>'+botaoBNP()+'</div>'
    +'<div id="corrfb"></div>'
    +'<textarea id="relatorio" class="redacao" style="min-height:280px" placeholder="Relatório de correção (você pode escrever/editar livremente)...">'+esc(d.relatorio)+'</textarea>'
    +'<div style="font-family:Arial,sans-serif;margin-top:10px">Nota (0 a 10): <input id="nota" style="width:90px;padding:8px;border:1px solid #cfc9b8;border-radius:6px" value="'+(d.nota!==''?String(d.nota).replace('.',','):'')+'"></div>'
@@ -483,6 +499,7 @@ async function salvarEntrega(validar){
 let RASCUNHO={nomePeca:'',disc:'',caso:'',gab:''};
 function profNova(){
   const opts=PECAS_ESTAGIO_I.concat(PECAS_ESTAGIO_II).map(x=>'<option>'+x+'</option>').join('');
+  const rc=RASCUNHO.classificacao||{};
   conteudo.innerHTML='<h2 class="titulo-peca">Nova peça</h2>'
    +'<div class="card"><h3>1) Crie o enunciado</h3>'
    +'<p style="font-size:.88rem;color:var(--cinza)">Gere por IA, suba um PDF ou escreva/cole você mesmo.</p>'
@@ -494,7 +511,14 @@ function profNova(){
    +'<div class="card"><h3>2) Enunciado da peça</h3><textarea id="np_caso" class="redacao" style="min-height:200px" oninput="atualizarBotaoGabarito()" placeholder="Enunciado do caso (gerado pela IA, extraído do PDF ou digitado por você)...">'+esc(RASCUNHO.caso)+'</textarea>'
    +'<div class="botoes" id="np_gabbtn" style="display:none"><button onclick="gerarGabarito()">⚖️ Gerar gabarito para este enunciado</button></div><div id="np_gabfb"></div></div>'
    +'<div class="card"><h3>3) Gabarito (confira e edite)</h3><textarea id="np_gab" class="redacao" style="min-height:220px" oninput="atualizarBotaoGabarito()" placeholder="Gabarito...">'+esc(RASCUNHO.gab)+'</textarea></div>'
-   +'<div class="card"><h3>4) Publicar</h3>'
+   +'<div class="card"><h3>4) Classificação processual (opcional)</h3>'
+   +'<p style="font-size:.85rem;color:var(--cinza);font-family:Arial,sans-serif">Registre o código e o nome conforme as Tabelas Processuais Unificadas do CNJ. <a href="https://www.cnj.jus.br/sgt/consulta_publica_classes.php" target="_blank" rel="noopener" style="color:var(--azul)">Consultar tabelas do CNJ</a>.</p>'
+   +'<div class="campo-grid"><label>Classe processual<input id="np_tpu_classe" maxlength="200" placeholder="Código e nome da classe" value="'+escAttr(rc.classe||'')+'"></label>'
+   +'<label>Assunto<input id="np_tpu_assunto" maxlength="200" placeholder="Código e nome do assunto" value="'+escAttr(rc.assunto||'')+'"></label>'
+   +'<label>Documento processual<input id="np_tpu_documento" maxlength="200" placeholder="Ex.: petição, recurso..." value="'+escAttr(rc.documento||'')+'"></label>'
+   +'<label>Fase processual<input id="np_fase" maxlength="200" placeholder="Ex.: conhecimento, recurso..." value="'+escAttr(rc.fase||'')+'"></label>'
+   +'<label>Órgão de referência<input id="np_orgao" maxlength="200" placeholder="Ex.: Vara Criminal do TJDFT" value="'+escAttr(rc.orgao||'')+'"></label></div></div>'
+   +'<div class="card"><h3>5) Publicar</h3>'
    +'<div style="font-family:Arial,sans-serif">Prazo de entrega (dia e hora): <input type="datetime-local" id="np_prazo" style="padding:8px;border:1px solid #cfc9b8;border-radius:6px"></div>'
    +'<div class="botoes" style="margin-top:12px"><button onclick="salvarPeca(false)">💾 Salvar rascunho</button>'
    +'<button class="primario" onclick="salvarPeca(true)">🚀 Publicar para a turma</button></div><div id="np_salvarfb"></div></div>';
@@ -555,16 +579,17 @@ async function salvarPeca(publicar){
   if(caso.length<40){fb.innerHTML='<p class="erro-ia">A peça precisa de um enunciado.</p>';return}
   if(publicar&&!gab){if(!confirm('Publicar SEM gabarito? Você não conseguirá corrigir com IA depois sem um gabarito.'))return;}
   const turmaId=(document.getElementById('np_turma')||{}).value||null;
-  try{const r=await apiPost('/api/peca/salvar',{id:RASCUNHO.id,nomePeca:nome,disc:turmaSelecionadaNome(),turmaId,caso,gab,prazo,publicar});
+  const classificacao={classe:(document.getElementById('np_tpu_classe')||{}).value||'',assunto:(document.getElementById('np_tpu_assunto')||{}).value||'',documento:(document.getElementById('np_tpu_documento')||{}).value||'',fase:(document.getElementById('np_fase')||{}).value||'',orgao:(document.getElementById('np_orgao')||{}).value||''};
+  try{const r=await apiPost('/api/peca/salvar',Object.assign({id:RASCUNHO.id,nomePeca:nome,disc:turmaSelecionadaNome(),turmaId,caso,gab,prazo,publicar},classificacaoPayload({classificacao})));
   const d=await r.json();if(!r.ok){fb.innerHTML='<p class="erro-ia">'+(d.erro||'Erro')+'</p>';return}
-  RASCUNHO={nomePeca:'',disc:'',caso:'',gab:''};
+  RASCUNHO={nomePeca:'',disc:'',caso:'',gab:'',classificacao:{}};
   fb.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif">'+(publicar?'🚀 Peça '+d.num+' publicada para a turma!':'💾 Rascunho salvo (Peça '+d.num+').')+'</p>';
   setTimeout(()=>irAba('pecas'),900);
   }catch(e){}
 }
 async function editarPeca(id){
   const r=await apiGet('/api/peca/get?id='+id);const d=await r.json();const p=d.peca;
-  RASCUNHO={id:p.id,nomePeca:p.nomePeca,disc:p.disc,turmaId:p.turmaId,caso:p.caso,gab:p.gab};
+  RASCUNHO={id:p.id,nomePeca:p.nomePeca,disc:p.disc,turmaId:p.turmaId,caso:p.caso,gab:p.gab,classificacao:p.classificacao||{}};
   ABA_PROF='nova';telaProfessor();
   setTimeout(()=>{document.getElementById('np_caso').value=p.caso;document.getElementById('np_gab').value=p.gab;if(p.prazo)document.getElementById('np_prazo').value=p.prazo;const s=document.getElementById('np_nome');if(s)s.value=p.nomePeca;},50);
 }
@@ -643,14 +668,45 @@ async function profGastos(mes){
   }catch(e){document.getElementById('gx').innerHTML='<p class="erro-ia">Falha ao carregar.</p>';}
 }
 
-// ---- Notas / planilha ----
-function profNotas(){
-  conteudo.innerHTML='<h2 class="titulo-peca">Notas</h2>'
-   +'<div class="card"><p>Baixe a planilha de notas <b>por turma</b> (formato CSV, abre no Excel). Cada professor só tem acesso às turmas dele; administração e coordenação, a todas.</p>'
-   +'<div class="botoes" style="align-items:center"><span style="font-family:Arial,sans-serif;font-size:.9rem">Turma: <select id="nt_turma" style="padding:7px;border:1px solid #cfc9b8;border-radius:6px"><option value="">Carregando...</option></select></span>'
-   +'<button class="primario" onclick="baixarPlanilha()">📊 Baixar planilha de notas (.csv)</button></div>'
-   +'<p class="aviso">Colunas: Aluno · Matrícula · e uma coluna por peça da turma, com a nota validada.</p><div id="nt_fb"></div></div>';
-  carregarTurmasSelect('nt_turma');
+// ---- Painel pedagógico / notas ----
+async function profNotas(){
+  conteudo.innerHTML='<h2 class="titulo-peca">Painel pedagógico</h2>'
+   +'<p style="color:var(--cinza);font-family:Arial,sans-serif;font-size:.88rem;margin-bottom:12px">Acompanhe entregas, correções e evolução da turma. Médias usam somente notas validadas pelo professor.</p>'
+   +'<div class="card"><div class="botoes" style="align-items:center"><span style="font-family:Arial,sans-serif;font-size:.9rem">Turma: <select id="nt_turma" onchange="carregarPainel(this.value)" style="padding:7px;border:1px solid #cfc9b8;border-radius:6px"><option value="">Carregando...</option></select></span>'
+   +'<button onclick="carregarPainel((document.getElementById(\'nt_turma\')||{}).value)">🔄 Atualizar painel</button>'
+   +'<button class="primario" onclick="baixarPlanilha()">📊 Baixar notas (.csv)</button></div>'
+   +'<p class="aviso">A análise por critério aparece quando o relatório de correção contém pontuação obtida/possível item a item.</p><div id="nt_fb"></div></div>'
+   +'<div id="painel_ped"><p><span class="spinner"></span>Carregando...</p></div>';
+  await carregarTurmasSelect('nt_turma');
+  const s=document.getElementById('nt_turma');if(s&&s.value)carregarPainel(s.value);else document.getElementById('painel_ped').innerHTML='<div class="card"><p>Crie ou selecione uma turma para visualizar o painel.</p></div>';
+}
+function notaBR(v){return v==null?'—':String(v).replace('.',',')}
+function corAproveitamento(v){return v<60?'var(--vermelho)':(v<75?'#b7791f':'var(--verde)')}
+async function carregarPainel(tid){
+  const el=document.getElementById('painel_ped');if(!el)return;
+  if(!tid){el.innerHTML='<div class="card"><p>Escolha uma turma.</p></div>';return}
+  el.innerHTML='<p><span class="spinner"></span>Calculando indicadores...</p>';
+  try{const r=await apiGet('/api/painel?turma='+encodeURIComponent(tid));const d=await r.json();
+    if(!r.ok){el.innerHTML='<p class="erro-ia">'+(d.erro||'Erro')+'</p>';return}
+    const z=d.resumo;
+    let html='<div class="metricas">'
+      +'<div class="metrica"><b>'+d.turma.alunos+'</b><span>alunos na turma</span></div>'
+      +'<div class="metrica"><b>'+z.pecas+'</b><span>peças publicadas</span></div>'
+      +'<div class="metrica"><b>'+z.entregas+'</b><span>entregas recebidas</span></div>'
+      +'<div class="metrica"><b>'+z.pendentes+'</b><span>aguardando validação</span></div>'
+      +'<div class="metrica"><b>'+notaBR(z.media)+'</b><span>média geral / 10</span></div></div>';
+    let pt='<table><tr><th>Peça</th><th>Entrega</th><th>Corrigidas</th><th>Pendentes</th><th>Média</th><th>Faixa</th></tr>';
+    for(const p of d.pecas)pt+='<tr><td><b>'+p.num+'. '+esc(p.nomePeca)+'</b></td><td><div class="barra-ind"><span style="width:'+Math.min(100,p.taxaEntrega)+'%"></span></div><small>'+p.entregas+'/'+p.alunos+' ('+notaBR(p.taxaEntrega)+'%)</small></td><td>'+p.corrigidas+'</td><td>'+p.pendentes+'</td><td><b>'+notaBR(p.media)+'</b></td><td>'+notaBR(p.menor)+' a '+notaBR(p.maior)+'</td></tr>';
+    pt+='</table>';
+    html+='<div class="card painel"><h3>Desempenho por peça</h3>'+(d.pecas.length?pt:'<p>Nenhuma peça publicada para esta turma.</p>')+'</div>';
+    if(d.criterios.length){let ct='<table><tr><th>Critério</th><th>Aproveitamento</th><th>Correções analisadas</th></tr>';
+      for(const c of d.criterios)ct+='<tr><td>'+esc(c.nome)+'</td><td><div class="barra-ind"><span style="width:'+Math.min(100,c.aproveitamento)+'%;background:'+corAproveitamento(c.aproveitamento)+'"></span></div><b>'+notaBR(c.aproveitamento)+'%</b></td><td>'+c.avaliacoes+'</td></tr>';
+      ct+='</table>';html+='<div class="card painel"><h3>Aproveitamento por critério</h3><p style="font-size:.84rem;color:var(--cinza);font-family:Arial,sans-serif">Ordenado do critério que mais precisa de atenção para o mais forte.</p>'+ct+'</div>';}
+    let at='<table><tr><th>Aluno</th><th>Entregas</th><th>Corrigidas</th><th>Média</th><th>Evolução</th></tr>';
+    for(const a of d.alunos){const ev=a.evolucao==null?'—':((a.evolucao>0?'+':'')+notaBR(a.evolucao));at+='<tr><td><b>'+esc(a.nome||'—')+'</b><br><small>'+esc(a.matricula)+'</small></td><td>'+a.entregas+'/'+z.pecas+'</td><td>'+a.corrigidas+'</td><td>'+notaBR(a.media)+'</td><td style="color:'+(a.evolucao>0?'var(--verde)':(a.evolucao<0?'var(--vermelho)':'var(--cinza)'))+'">'+ev+'</td></tr>';}
+    at+='</table>';html+='<div class="card painel"><h3>Acompanhamento dos alunos</h3><p style="font-size:.84rem;color:var(--cinza);font-family:Arial,sans-serif">Evolução = diferença entre a primeira e a última nota validada.</p>'+(d.alunos.length?at:'<p>Nenhum aluno cadastrado.</p>')+'</div>';
+    el.innerHTML=html;
+  }catch(e){el.innerHTML='<p class="erro-ia">Falha ao carregar o painel.</p>'}
 }
 async function baixarPlanilha(){
   const tid=(document.getElementById('nt_turma')||{}).value;
@@ -832,8 +888,9 @@ function abrirPecaAluno(id){
   conteudo.innerHTML='<div class="botoes" style="margin-bottom:10px"><button onclick="telaAluno()">← Voltar</button></div>'
    +'<span class="badge">Peça '+p.num+' · '+esc(p.disc)+'</span><h2 class="titulo-peca">'+esc(p.nomePeca)+'</h2>'
    +'<p style="font-family:Arial,sans-serif;font-size:.85rem;color:'+(fechado?'var(--vermelho)':'var(--cinza)')+'">Prazo: '+(p.prazo?dataHoraBR(p.prazo):'sem prazo')+(fechado?' — PRAZO ENCERRADO':'')+'</p>'
+   +classificacaoHtml(p.classificacao)
    +'<div class="card"><h3>Enunciado</h3><div class="caso">'+esc(p.caso)+'</div></div>'
-   +((p.gabLiberado&&p.gab)?'<div class="card"><h3>📖 Gabarito oficial</h3><p style="font-size:.82rem;color:var(--cinza);font-family:Arial,sans-serif">Liberado após o encerramento do prazo. Compare com a sua peça e confira as fontes pelos links.</p><div class="bloco" style="background:#eef5ee;border:1px solid #cfe3cf;border-radius:8px;padding:14px">'+linkCitacoesHtml(md2html(p.gab))+'</div></div>':'')
+   +((p.gabLiberado&&p.gab)?'<div class="card"><h3>📖 Gabarito oficial</h3><p style="font-size:.82rem;color:var(--cinza);font-family:Arial,sans-serif">Liberado após o encerramento do prazo. Compare com a sua peça e confira as fontes pelos links.</p><div class="botoes" style="margin-bottom:12px">'+botaoBNP()+'</div><div class="bloco" style="background:#eef5ee;border:1px solid #cfe3cf;border-radius:8px;padding:14px">'+linkCitacoesHtml(md2html(p.gab))+'</div></div>':'')
    +(fechado?'<div class="card"><p class="erro-ia">O prazo desta peça já encerrou. Não é possível enviar. Se precisar, fale com o(a) professor(a) para renovar o prazo ou liberar sua entrega.</p></div>'
      :('<div class="card"><h3>Sua peça</h3><p style="font-size:.85rem;color:var(--cinza)">Redija a peça completa. Se citar jurisprudência, inclua no FINAL um anexo com as fontes e seus links. O texto fica salvo neste navegador até você enviar.</p>'
    +'<div class="botoes" style="margin-bottom:8px"><label style="padding:9px 18px;border-radius:6px;background:var(--azul);color:#fff;cursor:pointer;font-size:.85rem;font-family:Arial,sans-serif">📷 Transcrever fotos do caderno<input type="file" accept="image/*" multiple style="display:none" onchange="transcreverFotos(this,\''+id+'\')"></label></div>'

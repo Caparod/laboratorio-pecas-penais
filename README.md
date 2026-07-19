@@ -55,6 +55,13 @@ Como a escrita é feita pelo servidor com `SUPABASE_SERVICE_ROLE_KEY`, não expo
 - CSV de notas tratado para reduzir risco de fórmula maliciosa no Excel.
 - Prazos calculados em horário de Brasília.
 
+## Recursos pedagógicos
+
+- Painel por turma com entregas, correções, médias, evolução dos alunos e aproveitamento por critério quando o relatório contém pontuação item a item.
+- Classificação opcional das peças por classe, assunto, documento, fase processual e órgão de referência, conforme as Tabelas Processuais Unificadas do CNJ.
+- Acesso direto ao Banco Nacional de Precedentes (BNP) nas telas de gabarito e correção.
+- Exportação das notas validadas por turma em CSV.
+
 ## Observação
 
 No plano Free do Render o serviço pode dormir após inatividade; a primeira visita após pausa pode demorar cerca de 1 minuto.
