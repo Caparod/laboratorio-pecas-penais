@@ -372,6 +372,13 @@ function csvCelula(v) {
 
 // ===== Envio de e-mail (Gmail SMTP via nodemailer) =====
 let _transport = null;
+let _pdfjsLib = null;
+async function carregarPdfJs() {
+  if (_pdfjsLib) return _pdfjsLib;
+  try { _pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs'); }
+  catch { _pdfjsLib = require('pdfjs-dist/legacy/build/pdf.js'); }
+  return _pdfjsLib;
+}
 function transporteEmail() {
   if (_transport) return _transport;
   if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) return null;
@@ -923,7 +930,7 @@ async function extrairPdf(req, res) {
   if (!sess) return json(res, 401, { erro: 'SESSAO' }); if (sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito ao professor.' });
   let d; try { d = await lerJson(req, 20000000); } catch { return json(res, 400, { erro: 'Arquivo grande demais (máx ~15 MB) ou inválido.' }); }
   if (!d.pdf) return json(res, 400, { erro: 'Envie o PDF.' });
-  let pdfjsLib; try { pdfjsLib = require('pdfjs-dist/legacy/build/pdf.js'); } catch { return json(res, 500, { erro: 'Leitor de PDF indisponível no servidor. Avise o desenvolvedor.' }); }
+  let pdfjsLib; try { pdfjsLib = await carregarPdfJs(); } catch { return json(res, 500, { erro: 'Leitor de PDF indisponível no servidor. Avise o desenvolvedor.' }); }
   try {
     const buf = Buffer.from(String(d.pdf).replace(/^data:[^,]*,/, ''), 'base64');
     const doc = await pdfjsLib.getDocument({ data: new Uint8Array(buf), isEvalSupported: false, useSystemFonts: true }).promise;
@@ -1249,7 +1256,7 @@ async function pecaExtrairPdf(req, res) {
   const sess = sessaoDe(req); if (!sess) return json(res, 401, { erro: 'SESSAO' }); if (sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
   let d; try { d = await lerJson(req, 20000000); } catch { return json(res, 400, { erro: 'Arquivo grande demais.' }); }
   if (!d.pdf) return json(res, 400, { erro: 'Envie o PDF.' });
-  let pdfjsLib; try { pdfjsLib = require('pdfjs-dist/legacy/build/pdf.js'); } catch { return json(res, 500, { erro: 'Leitor de PDF indisponível.' }); }
+  let pdfjsLib; try { pdfjsLib = await carregarPdfJs(); } catch { return json(res, 500, { erro: 'Leitor de PDF indisponível.' }); }
   try {
     const buf = Buffer.from(String(d.pdf).replace(/^data:[^,]*,/, ''), 'base64');
     const doc = await pdfjsLib.getDocument({ data: new Uint8Array(buf), isEvalSupported: false, useSystemFonts: true }).promise;
