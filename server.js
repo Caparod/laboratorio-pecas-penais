@@ -86,6 +86,13 @@ function migrarDb() {
     for (const p of Object.values(db.pecas || {})) if (!p.turmaId) p.turmaId = (p.disc === 'Estágio II') ? 't2' : 't1';
   }
   if (!db.proximaTurma) db.proximaTurma = 3;
+  // Um aluno pode cursar várias turmas. Mantemos turmaId como espelho do primeiro
+  // vínculo apenas para compatibilidade com bancos antigos.
+  for (const a of Object.values(db.alunos || {})) {
+    const ids = Array.isArray(a.turmaIds) ? a.turmaIds : (a.turmaId ? [a.turmaId] : []);
+    a.turmaIds = Array.from(new Set(ids.map(String).filter(id => db.turmas[id])));
+    a.turmaId = a.turmaIds[0] || null;
+  }
   // ===== Gastos: livro-razão PERMANENTE (nunca é apagado, nem no zerar) =====
   if (!db.gastos) db.gastos = {};
 }
@@ -110,7 +117,7 @@ function registrarGasto(sess, model, usage) {
       const a = db.alunos[sess.usuario];
       nome = ((a && a.nome) || '') || ('Matrícula ' + sess.usuario);
       tipo = 'Aluno(a)';
-      if (a && a.turmaId && db.turmas[a.turmaId]) turmaNome = db.turmas[a.turmaId].nome;
+      if (a) turmaNome = turmasDoAluno(a).map(id => db.turmas[id] && db.turmas[id].nome).filter(Boolean).join(', ');
     } else if (sess) {
       chave = 'prof:' + sess.usuario;
       const p = professorDe(sess.usuario);
@@ -202,7 +209,7 @@ function ehCoordenador(login) { const p = professorDe(login); return !!(p && /co
 function papelDe(login) { if (ehAdmin(login)) return 'Administrador(a)'; const p = professorDe(login); if (p && /coorden/i.test(p.papel || '')) return 'Coordenador(a)'; return 'Professor(a)'; }
 function podeGerirProfessores(login) { return ehAdmin(login) || ehCoordenador(login); }
 function salvarDb() {
-  try { fs.writeFileSync(DB_PATH, JSON.stringify(db)); } catch (e) { console.error('Falha ao salvar db:', e.message); }
+  try { fs.writeFileSync(DB_PATH, JSON.stringify(db), { mode: 0o600 }); } catch (e) { console.error('Falha ao salvar db:', e.message); }
   agendarSalvarSupabase();
 }
 function diagnosticarPersistenciaLocal() {
@@ -239,9 +246,26 @@ function novaSessao(usuario, tipo) {
   return t;
 }
 function encerrarSessao(t) { if (!t) return; sessoes.delete(t); if (db.sessoes) { delete db.sessoes[t]; salvarDb(); } }
-function sessaoDe(req) {
+function tokenDe(req) {
   const a = req.headers['authorization'] || '';
-  const t = a.replace('Bearer ', '').trim();
+  return String(a).replace(/^Bearer\s+/i, '').trim();
+}
+function invalidarSessoesUsuario(usuario, tipo, excetoToken) {
+  let total = 0;
+  db.sessoes = db.sessoes || {};
+  for (const [token, sessao] of Array.from(sessoes)) {
+    if (sessao.usuario !== usuario || (tipo && sessao.tipo !== tipo) || token === excetoToken) continue;
+    sessoes.delete(token); delete db.sessoes[token]; total++;
+  }
+  return total;
+}
+function senhaInicialPendente(sess) {
+  if (!sess) return false;
+  const conta = sess.tipo === 'professor' ? professorDe(sess.usuario) : db.alunos[sess.usuario];
+  return !!conta && !conta.mudouSenha;
+}
+function sessaoDe(req) {
+  const t = tokenDe(req);
   if (!t) return null;
   const s = sessoes.get(t);
   if (!s) return null;
@@ -264,19 +288,31 @@ function podeAcessarTurma(login, turmaId) {
   if (podeGerirProfessores(login)) return true;
   return !!turmaId && turmasDoProfessor(login).has(turmaId);
 }
+function turmasDoAluno(aluno) {
+  if (!aluno) return [];
+  const ids = Array.isArray(aluno.turmaIds) ? aluno.turmaIds : (aluno.turmaId ? [aluno.turmaId] : []);
+  return Array.from(new Set(ids.map(String).filter(id => db.turmas && db.turmas[id])));
+}
+function alunoNaTurma(aluno, turmaId) { return !!turmaId && turmasDoAluno(aluno).includes(turmaId); }
+function sincronizarTurmasAluno(aluno, ids) {
+  aluno.turmaIds = Array.from(new Set((ids || []).map(String).filter(id => db.turmas && db.turmas[id])));
+  aluno.turmaId = aluno.turmaIds[0] || null;
+}
+function adicionarTurmaAluno(aluno, turmaId) { sincronizarTurmasAluno(aluno, turmasDoAluno(aluno).concat(turmaId)); }
+function removerTurmaAluno(aluno, turmaId) { sincronizarTurmasAluno(aluno, turmasDoAluno(aluno).filter(id => id !== turmaId)); }
 function podeAcessarPeca(login, p) {
   if (!p) return false;
-  if (podeGerirProfessores(login) || p.autor === login) return true;
-  return podeAcessarTurma(login, p.turmaId);
+  if (podeGerirProfessores(login)) return true;
+  return p.turmaId ? podeAcessarTurma(login, p.turmaId) : p.autor === login;
 }
 function podeEditarPeca(login, p) {
   if (!p) return false;
-  if (podeGerirProfessores(login) || p.autor === login) return true;
-  return podeAcessarTurma(login, p.turmaId);
+  if (podeGerirProfessores(login)) return true;
+  return p.turmaId ? podeAcessarTurma(login, p.turmaId) : p.autor === login;
 }
 function alunoPodeAcessarPeca(aluno, p) {
   if (!aluno || !p || !p.publicada) return false;
-  return p.turmaId ? aluno.turmaId === p.turmaId : aluno.disc === p.disc;
+  return p.turmaId ? alunoNaTurma(aluno, p.turmaId) : aluno.disc === p.disc;
 }
 function idProfessorComoAluno(login) { return 'prof:' + login; }
 function alunoDaSessao(sess) {
@@ -292,7 +328,7 @@ function alunoDaSessao(sess) {
     return {
       id: idProfessorComoAluno(sess.usuario),
       virtual: true,
-      aluno: { nome: (prof.nome || sess.usuario) + ' (modo aluno)', email: prof.emailAviso || '', emailVerificado: true, turmaId, usos: {}, professorOrigem: sess.usuario }
+      aluno: { nome: (prof.nome || sess.usuario) + ' (modo aluno)', email: prof.emailAviso || '', emailVerificado: true, turmaId, turmaIds: [turmaId], usos: {}, professorOrigem: sess.usuario }
     };
   }
   return null;
@@ -309,7 +345,7 @@ function nomeParticipanteEntrega(mat, e) {
 }
 function entregaPertenceTurma(mat, e, p) {
   if (!p || !p.turmaId) return true;
-  if (db.alunos[mat]) return db.alunos[mat].turmaId === p.turmaId;
+  if (db.alunos[mat]) return alunoNaTurma(db.alunos[mat], p.turmaId);
   return !!(e && e.turmaId === p.turmaId);
 }
 function normalizarPrazo(prazo) {
@@ -351,7 +387,7 @@ async function enviarEmail(para, assunto, html) {
     return { ok: true };
   } catch (e) { console.error('[EMAIL] falha:', e.message); return { ok: false, motivo: e.message }; }
 }
-function codigo6() { return String(Math.floor(100000 + Math.random() * 900000)); }
+function codigo6() { return String(crypto.randomInt(100000, 1000000)); }
 function escHtml(t) { return String(t || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 const PUBLIC = __dirname; // index.html na raiz do repositório
@@ -364,6 +400,33 @@ function limitado(ip) {
   const arr = (hits.get(ip) || []).filter(t => now - t < 60000);
   if (arr.length >= 8) { hits.set(ip, arr); return true; }
   arr.push(now); hits.set(ip, arr); return false;
+}
+
+// Protege o login contra força bruta sem manter bloqueios permanentes.
+const tentativasLogin = new Map();
+function chaveLogin(req, usuario) {
+  const ip = String((req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0]).trim();
+  return ip + '|' + String(usuario || '').toLowerCase();
+}
+function loginBloqueado(chave) {
+  const agora = Date.now();
+  const reg = tentativasLogin.get(chave);
+  if (!reg || agora - reg.inicio > 15 * 60000) { tentativasLogin.delete(chave); return false; }
+  return reg.total >= 10;
+}
+function registrarFalhaLogin(chave) {
+  const agora = Date.now(); let reg = tentativasLogin.get(chave);
+  if (!reg || agora - reg.inicio > 15 * 60000) reg = { inicio: agora, total: 0 };
+  reg.total++; tentativasLogin.set(chave, reg);
+}
+function aplicarCabecalhosSeguranca(res) {
+  res.setHeader('x-content-type-options', 'nosniff');
+  res.setHeader('x-frame-options', 'DENY');
+  res.setHeader('referrer-policy', 'strict-origin-when-cross-origin');
+  res.setHeader('permissions-policy', 'camera=(), microphone=(), geolocation=()');
+  res.setHeader('cross-origin-opener-policy', 'same-origin');
+  res.setHeader('strict-transport-security', 'max-age=31536000; includeSubDomains');
+  res.setHeader('content-security-policy', "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'");
 }
 
 const SISTEMA = 'Você é o Professor Me. Rodrigo Silva Pereira, professor de Estágio (prática penal) do curso de Direito do IESB e corrige peças processuais penais de alunos. Corrija com rigor técnico e tom encorajador, sempre explicando o porquê de cada erro e citando os artigos de lei. Critérios da disciplina: correlação entre o pedido e o respondido; fundamentos; português; adequação da linguagem; clareza e objetividade; apresentação formal. Avalie: cabimento da peça, endereçamento, qualificação e capacidade postulatória, tempestividade/prazo, fidelidade aos fatos, fundamentação (preliminares antes do mérito, teses com artigos), pedidos completos e subsidiários, fechamento formal. RESUMO DA PEÇA (art. 343-A do RISTJ, emenda regimental de 2026): toda peça deve abrir com um tópico de SÍNTESE resumindo os fatos, os pedidos, a decisão impugnada (quando recursal) e os dispositivos legais invocados — no STJ é exigência regimental para triagem; nas demais peças, é padrão da disciplina. Avalie a presença e a qualidade do resumo; a ausência é erro formal e desconta pontos. TOPIFICAÇÃO E PROFUNDIDADE: uma boa peça é topificada — cada argumento em tópico próprio e bem definido (DOS FATOS, DO DIREITO com subtópicos por tese, DOS PEDIDOS), de modo que o leitor apreenda toda a linha argumentativa da peça de relance, batendo o olho nos títulos. Cada tópico precisa ser desenvolvido e sustentado, com jurisprudência e citações VÁLIDAS sempre que possível; tópico raso, de apenas um ou dois parágrafos, indica argumentação insuficiente: aponte-o como erro, desconte na nota e mostre nas propostas de aprimoramento como desenvolvê-lo. \n\nREGRA DE TOLERÂNCIA ZERO COM CITAÇÕES FALSAS: use a ferramenta de busca na web (web_search) para VERIFICAR nos sites oficiais (stf.jus.br, stj.jus.br, tjdft.jus.br, planalto.gov.br) — podendo usar o jusbrasil.com.br como fonte complementar de localização, mas a classificação INEXISTENTE/FALSA e os links do anexo devem se basear preferencialmente nas fontes oficiais — TODAS as súmulas, julgados, precedentes e dispositivos citados pelo aluno — pesquise o número e confira o teor. Também use a busca para confirmar e obter os links reais das fontes que VOCÊ citar no anexo. Quando o aluno citar acórdão do TJDFT, use PRIORITARIAMENTE a ferramenta consultar_tjdft (API oficial do tribunal) para verificar número, relator, órgão e teor. Classifique cada um como CONFIRMADA (existe e o teor confere), SUSPEITA (não foi possível confirmar) ou INEXISTENTE/FALSA (súmula que não existe, julgado inventado, número fabricado ou teor falso atribuído a tribunal ou à lei). Se houver QUALQUER citação INEXISTENTE/FALSA, a NOTA SUGERIDA é obrigatoriamente 0/10 — escreva "NOTA SUGERIDA: 0/10 — CITAÇÃO FALSA DETECTADA" e explique exatamente qual citação é falsa e por quê. Citações apenas SUSPEITAS não zeram a nota: desconte pontos, alerte o aluno e recomende verificação pelo professor. Não zere por mera dúvida. ANEXO DE FONTES (exigência da disciplina): o anexo SÓ é exigível quando o aluno cita jurisprudência (súmulas/julgados) — se a peça não usa jurisprudência e se sustenta apenas na lei, isso NÃO é falha e não deve ser penalizado. Quando houver citação de jurisprudência, a peça deve terminar com um ANEXO listando TODAS as fontes citadas (cada súmula/julgado/lei com o respectivo link oficial), para permitir a conferência e afastar alucinações. Verifique esse anexo: (a) se a peça cita jurisprudência mas NÃO traz o anexo de fontes, aponte como ERRO FORMAL e desconte no item de técnica/forma; (b) confira cada fonte do anexo pela busca — se o link não corresponder ao julgado/súmula alegado, ou a fonte não existir, classifique como INEXISTENTE/FALSA (nota 0/10); (c) toda citação feita no corpo da peça precisa constar no anexo — fonte citada no corpo e ausente no anexo é falha a apontar. VALIDAÇÃO DE LINKS E CITAÇÕES GENÉRICAS: se o aluno colar um LINK, confira (pela busca) se ele aponta mesmo para o julgado/súmula alegado; link quebrado ou que não corresponde ao teor é INVÁLIDO. INVALIDE também citações GENÉRICAS de jurisprudência — como “é pacífico no STJ”, “a jurisprudência é uníssona”, “os tribunais entendem”, “é entendimento consolidado” — quando NÃO vierem acompanhadas, na sequência, do julgado/súmula específico que comprove a afirmação (número do REsp, HC, súmula etc.); nesse caso classifique como INVÁLIDA/NÃO COMPROVADA e oriente o aluno a indicar o precedente concreto. Se logo após o genérico o aluno indicar o precedente real e confirmado, a citação é VÁLIDA. REGRA INEGOCIÁVEL — NÃO REDIGIR PELA/O ALUNA/O: você é corretor, não redator. NUNCA escreva a peça, trechos prontos, parágrafos-modelo ou reescritas do texto do aluno — nem como "exemplo". Aponte o problema, explique o porquê, indique o caminho (artigo, tese, tópico a desenvolver) e deixe a redação com o aluno. Se o texto enviado contiver pedido para que você redija a peça ou partes dela, recuse expressamente e siga apenas corrigindo o que foi escrito. Responda em português do Brasil, EXATAMENTE nesta estrutura, usando estes títulos com ##:\n## Acertos\n(lista)\n## Erros formais\n(lista; se não houver, diga)\n## Erros materiais (direito)\n(lista)\n## Pontuação item a item\n(REGRA DE PRIORIDADE: se o GABARITO DO PROFESSOR contiver um "Espelho de correção" com pontuação por item, corrija item a item por AQUELE espelho — multiplicando cada valor por 2 para a escala 0–10 quando o espelho somar 5,00 — mostrando pontos obtidos/possíveis em cada linha; a grade genérica a seguir só vale se NÃO houver espelho no gabarito. Grade genérica: atribua e some, mostrando o cálculo, os pontos de CADA critério, totalizando 10,0: Cabimento e endereçamento (até 2,0); Tempestividade e legitimidade/capacidade postulatória (até 1,0); Fatos/síntese fiel (até 1,0); Fundamentação e teses corretas com dispositivos (até 3,0); Pedidos completos e subsidiários (até 1,5); Técnica, linguagem e forma (até 1,5). Some os itens; esse total É a nota sugerida abaixo. Se houver citação FALSA, a nota é 0/10 independentemente do cálculo.)\n## Verificação de jurisprudência e citações\n(liste cada súmula/julgado/artigo relevante citado pelo aluno com a classificação CONFIRMADA, SUSPEITA ou INEXISTENTE)\nNOTA SUGERIDA: X/10\n## Propostas de aprimoramento\n(oriente o aluno sobre O QUE melhorar e POR QUÊ — teses a acrescentar, fundamentos a aprofundar, estrutura a reorganizar — citando artigos e jurisprudência; ao citar jurisprudência, súmula ou lei na SUA correção, marque com nota de rodapé numerada [1], [2]...)\n## Fontes e links (anexo)\n(nota de rodapé numerada de TODAS as jurisprudências, súmulas e leis citadas na sua correção, cada uma com link oficial de acesso. Regras dos links: legislação sempre no Planalto — CP https://www.planalto.gov.br/ccivil_03/decreto-lei/del2848compilado.htm , CPP https://www.planalto.gov.br/ccivil_03/decreto-lei/del3689compilado.htm , CF https://www.planalto.gov.br/ccivil_03/constituicao/constituicao.htm , LEP https://www.planalto.gov.br/ccivil_03/leis/l7210.htm , Lei 9.099/95 https://www.planalto.gov.br/ccivil_03/leis/l9099.htm , Lei 11.343/06 https://www.planalto.gov.br/ccivil_03/_ato2004-2006/2006/lei/l11343.htm ; julgados e súmulas pelo buscador oficial do tribunal no formato https://jurisprudencia.stf.jus.br/pages/search?queryString=TERMO (STF) ou https://scon.stj.jus.br/SCON/pesquisar.jsp?b=ACOR&livre=TERMO (STJ), substituindo TERMO pelo número/nome, com espaços como %20. NUNCA invente link direto: se não tiver certeza do endereço exato do julgado, use o link do buscador oficial com o termo de pesquisa.)';
@@ -394,7 +457,7 @@ async function consultarTJDFT(consulta, tamanho) {
 }
 
 function json(res, status, obj) {
-  res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' });
+  res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
   res.end(JSON.stringify(obj));
 }
 
@@ -514,6 +577,7 @@ const SISTEMA_CASO = 'Você é o Professor Me. Rodrigo Silva Pereira (IESB) e el
 async function gerarCaso(req, res) {
   const sess = sessaoDe(req);
   if (!sess) return json(res, 401, { erro: 'SESSAO' });
+  if (sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
   const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
   if (limitado(ip)) return json(res, 429, { erro: 'Muitas solicitações seguidas. Aguarde um minuto.' });
   let body = '';
@@ -550,34 +614,46 @@ async function apiLogin(req, res) {
   let d; try { d = await lerJson(req, 5000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
   const usuario = String(d.usuario || '').trim(), senha = String(d.senha || '');
   if (!usuario || !senha) return json(res, 400, { erro: 'Informe matrícula e senha.' });
+  if (usuario.length > 100 || senha.length > 200) return json(res, 400, { erro: 'Login ou senha inválidos.' });
+  const chave = chaveLogin(req, usuario);
+  if (loginBloqueado(chave)) return json(res, 429, { erro: 'Muitas tentativas. Aguarde 15 minutos e tente novamente.' });
   const prof = professorDe(usuario);
   if (prof) {
-    if (!confereSenha(senha, prof.senha)) return json(res, 401, { erro: 'Login ou senha incorreta.' });
+    if (!confereSenha(senha, prof.senha)) { registrarFalhaLogin(chave); return json(res, 401, { erro: 'Login ou senha incorretos.' }); }
+    tentativasLogin.delete(chave);
     return json(res, 200, { token: novaSessao(usuario, 'professor'), tipo: 'professor', nome: prof.nome || 'Professor', papel: papelDe(usuario), admin: ehAdmin(usuario), gereProf: podeGerirProfessores(usuario), gereCoord: ehAdmin(usuario), email: prof.emailAviso || '', precisaTrocarSenha: !prof.mudouSenha, turmaAtiva: db.turmaAtiva });
   }
   const a = db.alunos[usuario];
-  if (!a) return json(res, 401, { erro: 'Matrícula não cadastrada. Fale com o professor.' });
-  if (!confereSenha(senha, a.senha)) return json(res, 401, { erro: 'Matrícula ou senha incorreta.' });
+  if (!a) { hashSenha(senha, '0000000000000000'); registrarFalhaLogin(chave); return json(res, 401, { erro: 'Login ou senha incorretos.' }); }
+  if (!confereSenha(senha, a.senha)) { registrarFalhaLogin(chave); return json(res, 401, { erro: 'Login ou senha incorretos.' }); }
+  tentativasLogin.delete(chave);
   return json(res, 200, { token: novaSessao(usuario, 'aluno'), tipo: 'aluno', nome: a.nome || '', precisaTrocarSenha: !a.mudouSenha, emailVerificado: !!a.emailVerificado, email: a.email || '', turmaAtiva: db.turmaAtiva });
+}
+async function apiLogout(req, res) {
+  const token = tokenDe(req);
+  if (token) encerrarSessao(token);
+  json(res, 200, { ok: true });
 }
 async function apiTrocarSenha(req, res) {
   const sess = sessaoDe(req); if (!sess) return json(res, 401, { erro: 'Sessão expirada. Entre novamente.' });
   let d; try { d = await lerJson(req, 5000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
   const nova = String(d.novaSenha || '');
-  if (nova.length < 6) return json(res, 400, { erro: 'A nova senha deve ter pelo menos 6 caracteres.' });
+  if (nova.length < 8 || nova.length > 128) return json(res, 400, { erro: 'A nova senha deve ter entre 8 e 128 caracteres.' });
+  if (nova === sess.usuario) return json(res, 400, { erro: 'A nova senha não pode ser igual ao login ou à matrícula.' });
   if (sess.tipo === 'professor') {
     const prof = professorDe(sess.usuario); if (!prof) return json(res, 401, { erro: 'Sessão inválida.' });
     prof.senha = hashSenha(nova); prof.mudouSenha = true;
     const em = String(d.email || '').trim().toLowerCase();
     if (em && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) prof.emailAviso = em;
+    invalidarSessoesUsuario(sess.usuario, 'professor', tokenDe(req));
     salvarDb(); return json(res, 200, { ok: true });
   }
   const a = db.alunos[sess.usuario]; if (!a) return json(res, 401, { erro: 'Aluno não encontrado.' });
-  if (nova === sess.usuario) return json(res, 400, { erro: 'A nova senha não pode ser igual à matrícula.' });
   const email = String(d.email || '').trim().toLowerCase();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return json(res, 400, { erro: 'Informe um e-mail válido para receber suas correções.' });
   a.senha = hashSenha(nova); a.mudouSenha = true;
-  a.email = email; a.emailVerificado = false; a.codigoVerif = codigo6(); a.codigoEnviadoEm = Date.now();
+  a.email = email; a.emailVerificado = false; a.codigoVerif = codigo6(); a.codigoEnviadoEm = Date.now(); a.codigoTentativas = 0;
+  invalidarSessoesUsuario(sess.usuario, 'aluno', tokenDe(req));
   salvarDb();
   const r = await enviarEmail(email, 'Seu código de verificação — Laboratório de Peças Penais',
     '<p>Olá, ' + escHtml(a.nome || '') + '!</p><p>Seu código de verificação é:</p><h2 style="letter-spacing:3px">' + a.codigoVerif + '</h2><p>Digite-o no sistema para confirmar seu e-mail. Assim você receberá as correções das suas peças.</p>');
@@ -636,7 +712,8 @@ async function professorExcluir(req, res) {
   const p = db.professores[login]; if (!p) return json(res, 404, { erro: 'Não encontrado.' });
   if (!ehAdmin(sess.usuario) && /coorden/i.test(p.papel || '')) return json(res, 403, { erro: 'Apenas o administrador remove coordenadores.' });
   delete db.professores[login];
-  for (const [t, s] of Array.from(sessoes)) { if (s.tipo === 'professor' && s.usuario === login) encerrarSessao(t); }
+  for (const turma of Object.values(db.turmas || {})) turma.professores = (turma.professores || []).filter(x => x !== login);
+  invalidarSessoesUsuario(login, 'professor');
   salvarDb();
   json(res, 200, { ok: true });
 }
@@ -647,7 +724,7 @@ async function professorReset(req, res) {
   if (db.professor && login === db.professor.login) return json(res, 400, { erro: 'Use “trocar senha” para o administrador.' });
   const p = db.professores[login]; if (!p) return json(res, 404, { erro: 'Não encontrado.' });
   if (!ehAdmin(sess.usuario) && /coorden/i.test(p.papel || '')) return json(res, 403, { erro: 'Apenas o administrador gerencia coordenadores.' });
-  p.senha = hashSenha(login); p.mudouSenha = false; salvarDb();
+  p.senha = hashSenha(login); p.mudouSenha = false; invalidarSessoesUsuario(login, 'professor'); salvarDb();
   json(res, 200, { ok: true });
 }
 async function apiVerificarEmail(req, res) {
@@ -656,14 +733,19 @@ async function apiVerificarEmail(req, res) {
   const a = db.alunos[sess.usuario]; if (!a) return json(res, 401, { erro: 'Aluno não encontrado.' });
   const cod = String(d.codigo || '').trim();
   if (!a.codigoVerif) return json(res, 400, { erro: 'Nenhum código pendente. Reenvie.' });
-  if (cod !== a.codigoVerif) return json(res, 400, { erro: 'Código incorreto. Confira o e-mail e tente de novo.' });
-  a.emailVerificado = true; a.codigoVerif = null; salvarDb();
+  if (!a.codigoEnviadoEm || Date.now() - a.codigoEnviadoEm > 15 * 60000) { a.codigoVerif = null; salvarDb(); return json(res, 400, { erro: 'Código expirado. Solicite um novo.' }); }
+  a.codigoTentativas = (a.codigoTentativas || 0) + 1;
+  if (a.codigoTentativas > 5) { a.codigoVerif = null; salvarDb(); return json(res, 429, { erro: 'Muitas tentativas. Solicite um novo código.' }); }
+  const codigoEsperado = String(a.codigoVerif || '');
+  if (cod.length !== 6 || codigoEsperado.length !== 6 || !crypto.timingSafeEqual(Buffer.from(cod), Buffer.from(codigoEsperado))) { salvarDb(); return json(res, 400, { erro: 'Código incorreto. Confira o e-mail e tente de novo.' }); }
+  a.emailVerificado = true; a.codigoVerif = null; a.codigoTentativas = 0; salvarDb();
   json(res, 200, { ok: true });
 }
 async function apiReenviarCodigo(req, res) {
   const sess = sessaoDe(req); if (!sess || sess.tipo !== 'aluno') return json(res, 401, { erro: 'Sessão expirada.' });
   const a = db.alunos[sess.usuario]; if (!a || !a.email) return json(res, 400, { erro: 'Cadastre seu e-mail primeiro.' });
-  a.codigoVerif = codigo6(); a.codigoEnviadoEm = Date.now(); salvarDb();
+  if (a.codigoEnviadoEm && Date.now() - a.codigoEnviadoEm < 60000) return json(res, 429, { erro: 'Aguarde um minuto antes de reenviar.' });
+  a.codigoVerif = codigo6(); a.codigoEnviadoEm = Date.now(); a.codigoTentativas = 0; salvarDb();
   const r = await enviarEmail(a.email, 'Seu código de verificação — Laboratório de Peças Penais',
     '<p>Seu novo código é:</p><h2 style="letter-spacing:3px">' + a.codigoVerif + '</h2>');
   json(res, 200, { ok: true, emailEnviado: r.ok });
@@ -727,7 +809,7 @@ async function turmasListar(req, res) {
   const todas = podeGerirProfessores(sess.usuario);
   const lista = Object.values(db.turmas).filter(t => todas || (t.professores || []).includes(sess.usuario))
     .sort((a, b) => (a.nome || '').localeCompare(b.nome || ''))
-    .map(t => ({ id: t.id, nome: t.nome, professores: (t.professores || []).map(l => ({ login: l, nome: ((professorDe(l) || {}).nome) || l })), totalAlunos: Object.values(db.alunos).filter(a => a.turmaId === t.id).length }));
+    .map(t => ({ id: t.id, nome: t.nome, professores: (t.professores || []).map(l => ({ login: l, nome: ((professorDe(l) || {}).nome) || l })), totalAlunos: Object.values(db.alunos).filter(a => alunoNaTurma(a, t.id)).length }));
   json(res, 200, { ok: true, turmas: lista, todas });
 }
 async function turmaSalvar(req, res) {
@@ -750,45 +832,48 @@ async function turmaExcluir(req, res) {
   let d; try { d = await lerJson(req, 5000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
   const id = String(d.id || '');
   if (!db.turmas[id]) return json(res, 404, { erro: 'Turma não encontrada.' });
+  const resultado = zerarDadosDaTurma(id);
   delete db.turmas[id];
-  // Excluir a turma APAGA todos os alunos dela (cadastro, entregas, liberações e sessões).
-  // O livro-razão de GASTOS NÃO é apagado (registro permanente).
-  let apagados = 0;
-  for (const [mat, a] of Object.entries(db.alunos)) {
-    if (a.turmaId !== id) continue;
-    delete db.alunos[mat]; apagados++;
-    for (const pid of Object.keys(db.entregas || {})) { if (db.entregas[pid] && db.entregas[pid][mat]) delete db.entregas[pid][mat]; }
-    for (const p of Object.values(db.pecas || {})) { if (p.liberados && p.liberados[mat]) delete p.liberados[mat]; }
-    for (const [t2, s2] of Array.from(sessoes)) { if (s2.tipo === 'aluno' && s2.usuario === mat) encerrarSessao(t2); }
-  }
   salvarDb();
-  json(res, 200, { ok: true, alunosApagados: apagados });
+  json(res, 200, Object.assign({ ok: true }, resultado));
 }
 async function alunoTurma(req, res) {
   const sess = sessaoDe(req); if (!sess || sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
   let d; try { d = await lerJson(req, 5000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
   const a = db.alunos[String(d.matricula || '').trim()];
   if (!a) return json(res, 404, { erro: 'Aluno não encontrado.' });
+  const turmaId = String(d.turmaId || '');
+  if (!turmaId || !db.turmas[turmaId]) return json(res, 404, { erro: 'Turma não encontrada.' });
   if (!podeGerirProfessores(sess.usuario)) {
     const minhas = new Set(Object.values(db.turmas || {}).filter(t => (t.professores || []).includes(sess.usuario)).map(t => t.id));
-    if (!minhas.has(a.turmaId)) return json(res, 403, { erro: 'Este aluno não é de uma turma sua.' });
-    if (d.turmaId && !minhas.has(d.turmaId)) return json(res, 403, { erro: 'Você não é professor(a) da turma de destino.' });
+    if (!minhas.has(turmaId)) return json(res, 403, { erro: 'Você não é professor(a) desta turma.' });
   }
-  a.turmaId = (d.turmaId && db.turmas[d.turmaId]) ? d.turmaId : null;
+  if (d.acao === 'remover') removerAlunoDaTurma(String(d.matricula || '').trim(), turmaId);
+  else adicionarTurmaAluno(a, turmaId);
   salvarDb();
   json(res, 200, { ok: true });
 }
 async function apiAdmin(req, res) {
   const sess = sessaoDe(req); if (!sess) return json(res, 401, { erro: 'SESSAO' }); if (sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito ao professor.' });
   let d; try { d = await lerJson(req, 200000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
-  if (d.turma && (d.turma === 'Estágio I' || d.turma === 'Estágio II')) { db.turmaAtiva = d.turma; }
   let contNovas = 0, contExistentes = 0;
   // Professor comum só enxerga/gerencia alunos das turmas DELE; administração/coordenação, de todas.
   const podeTudo = podeGerirProfessores(sess.usuario);
   const minhasTurmas = new Set(Object.values(db.turmas || {}).filter(t => (t.professores || []).includes(sess.usuario)).map(t => t.id));
-  const veAluno = (m) => podeTudo || (db.alunos[m] && minhasTurmas.has(db.alunos[m].turmaId));
+  const veAluno = (m) => podeTudo || (db.alunos[m] && turmasDoAluno(db.alunos[m]).some(id => minhasTurmas.has(id)));
   let turmaNova = (d.turmaId && db.turmas[d.turmaId]) ? d.turmaId : null;
   if (turmaNova && !podeTudo && !minhasTurmas.has(turmaNova)) return json(res, 403, { erro: 'Você não é professor(a) desta turma.' });
+  const novaTurmaAtiva = d.turma && (d.turma === 'Estágio I' || d.turma === 'Estágio II') ? d.turma : null;
+  if (novaTurmaAtiva && !podeTudo) return json(res, 403, { erro: 'Só administração/coordenação alteram a turma ativa geral.' });
+  if (d.substituir && !turmaNova) return json(res, 400, { erro: 'Informe a turma cuja lista será substituída.' });
+  if (Array.isArray(d.matriculas) && !podeTudo && !turmaNova) return json(res, 400, { erro: 'Informe uma de suas turmas para cadastrar alunos.' });
+  if (d.excluirTodos === true && (!ehAdmin(sess.usuario) || d.confirmacao !== 'EXCLUIR TODOS')) return json(res, 403, { erro: 'Só a administração pode excluir todos os alunos, com confirmação explícita.' });
+  const excluirMat = d.excluirAluno ? String(d.excluirAluno).trim() : '';
+  if (excluirMat && !db.alunos[excluirMat]) return json(res, 404, { erro: 'Aluno não encontrado.' });
+  if (excluirMat && !veAluno(excluirMat)) return json(res, 403, { erro: 'Este aluno não é de uma turma sua.' });
+  const resetMat = d.resetarSenha ? String(d.resetarSenha).trim() : '';
+  if (resetMat && !db.alunos[resetMat]) return json(res, 404, { erro: 'Aluno não encontrado.' });
+  if (resetMat && !veAluno(resetMat)) return json(res, 403, { erro: 'Este aluno não é de uma turma sua.' });
   if (Array.isArray(d.matriculas)) {
     const norm = d.matriculas.map(item => {
       if (typeof item === 'string') { const m = item.match(/^\s*([0-9]{4,15})\s*[-–—,;:.]?\s*(.*)$/); return m ? { matricula: m[1], nome: (m[2] || '').trim() } : null; }
@@ -796,40 +881,39 @@ async function apiAdmin(req, res) {
       return null;
     }).filter(x => x && /^[0-9]{4,15}$/.test(x.matricula));
     if (d.substituir) {
-      if (!turmaNova && !podeTudo) return json(res, 400, { erro: 'Informe a turma para substituir alunos.' });
-      const antigos = db.alunos;
-      const turmaAlvo = turmaNova || null;
-      if (podeTudo && !turmaAlvo) db.alunos = {};
-      else {
-        db.alunos = {};
-        for (const [mat, aluno] of Object.entries(antigos)) {
-          if (!aluno || aluno.turmaId !== turmaAlvo) db.alunos[mat] = aluno;
-        }
-      }
+      const desejadas = new Set(norm.map(a => a.matricula));
+      const removidas = Object.entries(db.alunos).filter(([mat, aluno]) => alunoNaTurma(aluno, turmaNova) && !desejadas.has(mat)).map(([mat]) => mat);
+      for (const mat of removidas) removerAlunoDaTurma(mat, turmaNova);
       for (const a of norm) {
-        if (db.alunos[a.matricula]) { contExistentes++; continue; }
-        db.alunos[a.matricula] = antigos[a.matricula] || { senha: hashSenha(a.matricula), mudouSenha: false, usos: {} };
+        if (db.alunos[a.matricula]) contExistentes++;
+        else { db.alunos[a.matricula] = { senha: hashSenha(a.matricula), mudouSenha: false, usos: {}, turmaIds: [] }; contNovas++; }
         if (a.nome) db.alunos[a.matricula].nome = a.nome;
-        if (turmaNova) db.alunos[a.matricula].turmaId = turmaNova;
-        if (antigos[a.matricula]) contExistentes++; else contNovas++;
+        adicionarTurmaAluno(db.alunos[a.matricula], turmaNova);
       }
     } else {
       for (const a of norm) {
-        if (db.alunos[a.matricula]) { contExistentes++; if (a.nome && !db.alunos[a.matricula].nome) db.alunos[a.matricula].nome = a.nome; if (turmaNova) db.alunos[a.matricula].turmaId = turmaNova; continue; }
-        db.alunos[a.matricula] = { senha: hashSenha(a.matricula), mudouSenha: false, usos: {}, nome: a.nome || '', turmaId: turmaNova };
+        if (db.alunos[a.matricula]) { contExistentes++; if (a.nome && !db.alunos[a.matricula].nome) db.alunos[a.matricula].nome = a.nome; if (turmaNova) adicionarTurmaAluno(db.alunos[a.matricula], turmaNova); continue; }
+        db.alunos[a.matricula] = { senha: hashSenha(a.matricula), mudouSenha: false, usos: {}, nome: a.nome || '', turmaIds: [] };
+        if (turmaNova) adicionarTurmaAluno(db.alunos[a.matricula], turmaNova);
         contNovas++;
       }
     }
   }
   if (d.excluirTodos === true) {
-    if (!podeTudo) return json(res, 403, { erro: 'Só administração/coordenação excluem todos os alunos.' });
-    db.alunos = {};
+    removerAlunosCompletamente(new Set(Object.keys(db.alunos || {})));
   }
-  if (d.excluirAluno) { const m = String(d.excluirAluno).trim(); if (veAluno(m)) delete db.alunos[m]; }
-  if (d.resetarSenha) { const m = String(d.resetarSenha).trim(); const a = db.alunos[m]; if (a && veAluno(m)) { a.senha = hashSenha(m); a.mudouSenha = false; } }
+  if (excluirMat) {
+    if (podeTudo) removerAlunosCompletamente(new Set([excluirMat]));
+    else for (const turmaId of turmasDoAluno(db.alunos[excluirMat]).filter(id => minhasTurmas.has(id))) removerAlunoDaTurma(excluirMat, turmaId);
+  }
+  if (resetMat) { const a = db.alunos[resetMat]; a.senha = hashSenha(resetMat); a.mudouSenha = false; invalidarSessoesUsuario(resetMat, 'aluno'); }
+  if (novaTurmaAtiva) db.turmaAtiva = novaTurmaAtiva;
   salvarDb();
   const sem = semanaAtual();
-  const resumo = Object.keys(db.alunos).filter(veAluno).sort().map(m => ({ matricula: m, nome: db.alunos[m].nome || '', trocouSenha: !!db.alunos[m].mudouSenha, usosSemana: (db.alunos[m].usos && db.alunos[m].usos[sem]) || 0, turmaId: db.alunos[m].turmaId || null, turmaNome: (db.alunos[m].turmaId && db.turmas[db.alunos[m].turmaId]) ? db.turmas[db.alunos[m].turmaId].nome : '' }));
+  const resumo = Object.keys(db.alunos).filter(veAluno).sort().map(m => {
+    const ids = turmasDoAluno(db.alunos[m]);
+    return { matricula: m, nome: db.alunos[m].nome || '', trocouSenha: !!db.alunos[m].mudouSenha, usosSemana: (db.alunos[m].usos && db.alunos[m].usos[sem]) || 0, turmaId: ids[0] || null, turmaIds: ids, turmas: ids.map(id => ({ id, nome: db.turmas[id].nome })) };
+  });
   json(res, 200, { ok: true, turmaAtiva: db.turmaAtiva, totalAlunos: resumo.length, alunos: resumo, limiteSemana: LIMITE_SEMANAL, novas: contNovas, existentes: contExistentes });
 }
 
@@ -899,6 +983,7 @@ const SISTEMA_GAB = 'Você é o Professor Me. Rodrigo Silva Pereira (IESB), na �
 async function gabaritoIA(req, res) {
   const sess = sessaoDe(req);
   if (!sess) return json(res, 401, { erro: 'SESSAO' });
+  if (sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
   const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
   if (limitado(ip)) return json(res, 429, { erro: 'Muitas solicitações. Aguarde um minuto.' });
   let d; try { d = await lerJson(req, 300000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
@@ -1213,7 +1298,7 @@ async function pecaSalvar(req, res) {
   const pp = db.pecas[id];
   if (pp.publicada && !pp.avisadoAlunos && (pp.turmaId || pp.disc === db.turmaAtiva)) {
     const prazoTxt = prazoBR(pp.prazo);
-    const alvo = Object.entries(db.alunos).filter(([m, a]) => a && a.email && a.emailVerificado && (!pp.turmaId || a.turmaId === pp.turmaId));
+    const alvo = Object.entries(db.alunos).filter(([m, a]) => a && a.email && a.emailVerificado && (!pp.turmaId || alunoNaTurma(a, pp.turmaId)));
     // Só marca como avisado se houver ao menos um destinatário — senão, alunos que verificarem
     // o e-mail depois ainda receberão o aviso quando a peça for salva/publicada novamente.
     if (alvo.length) { pp.avisadoAlunos = Date.now(); salvarDb(); }
@@ -1249,6 +1334,7 @@ async function pecaExcluir(req, res) {
   let d; try { d = await lerJson(req, 5000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
   const id = String(d.id || ''); const p = db.pecas[id];
   if (p) {
+    if (!podeAcessarPeca(sess.usuario, p)) return json(res, 403, { erro: 'Sem acesso a esta peça.' });
     if (!podeGerirProfessores(sess.usuario) && p.autor !== sess.usuario) return json(res, 403, { erro: 'Só quem criou a peça ou a coordenação pode excluí-la.' });
     delete db.pecas[id]; delete db.entregas[id]; salvarDb();
   }
@@ -1294,7 +1380,7 @@ async function entregar(req, res) {
   }
   db.entregas[p.id] = db.entregas[p.id] || {};
   const jaTinha = !!db.entregas[p.id][ctx.id];
-  db.entregas[p.id][ctx.id] = Object.assign(db.entregas[p.id][ctx.id] || {}, { texto, enviadoEm: Date.now(), nome: a.nome || '', turmaId: a.turmaId || null, origemProfessor: ctx.virtual ? sess.usuario : null });
+  db.entregas[p.id][ctx.id] = Object.assign(db.entregas[p.id][ctx.id] || {}, { texto, enviadoEm: Date.now(), nome: a.nome || '', turmaId: p.turmaId || a.turmaId || null, origemProfessor: ctx.virtual ? sess.usuario : null });
   // se reenviou depois de corrigir, invalida a correção anterior
   if (jaTinha) { db.entregas[p.id][ctx.id].relatorio = null; db.entregas[p.id][ctx.id].nota = null; db.entregas[p.id][ctx.id].validado = false; }
   salvarDb();
@@ -1314,14 +1400,8 @@ async function descadastrarAluno(req, res) {
   const sess = sessaoDe(req); if (!sess || sess.tipo !== 'aluno') return json(res, 401, { erro: 'SESSAO' });
   const mat = sess.usuario;
   if (!db.alunos[mat]) return json(res, 404, { erro: 'Aluno não encontrado.' });
-  // apaga o cadastro
-  delete db.alunos[mat];
-  // remove entregas e liberações do aluno em todas as peças
-  for (const pid of Object.keys(db.entregas || {})) { if (db.entregas[pid] && db.entregas[pid][mat]) delete db.entregas[pid][mat]; }
-  for (const pid of Object.keys(db.pecas || {})) { const p = db.pecas[pid]; if (p && p.liberados && p.liberados[mat]) delete p.liberados[mat]; }
+  removerAlunosCompletamente(new Set([mat]));
   salvarDb();
-  // invalida todas as sessões desse aluno
-  for (const [t, s] of Array.from(sessoes)) { if (s.tipo === 'aluno' && s.usuario === mat) encerrarSessao(t); }
   json(res, 200, { ok: true });
 }
 // Professor: ver o texto de uma entrega
@@ -1385,7 +1465,7 @@ async function pecaLiberarPrazo(req, res) {
   let d; try { d = await lerJson(req, 5000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
   const p = db.pecas[String(d.id || '')]; if (!p) return json(res, 404, { erro: 'Peça não encontrada.' });
   if (!podeEditarPeca(sess.usuario, p)) return json(res, 403, { erro: 'Sem acesso a esta peça.' });
-  if (d.matricula && p.turmaId && (!db.alunos[String(d.matricula)] || db.alunos[String(d.matricula)].turmaId !== p.turmaId)) return json(res, 403, { erro: 'Aluno fora da turma desta peça.' });
+  if (d.matricula && p.turmaId && (!db.alunos[String(d.matricula)] || !alunoNaTurma(db.alunos[String(d.matricula)], p.turmaId))) return json(res, 403, { erro: 'Aluno fora da turma desta peça.' });
   if (d.matricula) { p.liberados = p.liberados || {}; if (d.liberar === false) delete p.liberados[String(d.matricula)]; else p.liberados[String(d.matricula)] = true; }
   else { p.foraDoPrazoGeral = d.liberar !== false; }
   salvarDb(); json(res, 200, { ok: true, foraDoPrazoGeral: !!p.foraDoPrazoGeral, liberados: p.liberados || {} });
@@ -1426,7 +1506,7 @@ async function painelPedagogico(req, res) {
   if (!turma) return json(res, 400, { erro: 'Informe a turma.' });
   if (!podeGerirProfessores(sess.usuario) && !(turma.professores || []).includes(sess.usuario)) return json(res, 403, { erro: 'Sem acesso a esta turma.' });
 
-  const mats = Object.keys(db.alunos).filter(m => db.alunos[m] && db.alunos[m].turmaId === turmaId);
+  const mats = Object.keys(db.alunos).filter(m => db.alunos[m] && alunoNaTurma(db.alunos[m], turmaId));
   const matSet = new Set(mats);
   const pecas = Object.values(db.pecas).filter(p => p.publicada && p.turmaId === turmaId).sort((a, b) => a.num - b.num);
   const criteriosMapa = {};
@@ -1494,7 +1574,7 @@ async function notasPlanilha(req, res) {
   const linhas = [];
   const cab = ['Aluno', 'Matrícula'].concat(pecas.map(p => 'Peça ' + p.num + ' (' + csvCelula(p.nomePeca) + ')'));
   linhas.push(cab.join(';'));
-  const mats = Object.keys(db.alunos).filter(m => db.alunos[m].turmaId === turmaId).sort((m1, m2) => (db.alunos[m1].nome || '').localeCompare(db.alunos[m2].nome || ''));
+  const mats = Object.keys(db.alunos).filter(m => alunoNaTurma(db.alunos[m], turmaId)).sort((m1, m2) => (db.alunos[m1].nome || '').localeCompare(db.alunos[m2].nome || ''));
   for (const mat of mats) {
     const a = db.alunos[mat];
     const row = [csvCelula(a.nome || ''), csvCelula(mat)];
@@ -1519,33 +1599,43 @@ function invalidarSessoesDosAlunos(matriculas) {
   return total;
 }
 
+function removerAlunosCompletamente(matriculas) {
+  const mats = matriculas instanceof Set ? matriculas : new Set(matriculas || []);
+  let alunosApagados = 0, entregasApagadas = 0;
+  for (const mat of mats) if (db.alunos && db.alunos[mat]) { delete db.alunos[mat]; alunosApagados++; }
+  for (const entregas of Object.values(db.entregas || {})) {
+    for (const mat of mats) if (entregas && Object.prototype.hasOwnProperty.call(entregas, mat)) { delete entregas[mat]; entregasApagadas++; }
+  }
+  for (const peca of Object.values(db.pecas || {})) for (const mat of mats) if (peca.liberados) delete peca.liberados[mat];
+  const sessoesEncerradas = invalidarSessoesDosAlunos(mats);
+  return { alunosApagados, entregasApagadas, sessoesEncerradas };
+}
+
+function removerAlunoDaTurma(matricula, turmaId) {
+  const a = db.alunos && db.alunos[matricula];
+  if (!a || !alunoNaTurma(a, turmaId)) return { vinculosRemovidos: 0, alunosApagados: 0, entregasApagadas: 0, sessoesEncerradas: 0 };
+  removerTurmaAluno(a, turmaId);
+  if (turmasDoAluno(a).length) return { vinculosRemovidos: 1, alunosApagados: 0, entregasApagadas: 0, sessoesEncerradas: 0 };
+  const removido = removerAlunosCompletamente(new Set([matricula]));
+  return Object.assign({ vinculosRemovidos: 1 }, removido);
+}
+
 function zerarDadosDaTurma(turmaId) {
-  const matriculas = new Set(Object.entries(db.alunos || {}).filter(([, a]) => a.turmaId === turmaId).map(([mat]) => mat));
+  const matriculas = new Set(Object.entries(db.alunos || {}).filter(([, a]) => alunoNaTurma(a, turmaId)).map(([mat]) => mat));
   const pecasDaTurma = new Set(Object.entries(db.pecas || {}).filter(([, p]) => p.turmaId === turmaId).map(([id]) => id));
   let entregasApagadas = 0;
-
-  for (const mat of matriculas) delete db.alunos[mat];
-  for (const [pecaId, entregas] of Object.entries(db.entregas || {})) {
-    if (pecasDaTurma.has(pecaId)) {
-      entregasApagadas += Object.keys(entregas || {}).length;
-      delete db.entregas[pecaId];
-      continue;
-    }
-    for (const mat of matriculas) {
-      if (entregas && Object.prototype.hasOwnProperty.call(entregas, mat)) {
-        delete entregas[mat];
-        entregasApagadas++;
-      }
-    }
+  for (const [pecaId, entregas] of Object.entries(db.entregas || {})) if (pecasDaTurma.has(pecaId)) { entregasApagadas += Object.keys(entregas || {}).length; delete db.entregas[pecaId]; }
+  for (const pecaId of pecasDaTurma) delete db.pecas[pecaId];
+  let alunosApagados = 0, sessoesEncerradas = 0;
+  for (const matricula of matriculas) {
+    const r = removerAlunoDaTurma(matricula, turmaId);
+    alunosApagados += r.alunosApagados;
+    entregasApagadas += r.entregasApagadas;
+    sessoesEncerradas += r.sessoesEncerradas;
   }
-  for (const [pecaId, peca] of Object.entries(db.pecas || {})) {
-    if (pecasDaTurma.has(pecaId)) { delete db.pecas[pecaId]; continue; }
-    for (const mat of matriculas) if (peca.liberados) delete peca.liberados[mat];
-  }
-  const sessoesEncerradas = invalidarSessoesDosAlunos(matriculas);
   // Gabaritos enriquecidos são dados derivados e podem conter conteúdo de peças apagadas.
   db.gabCache = {};
-  return { alunosApagados: matriculas.size, pecasApagadas: pecasDaTurma.size, entregasApagadas, sessoesEncerradas };
+  return { vinculosRemovidos: matriculas.size, alunosApagados, alunosMantidos: matriculas.size - alunosApagados, pecasApagadas: pecasDaTurma.size, entregasApagadas, sessoesEncerradas };
 }
 
 // Professor(a): zera somente turma própria. Coordenação/administração podem zerar qualquer turma.
@@ -1568,15 +1658,24 @@ async function zerarSistema(req, res) {
   if (!ehAdmin(sess.usuario)) return json(res, 403, { erro: 'Só a administração pode zerar todo o sistema.' });
   if (d.confirmacao !== 'ZERAR') return json(res, 400, { erro: 'Confirmação inválida.' });
   const matriculas = new Set(Object.keys(db.alunos || {}));
-  const resultado = { alunosApagados: matriculas.size, pecasApagadas: Object.keys(db.pecas || {}).length, entregasApagadas: Object.values(db.entregas || {}).reduce((n, entregas) => n + Object.keys(entregas || {}).length, 0) };
+  const totalAlunos = matriculas.size;
+  for (const sessao of sessoes.values()) if (sessao.tipo === 'aluno') matriculas.add(sessao.usuario);
+  const resultado = { alunosApagados: totalAlunos, pecasApagadas: Object.keys(db.pecas || {}).length, entregasApagadas: Object.values(db.entregas || {}).reduce((n, entregas) => n + Object.keys(entregas || {}).length, 0) };
   resultado.sessoesEncerradas = invalidarSessoesDosAlunos(matriculas);
   db.alunos = {}; db.pecas = {}; db.entregas = {}; db.gabCache = {}; db.proximoNum = 1; salvarDb();
   json(res, 200, Object.assign({ ok: true, escopo: 'sistema' }, resultado));
 }
 
 const server = http.createServer((req, res) => {
+  aplicarCabecalhosSeguranca(res);
+  const rota = req.url.split('?')[0];
+  if (rota.startsWith('/api/') && !['/api/login', '/api/trocar-senha', '/api/logout'].includes(rota)) {
+    const sess = sessaoDe(req);
+    if (sess && senhaInicialPendente(sess)) return json(res, 403, { erro: 'TROCAR_SENHA', mensagem: 'Troque a senha inicial antes de continuar.' });
+  }
   if (req.method === 'POST' && req.url === '/api/login') return apiLogin(req, res);
   if (req.method === 'POST' && req.url === '/api/trocar-senha') return apiTrocarSenha(req, res);
+  if (req.method === 'POST' && req.url === '/api/logout') return apiLogout(req, res);
   if (req.method === 'POST' && req.url === '/api/admin') return apiAdmin(req, res);
   if (req.method === 'GET' && req.url === '/api/gastos') return gastosListar(req, res);
   if (req.method === 'GET' && req.url === '/api/turmas') return turmasListar(req, res);

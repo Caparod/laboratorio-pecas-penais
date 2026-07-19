@@ -35,20 +35,25 @@ async function requisitar(url, token, body, headers) {
   return { status: r.status, body: d };
 }
 
-async function login(usuario, senha) {
+async function login(usuario, senha, novaSenha, email) {
   const r = await requisitar('/api/login', null, { usuario, senha });
   assert.equal(r.status, 200, `login de ${usuario}: ${JSON.stringify(r.body)}`);
+  if (r.body.precisaTrocarSenha) {
+    assert.ok(novaSenha, `teste deve trocar a senha inicial de ${usuario}`);
+    const troca = await requisitar('/api/trocar-senha', r.body.token, { novaSenha, email });
+    assert.equal(troca.status, 200, `troca de senha de ${usuario}: ${JSON.stringify(troca.body)}`);
+  }
   return r.body.token;
 }
 
 async function executar() {
   await esperarServidor();
-  const coordenador = await login('Any', '123456');
-  const admin = await login(adminLogin, adminLogin);
+  const coordenador = await login('Any', '123456', 'Coord-Zerar-2026');
+  const admin = await login(adminLogin, adminLogin, 'Admin-Zerar-2026');
 
   let r = await requisitar('/api/professores/salvar', coordenador, { login: 'prof-teste', nome: 'Professor Teste', papel: 'Professor' });
   assert.equal(r.status, 200);
-  const professor = await login('prof-teste', 'prof-teste');
+  const professor = await login('prof-teste', 'prof-teste', 'Prof-Zerar-2026');
 
   r = await requisitar('/api/turmas/salvar', coordenador, { nome: 'Turma do Professor', professores: ['prof-teste'] });
   assert.equal(r.status, 200); const turmaPropria = r.body.id;
@@ -59,7 +64,7 @@ async function executar() {
   assert.equal(r.status, 200);
   r = await requisitar('/api/admin', coordenador, { turmaId: turmaAlheia, matriculas: [{ matricula: '9000002', nome: 'Aluno Alheio' }] });
   assert.equal(r.status, 200);
-  const alunoProprio = await login('9000001', '9000001');
+  const alunoProprio = await login('9000001', '9000001', 'Aluno-Zerar-2026', 'aluno@example.test');
 
   r = await requisitar('/api/peca/salvar', professor, { nomePeca: 'Peça da turma própria', caso: 'Caso de teste com conteúdo suficiente.', gab: 'Gabarito de teste.', turmaId: turmaPropria, publicada: true });
   assert.equal(r.status, 200, JSON.stringify(r.body));
