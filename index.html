@@ -722,16 +722,31 @@ async function baixarPlanilha(){
 
 // ---- Sistema (zerar) ----
 function profConfig(){
+  const global=AUTH&&AUTH.admin?'<div class="card"><h3>Zerar todo o sistema</h3>'
+   +'<p style="color:var(--vermelho)"><b>⚠️ SOMENTE ADMINISTRAÇÃO:</b> apaga TODAS as peças, entregas, notas e alunos cadastrados. As contas e as turmas são mantidas. <b>Não há retorno.</b></p>'
+   +'<div class="botoes"><button style="background:var(--vermelho);color:#fff;border:none" onclick="zerarTudo()">🗑 Zerar tudo (irreversível)</button></div><div id="zfb"></div></div>':'';
   conteudo.innerHTML='<h2 class="titulo-peca">Sistema</h2>'
-   +'<div class="card"><h3>Zerar todo o sistema</h3>'
-   +'<p style="color:var(--vermelho)"><b>⚠️ ATENÇÃO:</b> apaga TODAS as peças, entregas, notas e alunos cadastrados. As contas de professores/coordenação são mantidas. <b>Não há retorno.</b></p>'
-   +'<div class="botoes"><button style="background:var(--vermelho);color:#fff;border:none" onclick="zerarTudo()">🗑 Zerar tudo (irreversível)</button></div><div id="zfb"></div></div>';
+   +'<div class="card"><h3>Zerar uma turma</h3>'
+   +'<p>Apaga os alunos, peças, entregas e notas da turma escolhida. A turma e os professores vinculados são mantidos. Professor(a) só pode zerar turma em que leciona.</p>'
+   +'<label>Turma</label><select id="z_turma"><option value="">Carregando...</option></select>'
+   +'<div class="botoes"><button style="background:var(--vermelho);color:#fff;border:none" onclick="zerarTurma()">🗑 Zerar turma (irreversível)</button></div><div id="ztfb"></div></div>'+global;
+  carregarTurmasSelect('z_turma');
+}
+async function zerarTurma(){
+  const sel=document.getElementById('z_turma'),fb=document.getElementById('ztfb');
+  if(!sel||!sel.value){fb.innerHTML='<p class="erro-ia">Escolha a turma.</p>';return}
+  const nome=(sel.options[sel.selectedIndex]||{}).text||'esta turma';
+  if(!confirm('ZERAR A TURMA '+nome+'? Alunos, peças, entregas e notas serão apagados. NÃO HÁ RETORNO.'))return;
+  const c=prompt('Para confirmar, digite ZERAR TURMA (em maiúsculas):');
+  if(c!=='ZERAR TURMA'){fb.innerHTML='<p class="aviso">Cancelado.</p>';return}
+  fb.innerHTML='<p><span class="spinner"></span>Zerando turma...</p>';
+  try{const r=await apiPost('/api/zerar',{escopo:'turma',turmaId:sel.value,confirmacao:'ZERAR TURMA'});const d=await r.json();if(r.ok){fb.innerHTML='<p style="color:var(--verde)">Turma zerada: '+d.alunosApagados+' aluno(s), '+d.pecasApagadas+' peça(s) e '+d.entregasApagadas+' entrega(s) apagados.</p>';carregarTurmasSelect('z_turma');}else fb.innerHTML='<p class="erro-ia">'+esc(d.erro||'Erro')+'</p>';}catch(e){fb.innerHTML='<p class="erro-ia">Falha ao zerar a turma.</p>'}
 }
 async function zerarTudo(){
   if(!confirm('ZERAR TODO O SISTEMA? Apaga peças, entregas, notas e alunos. NÃO HÁ RETORNO.'))return;
   const c=prompt('Para confirmar, digite ZERAR (em maiúsculas):');
   if(c!=='ZERAR'){document.getElementById('zfb').innerHTML='<p class="aviso">Cancelado.</p>';return}
-  try{const r=await apiPost('/api/zerar',{confirmacao:'ZERAR'});const d=await r.json();if(r.ok)document.getElementById('zfb').innerHTML='<p style="color:var(--verde)">Sistema zerado.</p>';else document.getElementById('zfb').innerHTML='<p class="erro-ia">'+(d.erro||'Erro')+'</p>';}catch(e){}
+  try{const r=await apiPost('/api/zerar',{escopo:'sistema',confirmacao:'ZERAR'});const d=await r.json();if(r.ok)document.getElementById('zfb').innerHTML='<p style="color:var(--verde)">Sistema zerado.</p>';else document.getElementById('zfb').innerHTML='<p class="erro-ia">'+esc(d.erro||'Erro')+'</p>';}catch(e){}
 }
 
 // ---- Professores(as) / Coordenadores(as) ----

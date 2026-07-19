@@ -1506,14 +1506,72 @@ async function notasPlanilha(req, res) {
   res.writeHead(200, { 'content-type': 'text/csv; charset=utf-8', 'content-disposition': 'attachment; filename="' + nomeArq + '"' });
   res.end(csv);
 }
-// Professor: ZERAR todo o sistema (mantém contas de professores)
+function invalidarSessoesDosAlunos(matriculas) {
+  if (!matriculas || !matriculas.size) return 0;
+  let total = 0;
+  db.sessoes = db.sessoes || {};
+  for (const [token, sessao] of Array.from(sessoes)) {
+    if (sessao.tipo !== 'aluno' || !matriculas.has(sessao.usuario)) continue;
+    sessoes.delete(token);
+    delete db.sessoes[token];
+    total++;
+  }
+  return total;
+}
+
+function zerarDadosDaTurma(turmaId) {
+  const matriculas = new Set(Object.entries(db.alunos || {}).filter(([, a]) => a.turmaId === turmaId).map(([mat]) => mat));
+  const pecasDaTurma = new Set(Object.entries(db.pecas || {}).filter(([, p]) => p.turmaId === turmaId).map(([id]) => id));
+  let entregasApagadas = 0;
+
+  for (const mat of matriculas) delete db.alunos[mat];
+  for (const [pecaId, entregas] of Object.entries(db.entregas || {})) {
+    if (pecasDaTurma.has(pecaId)) {
+      entregasApagadas += Object.keys(entregas || {}).length;
+      delete db.entregas[pecaId];
+      continue;
+    }
+    for (const mat of matriculas) {
+      if (entregas && Object.prototype.hasOwnProperty.call(entregas, mat)) {
+        delete entregas[mat];
+        entregasApagadas++;
+      }
+    }
+  }
+  for (const [pecaId, peca] of Object.entries(db.pecas || {})) {
+    if (pecasDaTurma.has(pecaId)) { delete db.pecas[pecaId]; continue; }
+    for (const mat of matriculas) if (peca.liberados) delete peca.liberados[mat];
+  }
+  const sessoesEncerradas = invalidarSessoesDosAlunos(matriculas);
+  // Gabaritos enriquecidos são dados derivados e podem conter conteúdo de peças apagadas.
+  db.gabCache = {};
+  return { alunosApagados: matriculas.size, pecasApagadas: pecasDaTurma.size, entregasApagadas, sessoesEncerradas };
+}
+
+// Professor(a): zera somente turma própria. Coordenação/administração podem zerar qualquer turma.
+// Apenas a administração pode zerar o sistema inteiro. As contas, turmas e o livro-razão de gastos são mantidos.
 async function zerarSistema(req, res) {
   const sess = sessaoDe(req); if (!sess) return json(res, 401, { erro: 'SESSAO' }); if (sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
   let d; try { d = await lerJson(req, 5000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
+  const escopo = String(d.escopo || 'sistema');
+  if (escopo === 'turma') {
+    if (d.confirmacao !== 'ZERAR TURMA') return json(res, 400, { erro: 'Confirmação inválida.' });
+    const turmaId = String(d.turmaId || '');
+    const turma = db.turmas && db.turmas[turmaId];
+    if (!turma) return json(res, 404, { erro: 'Turma não encontrada.' });
+    if (!podeAcessarTurma(sess.usuario, turmaId)) return json(res, 403, { erro: 'Você só pode zerar uma turma em que leciona.' });
+    const resultado = zerarDadosDaTurma(turmaId);
+    salvarDb();
+    return json(res, 200, Object.assign({ ok: true, escopo: 'turma', turma: { id: turma.id, nome: turma.nome } }, resultado));
+  }
+  if (escopo !== 'sistema') return json(res, 400, { erro: 'Escopo inválido.' });
+  if (!ehAdmin(sess.usuario)) return json(res, 403, { erro: 'Só a administração pode zerar todo o sistema.' });
   if (d.confirmacao !== 'ZERAR') return json(res, 400, { erro: 'Confirmação inválida.' });
-  // O livro-razão de GASTOS (db.gastos) e as TURMAS são preservados — registro permanente.
-  db.alunos = {}; db.pecas = {}; db.entregas = {}; db.proximoNum = 1; salvarDb();
-  json(res, 200, { ok: true });
+  const matriculas = new Set(Object.keys(db.alunos || {}));
+  const resultado = { alunosApagados: matriculas.size, pecasApagadas: Object.keys(db.pecas || {}).length, entregasApagadas: Object.values(db.entregas || {}).reduce((n, entregas) => n + Object.keys(entregas || {}).length, 0) };
+  resultado.sessoesEncerradas = invalidarSessoesDosAlunos(matriculas);
+  db.alunos = {}; db.pecas = {}; db.entregas = {}; db.gabCache = {}; db.proximoNum = 1; salvarDb();
+  json(res, 200, Object.assign({ ok: true, escopo: 'sistema' }, resultado));
 }
 
 const server = http.createServer((req, res) => {
