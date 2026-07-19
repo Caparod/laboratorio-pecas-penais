@@ -4,6 +4,6 @@
   "description": "Laboratório de Peças Penais - Estágio I e II (IESB) - Prof. Rodrigo Silva",
   "main": "server.js",
   "scripts": { "start": "node server.js", "test": "node test/zerar-permissoes.test.js" },
-  "engines": { "node": ">=18" },
+  "engines": { "node": "20.x" },
   "dependencies": { "pdfjs-dist": "3.11.174", "nodemailer": "6.9.14" }
 }
