@@ -7,20 +7,22 @@ A chave de IA fica apenas no servidor, pela variável `ANTHROPIC_API_KEY`. O nav
 1. Crie um Web Service no Render apontando para esta pasta.
 2. Use:
    - Runtime: Node
-   - Build Command: `npm install`
+   - Build Command: `npm ci`
    - Start Command: `npm start`
 3. Configure as variáveis de ambiente:
    - `ANTHROPIC_API_KEY`: chave da Anthropic.
    - `APP_URL`: URL pública do sistema no Render.
    - `MODELO`: opcional, padrão definido no servidor.
-   - `PROF_LOGIN`: login do administrador principal, se quiser mudar o padrão.
-   - `PROF_SENHA`: senha inicial do administrador principal, se quiser mudar o padrão.
+   - `PROF_LOGIN`: login do administrador principal.
+   - `PROF_SENHA`: senha inicial forte do administrador principal. É obrigatória ao criar uma base nova.
    - `GMAIL_USER` e `GMAIL_APP_PASSWORD`: opcionais, para avisos por e-mail.
-   - `SESSAO_DIAS`: opcional, padrão 30.
+   - `SESSAO_DIAS`: opcional; na implantação fornecida, 7 dias.
+   - `CONFIAR_PROXY`: `true` no Render, para usar corretamente o IP encaminhado pelo proxy.
+   - `CRIAR_CONTAS_DEMO`: mantenha `false` em produção. Use `true` somente nos testes automatizados.
 
 ## Supabase
 
-O sistema usa Supabase como banco principal quando as variáveis abaixo existem. O arquivo `db.json` continua sendo salvo como contingência local.
+O sistema usa Supabase como banco principal quando as variáveis abaixo existem. O arquivo `db.json` continua sendo salvo como contingência local. Se o Supabase estiver configurado e a leitura remota falhar, o serviço não inicia e não sobrescreve o estado remoto com um fallback local.
 
 Variáveis no Render:
 
@@ -37,15 +39,21 @@ create table if not exists public.app_state (
   data jsonb not null,
   updated_at timestamptz not null default now()
 );
+
+-- O estado completo da aplicação é privado. O backend usa a service_role,
+-- que não é afetada pelo RLS; nenhuma política pública deve ser criada.
+alter table public.app_state enable row level security;
+revoke all on table public.app_state from anon, authenticated;
 ```
 
-Como a escrita é feita pelo servidor com `SUPABASE_SERVICE_ROLE_KEY`, não exponha essa chave no front-end.
+Se a tabela já existe, execute ao menos os dois últimos comandos no SQL Editor.
+Como a leitura e a escrita são feitas pelo servidor com `SUPABASE_SERVICE_ROLE_KEY`, não exponha essa chave no front-end.
 
-## Contas padrão
+## Contas e senhas iniciais
 
-- Administrador principal: definido por `PROF_LOGIN`/`PROF_SENHA`, ou o padrão legado do sistema.
-- Any: login `Any`, senha inicial `123456`, papel `Coordenador(a) do Curso de Direito`.
-- Karine: login `Karine`, senha inicial `123456`, papel `Coordenador(a) do NPJ`.
+- Somente o administrador definido por `PROF_LOGIN`/`PROF_SENHA` é criado em uma base nova.
+- Novos professores e alunos recebem senha temporária aleatória, exibida uma única vez à coordenação.
+- As contas `Any` e `Karine` com credenciais conhecidas existem somente quando `CRIAR_CONTAS_DEMO=true`.
 
 ## Proteções incluídas
 
@@ -55,11 +63,15 @@ Como a escrita é feita pelo servidor com `SUPABASE_SERVICE_ROLE_KEY`, não expo
 - Ao zerar uma turma, vínculos, peças, entregas e notas dela são apagados; contas sem outra turma também são removidas, mas o cadastro da turma e seus professores são preservados.
 - Aluno(a) só visualiza e entrega peças das turmas das quais participa.
 - A senha inicial precisa ser trocada antes de acessar as demais APIs; troca/reset de senha invalida sessões antigas.
-- Logout encerra a sessão também no servidor, e sessões expiram após o prazo configurado.
+- Logout encerra a sessão também no servidor. O navegador usa cookie `HttpOnly`, e somente o hash dos tokens é persistido.
 - Login possui limitação de tentativas e mensagens que não revelam se uma conta existe.
 - Exclusões removem entregas, liberações e sessões relacionadas, evitando dados órfãos.
 - Respostas incluem cabeçalhos de proteção do navegador e não armazenam dados de API em cache.
-- A leitura de PDF usa PDF.js 4.10.38 com execução dinâmica desativada (`isEvalSupported: false`), e o envio de e-mail usa Nodemailer 7.0.7 ou superior.
+- A persistência local usa gravação temporária, cópia de segurança `db.json.bak` e substituição atômica.
+- Falhas temporárias de escrita no Supabase são repetidas com espera progressiva.
+- Integrações HTTP e SMTP possuem tempo limite.
+- A leitura de PDF usa PDF.js 6.1.200 com execução dinâmica desativada (`isEvalSupported: false`), e o envio de e-mail usa Nodemailer 9.0.3.
+- O uso de IA exige ciência do aviso de privacidade; consulte `privacidade.html` e `PRIVACIDADE.md`.
 - CSV de notas tratado para reduzir risco de fórmula maliciosa no Excel.
 - Prazos calculados em horário de Brasília.
 

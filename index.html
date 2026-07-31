@@ -140,23 +140,24 @@ function aplicarCabecalhosVisao(h){
 }
 async function apiPost(u,b){
   const h={'content-type':'application/json'};
-  if(AUTH&&AUTH.token)h['authorization']='Bearer '+AUTH.token;
   aplicarCabecalhosVisao(h);
-  const r=await fetch(u,{method:'POST',headers:h,body:JSON.stringify(b)});
+  const r=await fetch(u,{method:'POST',headers:h,credentials:'same-origin',body:JSON.stringify(b)});
   if(r.status===401){let d=null;try{d=await r.clone().json()}catch(e){}
     if(d&&d.erro==='SESSAO'){sair('Sua sessão expirou. Entre novamente.');throw new Error('sessao')}}
   if(r.status===403){let d=null;try{d=await r.clone().json()}catch(e){}
-    if(d&&d.erro==='TROCAR_SENHA'&&AUTH){AUTH.precisaTrocarSenha=true;sset('auth',JSON.stringify(AUTH));renderTroca();throw new Error('trocar_senha')}}
+    if(d&&d.erro==='TROCAR_SENHA'&&AUTH){AUTH.precisaTrocarSenha=true;sset('auth',JSON.stringify(AUTH));renderTroca();throw new Error('trocar_senha')}
+    if(d&&d.erro==='ACEITAR_PRIVACIDADE'&&AUTH){AUTH.precisaAceitarPrivacidade=true;sset('auth',JSON.stringify(AUTH));renderPrivacidade();throw new Error('privacidade')}}
   return r;
 }
 async function apiGet(u){
-  const h={};if(AUTH&&AUTH.token)h['authorization']='Bearer '+AUTH.token;
+  const h={};
   aplicarCabecalhosVisao(h);
-  const r=await fetch(u,{headers:h});
+  const r=await fetch(u,{headers:h,credentials:'same-origin'});
   if(r.status===401){let d=null;try{d=await r.clone().json()}catch(e){}
     if(d&&d.erro==='SESSAO'){sair('Sua sessão expirou. Entre novamente.');throw new Error('sessao')}}
   if(r.status===403){let d=null;try{d=await r.clone().json()}catch(e){}
-    if(d&&d.erro==='TROCAR_SENHA'&&AUTH){AUTH.precisaTrocarSenha=true;sset('auth',JSON.stringify(AUTH));renderTroca();throw new Error('trocar_senha')}}
+    if(d&&d.erro==='TROCAR_SENHA'&&AUTH){AUTH.precisaTrocarSenha=true;sset('auth',JSON.stringify(AUTH));renderTroca();throw new Error('trocar_senha')}
+    if(d&&d.erro==='ACEITAR_PRIVACIDADE'&&AUTH){AUTH.precisaAceitarPrivacidade=true;sset('auth',JSON.stringify(AUTH));renderPrivacidade();throw new Error('privacidade')}}
   return r;
 }
 function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
@@ -210,7 +211,7 @@ function progresso(el,etapas,dur){
 const PECAS_ESTAGIO_I=['Queixa-Crime','Resposta à Acusação','Alegações Finais por Memoriais','Pedido de Liberdade Provisória','Relaxamento de Prisão em Flagrante','Revogação de Prisão Preventiva'];
 const PECAS_ESTAGIO_II=['Apelação Criminal','Recurso em Sentido Estrito (RESE)','Contrarrazões de Apelação','Embargos de Declaração','Embargos Infringentes e de Nulidade','Agravo em Execução','Habeas Corpus','Revisão Criminal'];
 // ================= Sessão / Login =================
-function sair(msg){const token=AUTH&&AUTH.token;sset('auth','');AUTH=null;renderLogin(msg);if(token)fetch('/api/logout',{method:'POST',headers:{authorization:'Bearer '+token}}).catch(()=>{})}
+function sair(msg){sset('auth','');AUTH=null;renderLogin(msg);fetch('/api/logout',{method:'POST',credentials:'same-origin'}).catch(()=>{})}
 function barra(){
   const el=document.getElementById('progresso');if(!el)return;
   if(!AUTH){el.innerHTML='';return}
@@ -222,14 +223,16 @@ function barra(){
 }
 // Volta à tela inicial do painel (título clicável) — sempre há um caminho de volta.
 function irInicio(){
-  if(!AUTH||!AUTH.token){renderLogin();return}
+  if(!AUTH){renderLogin();return}
   if(AUTH.tipo==='professor'){if(MODO_VISAO==='aluno')telaAluno();else{ABA_PROF='pecas';telaProfessor();}}
   else telaAluno();
 }
 function renderLogin(msg){
   menu.innerHTML='';document.getElementById('progresso').innerHTML='';
   conteudo.innerHTML='<div class="loginwrap"><h2>⚖️ Laboratório de Peças Penais</h2>'
-  +'<p>Entre com seu login. Aluno(a): use a matrícula (senha inicial = matrícula).</p>'
+  +'<p>Entre com seu login. Aluno(a): use a matrícula e a senha temporária fornecida pelo(a) professor(a).</p>'
+  +'<p style="font-size:.78rem;color:var(--cinza)">Os recursos de IA processam enunciados, trabalhos e imagens em provedor externo. Não envie dados pessoais desnecessários.</p>'
+  +'<p style="font-size:.78rem"><a href="/privacidade" target="_blank" rel="noopener" style="color:var(--azul)">Ler aviso de privacidade</a></p>'
   +'<input id="lg_user" placeholder="Login / Matrícula" autocomplete="username">'
   +'<input id="lg_pass" type="password" placeholder="Senha" autocomplete="current-password">'
   +'<button onclick="fazerLogin()">Entrar</button>'
@@ -242,14 +245,14 @@ async function fazerLogin(){
   if(!u||!p){e.innerHTML='<p class="erro-ia">Preencha login e senha.</p>';return}
   e.innerHTML='<p style="font-family:Arial,sans-serif;font-size:.85rem"><span class="spinner"></span>Entrando... (o servidor pode levar até 1 min para acordar)</p>';
   try{
-    const r=await fetch('/api/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({usuario:u,senha:p})});
+    const r=await fetch('/api/login',{method:'POST',headers:{'content-type':'application/json'},credentials:'same-origin',body:JSON.stringify({usuario:u,senha:p})});
     const d=await r.json();
-    if(!r.ok){e.innerHTML='<p class="erro-ia">'+(d.erro||'Falha no login.')+'</p>';return}
-    AUTH={token:d.token,tipo:d.tipo,usuario:u,nome:d.nome||'',papel:d.papel||'',admin:!!d.admin,gereProf:!!d.gereProf,gereCoord:!!d.gereCoord,turmaAtiva:d.turmaAtiva,precisaTrocarSenha:d.precisaTrocarSenha,emailVerificado:d.emailVerificado,email:d.email||''};
+    if(!r.ok){e.innerHTML='<p class="erro-ia">'+esc(d.erro||'Falha no login.')+'</p>';return}
+    AUTH={tipo:d.tipo,usuario:d.usuario||u,nome:d.nome||'',papel:d.papel||'',admin:!!d.admin,gereProf:!!d.gereProf,gereCoord:!!d.gereCoord,turmaAtiva:d.turmaAtiva,precisaTrocarSenha:d.precisaTrocarSenha,precisaAceitarPrivacidade:d.precisaAceitarPrivacidade,emailVerificado:d.emailVerificado,email:d.email||''};
     if(AUTH.tipo==='professor')MODO_VISAO=modoPadraoProfessor(); else MODO_VISAO='';
     sset('modo_visao',MODO_VISAO);
     sset('auth',JSON.stringify(AUTH));iniciar();
-  }catch(err){e.innerHTML='<p class="erro-ia">Erro de conexão: '+err.message+'</p>'}
+  }catch(err){e.innerHTML='<p class="erro-ia">Erro de conexão: '+esc(err.message)+'</p>'}
 }
 // Troca de senha (professor: só senha; aluno no 1º acesso: senha + e-mail)
 function renderTroca(){
@@ -272,7 +275,7 @@ async function salvarTroca(){
   e.innerHTML='<p style="font-family:Arial,sans-serif;font-size:.85rem"><span class="spinner"></span>Salvando...</p>';
   try{
     const r=await apiPost('/api/trocar-senha',body);const d=await r.json();
-    if(!r.ok){e.innerHTML='<p class="erro-ia">'+(d.erro||'Falha.')+'</p>';return}
+    if(!r.ok){e.innerHTML='<p class="erro-ia">'+esc(d.erro||'Falha.')+'</p>';return}
     AUTH.precisaTrocarSenha=false;
     if(AUTH.tipo==='aluno'){AUTH.email=body.email;AUTH.emailVerificado=false;sset('auth',JSON.stringify(AUTH));renderVerificarEmail(d.emailEnviado);}
     else{sset('auth',JSON.stringify(AUTH));iniciar();}
@@ -289,16 +292,25 @@ function renderVerificarEmail(enviado){
 async function confirmarEmail(){
   const c=document.getElementById('vc').value.trim(),e=document.getElementById('vc_erro');
   try{const r=await apiPost('/api/verificar-email',{codigo:c});const d=await r.json();
-  if(!r.ok){e.innerHTML='<p class="erro-ia">'+(d.erro||'Código incorreto.')+'</p>';return}
+  if(!r.ok){e.innerHTML='<p class="erro-ia">'+esc(d.erro||'Código incorreto.')+'</p>';return}
   AUTH.emailVerificado=true;sset('auth',JSON.stringify(AUTH));iniciar();}catch(err){}
 }
 async function reenviarCodigo(){try{await apiPost('/api/reenviar-codigo',{});alert('Novo código enviado.')}catch(e){}}
 function trocarMinhaSenha(){AUTH.precisaTrocarSenha=true;renderTroca();}
+function renderPrivacidade(){
+  menu.innerHTML='';barra();
+  conteudo.innerHTML='<div class="loginwrap"><h2>Aviso de privacidade</h2><p>Alguns recursos enviam enunciados, textos, imagens e listas acadêmicas ao provedor de inteligência artificial para processamento. Envie somente o necessário para a atividade.</p><p><a href="/privacidade" target="_blank" rel="noopener" style="color:var(--azul)">Ler o aviso completo</a></p><label style="display:flex;gap:8px;align-items:flex-start;text-align:left;font-family:Arial,sans-serif;font-size:.85rem"><input id="priv_ok" type="checkbox" style="width:auto;margin-top:2px">Li o aviso e estou ciente do processamento necessário para usar os recursos de IA.</label><button onclick="confirmarPrivacidade()">Continuar</button><div id="priv_fb"></div></div>';
+}
+async function confirmarPrivacidade(){
+  const fb=document.getElementById('priv_fb');if(!document.getElementById('priv_ok').checked){fb.innerHTML='<p class="erro-ia">Marque a confirmação para continuar.</p>';return}
+  try{const r=await apiPost('/api/aceitar-privacidade',{aceite:true});const d=await r.json();if(!r.ok){fb.innerHTML='<p class="erro-ia">'+esc(d.erro||'Falha')+'</p>';return}AUTH.precisaAceitarPrivacidade=false;sset('auth',JSON.stringify(AUTH));iniciar();}catch(e){}
+}
 function iniciar(){
-  if(!AUTH||!AUTH.token){renderLogin();return}
+  if(!AUTH){renderLogin();return}
   if(AUTH.tipo==='professor'&&(!MODO_VISAO||!modoPermitido(MODO_VISAO))){MODO_VISAO=modoPadraoProfessor();sset('modo_visao',MODO_VISAO);}
   if(AUTH.precisaTrocarSenha){renderTroca();return}
   if(AUTH.tipo==='aluno'&&!AUTH.emailVerificado){renderVerificarEmail();return}
+  if(AUTH.precisaAceitarPrivacidade){renderPrivacidade();return}
   barra();
   if(AUTH.tipo==='professor'){if(MODO_VISAO==='aluno')telaAluno();else telaProfessor();}
   else telaAluno();
@@ -381,7 +393,7 @@ function dataHoraBR(iso){if(!iso)return '';const t=iso.split('T');const dd=dataB
 async function abrirPeca(id){
   conteudo.innerHTML='<p><span class="spinner"></span>Abrindo...</p>';
   const r=await apiGet('/api/peca/get?id='+id);const d=await r.json();
-  if(!r.ok){conteudo.innerHTML='<p class="erro-ia">'+(d.erro||'Erro')+'</p>';return}
+  if(!r.ok){conteudo.innerHTML='<p class="erro-ia">'+esc(d.erro||'Erro')+'</p>';return}
   const p=d.peca;
   let ent='';
   if(!d.entregas.length)ent='<p style="color:var(--cinza)">Nenhuma entrega ainda.</p>';
@@ -432,9 +444,9 @@ async function publicarRascunho(id){
   fb.innerHTML='<p style="font-family:Arial,sans-serif;font-size:.85rem"><span class="spinner"></span>Publicando...</p>';
   try{const r=await apiPost('/api/peca/salvar',Object.assign({id,nomePeca:p.nomePeca,turmaId,caso:p.caso,gab:p.gab,prazo,publicar:true},classificacaoPayload(p)));
     const d=await r.json();
-    if(!r.ok){fb.innerHTML='<p class="erro-ia">'+(d.erro||'Erro')+'</p>';return}
+    if(!r.ok){fb.innerHTML='<p class="erro-ia">'+esc(d.erro||'Erro')+'</p>';return}
     abrirPeca(id);
-  }catch(e){fb.innerHTML='<p class="erro-ia">Falha: '+e.message+'</p>';}
+  }catch(e){fb.innerHTML='<p class="erro-ia">Falha: '+esc(e.message)+'</p>';}
 }
 async function vincularTurma(){
   const p=window.__peca;if(!p)return;
@@ -448,12 +460,12 @@ async function vincularTurma(){
   fb.innerHTML='<p style="font-family:Arial,sans-serif;font-size:.85rem"><span class="spinner"></span>Publicando...</p>';
   try{const r=await apiPost('/api/peca/salvar',Object.assign({nomePeca:p.nomePeca,turmaId,caso:p.caso,gab:p.gab,prazo,publicar:true},classificacaoPayload(p)));
     const d=await r.json();
-    if(!r.ok){fb.innerHTML='<p class="erro-ia">'+(d.erro||'Erro')+'</p>';return}
+    if(!r.ok){fb.innerHTML='<p class="erro-ia">'+esc(d.erro||'Erro')+'</p>';return}
     fb.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif">🚀 Publicada como Peça '+d.num+' para '+esc(tNome)+' — prazo '+dataHoraBR(prazo)+'.</p>';
-  }catch(e){fb.innerHTML='<p class="erro-ia">Falha: '+e.message+'</p>';}
+  }catch(e){fb.innerHTML='<p class="erro-ia">Falha: '+esc(e.message)+'</p>';}
 }
-async function renovarPrazo(id){const v=document.getElementById('pz_novo').value;if(!v){alert('Escolha o novo prazo.');return}const r=await apiPost('/api/peca/renovar-prazo',{id,prazo:v});const d=await r.json();document.getElementById('pz_fb').innerHTML=r.ok?'<p style="color:var(--verde);font-family:Arial,sans-serif;font-size:.85rem">Prazo renovado para '+dataHoraBR(v)+'.</p>':'<p class="erro-ia">'+(d.erro||'Erro')+'</p>';}
-async function liberarGeral(id,val){const r=await apiPost('/api/peca/liberar-prazo',{id,liberar:val});const d=await r.json();document.getElementById('pz_fb').innerHTML=r.ok?'<p style="color:var(--verde);font-family:Arial,sans-serif;font-size:.85rem">'+(val?'Entregas fora do prazo LIBERADAS para a turma.':'Bloqueio de prazo reativado.')+'</p>':'<p class="erro-ia">'+(d.erro||'Erro')+'</p>';}
+async function renovarPrazo(id){const v=document.getElementById('pz_novo').value;if(!v){alert('Escolha o novo prazo.');return}const r=await apiPost('/api/peca/renovar-prazo',{id,prazo:v});const d=await r.json();document.getElementById('pz_fb').innerHTML=r.ok?'<p style="color:var(--verde);font-family:Arial,sans-serif;font-size:.85rem">Prazo renovado para '+esc(dataHoraBR(v))+'.</p>':'<p class="erro-ia">'+esc(d.erro||'Erro')+'</p>';}
+async function liberarGeral(id,val){const r=await apiPost('/api/peca/liberar-prazo',{id,liberar:val});const d=await r.json();document.getElementById('pz_fb').innerHTML=r.ok?'<p style="color:var(--verde);font-family:Arial,sans-serif;font-size:.85rem">'+(val?'Entregas fora do prazo LIBERADAS para a turma.':'Bloqueio de prazo reativado.')+'</p>':'<p class="erro-ia">'+esc(d.erro||'Erro')+'</p>';}
 async function liberarAluno(id,mat,val){const m=mat||document.getElementById('pz_mat').value.trim();if(!m){alert('Informe a matrícula.');return}const r=await apiPost('/api/peca/liberar-prazo',{id,matricula:m,liberar:val!==false});if(r.ok)abrirPeca(id);}
 function dataHora(ts){if(!ts)return '—';const d=new Date(ts);return d.toLocaleString('pt-BR')}
 async function excluirPeca(id){if(!confirm('Excluir esta peça e todas as suas entregas? Não há retorno.'))return;await apiPost('/api/peca/excluir',{id});irAba('pecas');}
@@ -462,7 +474,7 @@ async function excluirPeca(id){if(!confirm('Excluir esta peça e todas as suas e
 async function abrirEntrega(id,mat){
   conteudo.innerHTML='<p><span class="spinner"></span>Abrindo entrega...</p>';
   const r=await apiGet('/api/entrega?id='+id+'&matricula='+mat);const d=await r.json();
-  if(!r.ok){conteudo.innerHTML='<p class="erro-ia">'+(d.erro||'Erro')+'</p>';return}
+  if(!r.ok){conteudo.innerHTML='<p class="erro-ia">'+esc(d.erro||'Erro')+'</p>';return}
   window.__ent={id,mat};
   conteudo.innerHTML='<div class="botoes" style="margin-bottom:10px"><button onclick="abrirPeca(\''+id+'\')">← Voltar</button></div>'
    +'<span class="badge">Peça '+d.peca.num+'</span><h2 class="titulo-peca">'+esc(d.aluno.nome)+' · '+d.aluno.matricula+'</h2>'
@@ -483,11 +495,11 @@ async function corrigirEntregaIA(){
   try{
     const r=await apiPost('/api/entrega/corrigir',{id:window.__ent.id,matricula:window.__ent.mat});
     const d=await r.json();prog.fim();
-    if(!r.ok){let m=(d&&d.erro)||'Erro';if(m==='LIMITE_CREDITOS')m='⛔ Limite mensal de uso da IA atingido. '+((d&&d.detalhe)?('('+d.detalhe+') '):'')+'A IA volta quando o limite for renovado ou aumentado no painel da Anthropic.';fb.innerHTML='<p class="erro-ia">'+m+'</p>';return}
+    if(!r.ok){let m=(d&&d.erro)||'Erro';if(m==='LIMITE_CREDITOS')m='⛔ Limite mensal de uso da IA atingido. A IA volta quando o limite for renovado ou aumentado no painel do provedor.';fb.innerHTML='<p class="erro-ia">'+esc(m)+'</p>';return}
     document.getElementById('relatorio').value=d.relatorio;
     if(d.notaSugerida)document.getElementById('nota').value=String(d.notaSugerida).replace('.',',');
     fb.innerHTML='<p style="font-family:Arial,sans-serif;font-size:.85rem;color:var(--verde)">Relatório gerado pela IA. Revise, ajuste a nota e valide.</p>';
-  }catch(e){prog.fim();fb.innerHTML='<p class="erro-ia">Falha: '+e.message+'</p>';}
+  }catch(e){prog.fim();fb.innerHTML='<p class="erro-ia">Falha: '+esc(e.message)+'</p>';}
 }
 async function salvarEntrega(validar){
   const rel=document.getElementById('relatorio').value.trim();const nota=document.getElementById('nota').value.trim();
@@ -495,7 +507,7 @@ async function salvarEntrega(validar){
   if(!nota){fb.innerHTML='<p class="erro-ia">Informe a nota.</p>';return}
   if(validar&&!confirm('Validar e enviar o relatório e a nota '+nota+' ao e-mail do aluno?'))return;
   try{const r=await apiPost('/api/entrega/validar',{id:window.__ent.id,matricula:window.__ent.mat,relatorio:rel,nota:nota,validar:!!validar});
-  const d=await r.json();if(!r.ok){fb.innerHTML='<p class="erro-ia">'+(d.erro||'Erro')+'</p>';return}
+  const d=await r.json();if(!r.ok){fb.innerHTML='<p class="erro-ia">'+esc(d.erro||'Erro')+'</p>';return}
   fb.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif">'+(validar?'✅ Validada e enviada ao aluno.':'💾 Rascunho salvo.')+'</p>';
   }catch(e){}
 }
@@ -550,20 +562,20 @@ async function gerarPecaIA(){
   const fb=document.getElementById('np_fb');const nome=document.getElementById('np_nome').value;const nivel=document.getElementById('np_nivel').value;
   const prog=progresso(fb,ETAPAS_CASO,30);
   try{const r=await apiPost('/api/peca/gerar-ia',{nomePeca:nome,disc:turmaSelecionadaNome(),nivel});const d=await r.json();prog.fim();
-    if(!r.ok){let m=(d&&d.erro)||'Erro';if(m==='LIMITE_CREDITOS')m='⛔ Limite mensal de uso da IA atingido. '+((d&&d.detalhe)?('('+d.detalhe+') '):'')+'A IA volta quando o limite for renovado ou aumentado no painel da Anthropic.';fb.innerHTML='<p class="erro-ia">'+m+'</p>'+((d&&d.bruto)?('<pre style="white-space:pre-wrap;font-size:.72rem;color:var(--cinza);background:#faf8f2;border:1px solid #eee4c8;border-radius:6px;padding:8px;margin-top:6px">Resposta recebida da IA: '+esc(d.bruto)+'</pre>'):'');return}
+    if(!r.ok){let m=(d&&d.erro)||'Erro';if(m==='LIMITE_CREDITOS')m='⛔ Limite mensal de uso da IA atingido. A IA volta quando o limite for renovado ou aumentado no painel do provedor.';fb.innerHTML='<p class="erro-ia">'+esc(m)+'</p>'+((d&&d.bruto)?('<pre style="white-space:pre-wrap;font-size:.72rem;color:var(--cinza);background:#faf8f2;border:1px solid #eee4c8;border-radius:6px;padding:8px;margin-top:6px">Resposta recebida da IA: '+esc(d.bruto)+'</pre>'):'');return}
     document.getElementById('np_caso').value=d.caso;document.getElementById('np_gab').value=d.gab||'';atualizarBotaoGabarito();
     RASCUNHO={nomePeca:nome,disc:turmaSelecionadaNome(),turmaId:(document.getElementById('np_turma')||{}).value,caso:d.caso,gab:d.gab||''};
     fb.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif;font-size:.85rem">✅ Enunciado gerado. Revise abaixo e clique em <b>“⚖️ Gerar gabarito para este enunciado”</b> (passo 2).</p>';
-  }catch(e){prog.fim();fb.innerHTML='<p class="erro-ia">Falha: '+e.message+'</p>';}
+  }catch(e){prog.fim();fb.innerHTML='<p class="erro-ia">Falha: '+esc(e.message)+'</p>';}
 }
 function subirPecaPdf(inp){
   const f=inp.files&&inp.files[0];if(!f)return;const fb=document.getElementById('np_fb');
   fb.innerHTML='<p style="font-family:Arial,sans-serif;font-size:.85rem"><span class="spinner"></span>Lendo o PDF...</p>';
   const fr=new FileReader();fr.onload=async function(){
     try{const r=await apiPost('/api/peca/extrair-pdf',{pdf:fr.result});const d=await r.json();
-    if(!r.ok){fb.innerHTML='<p class="erro-ia">'+(d.erro||'Erro')+'</p>';return}
+    if(!r.ok){fb.innerHTML='<p class="erro-ia">'+esc(d.erro||'Erro')+'</p>';return}
     document.getElementById('np_caso').value=d.texto;atualizarBotaoGabarito();fb.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif;font-size:.85rem">Enunciado extraído do PDF. Agora clique em “Gerar gabarito” (ou escreva o seu).</p>';
-    }catch(e){fb.innerHTML='<p class="erro-ia">Falha: '+e.message+'</p>';}
+    }catch(e){fb.innerHTML='<p class="erro-ia">Falha: '+esc(e.message)+'</p>';}
   };fr.readAsDataURL(f);inp.value='';
 }
 const ETAPAS_GAB=[[0,'📖 Lendo o enunciado...'],[8,'⚖️ Verificando súmulas e precedentes...'],[40,'🔗 Montando as fontes...']];
@@ -572,9 +584,9 @@ async function gerarGabarito(){
   if(caso.length<40){fb.innerHTML='<p class="erro-ia">Escreva/gere o enunciado primeiro.</p>';return}
   const prog=progresso(fb,ETAPAS_GAB,70);
   try{const r=await apiPost('/api/peca/gerar-gabarito',{caso});const d=await r.json();prog.fim();
-    if(!r.ok){let m=(d&&d.erro)||'Erro';if(m==='LIMITE_CREDITOS')m='⛔ Limite mensal de uso da IA atingido. '+((d&&d.detalhe)?('('+d.detalhe+') '):'')+'A IA volta quando o limite for renovado ou aumentado no painel da Anthropic.';fb.innerHTML='<p class="erro-ia">'+m+'</p>';return}
+    if(!r.ok){let m=(d&&d.erro)||'Erro';if(m==='LIMITE_CREDITOS')m='⛔ Limite mensal de uso da IA atingido. A IA volta quando o limite for renovado ou aumentado no painel do provedor.';fb.innerHTML='<p class="erro-ia">'+esc(m)+'</p>';return}
     document.getElementById('np_gab').value=d.gab;atualizarBotaoGabarito();fb.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif;font-size:.85rem">Gabarito gerado — confira e edite à vontade.</p>';
-  }catch(e){prog.fim();fb.innerHTML='<p class="erro-ia">Falha: '+e.message+'</p>';}
+  }catch(e){prog.fim();fb.innerHTML='<p class="erro-ia">Falha: '+esc(e.message)+'</p>';}
 }
 async function salvarPeca(publicar){
   const caso=document.getElementById('np_caso').value.trim();const gab=document.getElementById('np_gab').value.trim();
@@ -585,7 +597,7 @@ async function salvarPeca(publicar){
   const turmaId=(document.getElementById('np_turma')||{}).value||null;
   const classificacao={classe:(document.getElementById('np_tpu_classe')||{}).value||'',assunto:(document.getElementById('np_tpu_assunto')||{}).value||'',documento:(document.getElementById('np_tpu_documento')||{}).value||'',fase:(document.getElementById('np_fase')||{}).value||'',orgao:(document.getElementById('np_orgao')||{}).value||''};
   try{const r=await apiPost('/api/peca/salvar',Object.assign({id:RASCUNHO.id,nomePeca:nome,disc:turmaSelecionadaNome(),turmaId,caso,gab,prazo,publicar},classificacaoPayload({classificacao})));
-  const d=await r.json();if(!r.ok){fb.innerHTML='<p class="erro-ia">'+(d.erro||'Erro')+'</p>';return}
+  const d=await r.json();if(!r.ok){fb.innerHTML='<p class="erro-ia">'+esc(d.erro||'Erro')+'</p>';return}
   RASCUNHO={nomePeca:'',disc:'',caso:'',gab:'',classificacao:{}};
   fb.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif">'+(publicar?'🚀 Peça '+d.num+' publicada para a turma!':'💾 Rascunho salvo (Peça '+d.num+').')+'</p>';
   setTimeout(()=>irAba('pecas'),900);
@@ -629,7 +641,7 @@ async function profAlunos(dadosPrev){
    +'<table><tr><th>Matrícula</th><th>Nome</th><th>Turma</th><th>Senha</th><th></th></tr>'+(linhas||'<tr><td colspan="5">Nenhum aluno.</td></tr>')+'</table></div>';
   if(podeGerirAgora())carregarProfsSelect();
 }
-async function carregarProfsSelect(){try{const r=await apiGet('/api/professores');const d=await r.json();const s=document.getElementById('tur_prof');if(!s||!r.ok)return;s.innerHTML=(d.professores||[]).map(p=>'<option value="'+p.login+'"'+(p.login===AUTH.usuario?' selected':'')+'>'+esc(p.nome||p.login)+'</option>').join('');}catch(e){}}
+async function carregarProfsSelect(){try{const r=await apiGet('/api/professores');const d=await r.json();const s=document.getElementById('tur_prof');if(!s||!r.ok)return;s.innerHTML=(d.professores||[]).map(p=>'<option value="'+escAttr(p.login)+'"'+(p.login===AUTH.usuario?' selected':'')+'>'+esc(p.nome||p.login)+'</option>').join('');}catch(e){}}
 async function criarTurma(){const n=(document.getElementById('tur_nome')||{}).value.trim();const p=(document.getElementById('tur_prof')||{}).value;if(!n){alert('Dê um nome à turma.');return}const r=await apiPost('/api/turmas/salvar',{nome:n,professores:p?[p]:[]});const d=await r.json();if(!r.ok){alert(d.erro||'Erro');return}profAlunos();}
 async function renomearTurma(id){const t=(window.__turmas||[]).find(x=>x.id===id);if(!t)return;const n=prompt('Nome da turma:',t.nome);if(!n)return;const pr=prompt('Login(s) do(s) professor(es) responsável(is), separados por vírgula:',t.professores.map(p=>p.login).join(', '));const profs=(pr||'').split(',').map(x=>x.trim()).filter(x=>x);const r=await apiPost('/api/turmas/salvar',{id,nome:n,professores:profs});const d=await r.json();if(!r.ok){alert(d.erro||'Erro');return}profAlunos();}
 async function excluirTurma(id){
@@ -642,11 +654,26 @@ async function excluirTurma(id){
   alert('Turma excluída. '+(d.vinculosRemovidos||0)+' vínculo(s) removido(s), '+(d.alunosApagados||0)+' conta(s) sem outra turma apagada(s), '+(d.pecasApagadas||0)+' peça(s) e '+(d.entregasApagadas||0)+' entrega(s) apagados.');
   profAlunos();}
 async function alterarTurmaAluno(mat,tid,acao){try{const r=await apiPost('/api/aluno/turma',{matricula:mat,turmaId:tid,acao});const d=await r.json();if(!r.ok){alert(d.erro||'Erro');return}profAlunos();}catch(e){}}
-async function salvarAlunos(sub){const txt=document.getElementById('adm_mats').value;const mats=txt.split(/\n+/).map(x=>x.trim()).filter(x=>x);if(!mats.length){document.getElementById('adm_msg').innerHTML='<p class="erro-ia">Cole ao menos uma matrícula.</p>';return}const turmaId=(document.getElementById('adm_turma')||{}).value||null;const r=await apiPost('/api/admin',{matriculas:mats,substituir:!!sub,turmaId});const d=await r.json();if(r.ok){profAlunos(d);setTimeout(()=>{const m=document.getElementById('adm_msg');if(m)m.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif;font-size:.85rem"><b>'+(d.novas||0)+' novo(s).</b> '+((d.existentes||0)?d.existentes+' já existiam (ignorados).':'')+'</p>'},80)}}
-async function resetSenha(m){if(!confirm('Resetar senha de '+m+' para a matrícula?'))return;const r=await apiPost('/api/admin',{resetarSenha:m});profAlunos(await r.json());}
+async function salvarAlunos(sub){
+  const txt=document.getElementById('adm_mats').value;const mats=txt.split(/\n+/).map(x=>x.trim()).filter(x=>x);
+  if(!mats.length){document.getElementById('adm_msg').innerHTML='<p class="erro-ia">Cole ao menos uma matrícula.</p>';return}
+  const turmaId=(document.getElementById('adm_turma')||{}).value||null;const r=await apiPost('/api/admin',{matriculas:mats,substituir:!!sub,turmaId});const d=await r.json();
+  if(!r.ok){document.getElementById('adm_msg').innerHTML='<p class="erro-ia">'+esc(d.erro||'Erro')+'</p>';return}
+  profAlunos(d);setTimeout(()=>{const m=document.getElementById('adm_msg');if(!m)return;const creds=d.credenciaisIniciais||[];
+    const bloco=creds.length?'<p><b>Senhas temporárias — copie agora:</b></p><pre style="white-space:pre-wrap">'+creds.map(c=>esc(c.matricula+' — '+c.senha)).join('\n')+'</pre>':'';
+    m.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif;font-size:.85rem"><b>'+(d.novas||0)+' novo(s).</b> '+((d.existentes||0)?d.existentes+' já existiam (ignorados).':'')+'</p>'+bloco;
+  },80)
+}
+async function resetSenha(m){
+  if(!confirm('Gerar uma nova senha temporária para '+m+'?'))return;
+  const r=await apiPost('/api/admin',{resetarSenha:m});const d=await r.json();
+  if(!r.ok){alert(d.erro||'Erro');return}
+  const cred=(d.credenciaisIniciais||[])[0];if(cred)alert('Senha temporária de '+m+': '+cred.senha+'\n\nCopie agora: ela não será exibida novamente.');
+  profAlunos(d);
+}
 async function excluirAl(m){if(!confirm((AUTH&&AUTH.admin||podeGerirAgora()?'Excluir a conta ':'Remover das suas turmas o aluno ')+m+'?'))return;const r=await apiPost('/api/admin',{excluirAluno:m});const d=await r.json();if(!r.ok){alert(d.erro||'Erro');return}profAlunos(d);}
 async function excluirTodosAl(){if(!confirm('Excluir TODOS os alunos do sistema?'))return;const c=prompt('Para confirmar, digite EXCLUIR TODOS (em maiúsculas):');if(c!=='EXCLUIR TODOS'){alert('Cancelado.');return}const r=await apiPost('/api/admin',{excluirTodos:true,confirmacao:c});const d=await r.json();if(!r.ok){alert(d.erro||'Erro');return}profAlunos(d);}
-function importarPdfAlunos(inp){const f=inp.files&&inp.files[0];if(!f)return;const msg=document.getElementById('adm_msg');msg.innerHTML='<p style="font-family:Arial,sans-serif;font-size:.85rem"><span class="spinner"></span>Lendo o PDF com IA...</p>';const fr=new FileReader();fr.onload=async function(){try{const r=await apiPost('/api/extrair-pdf',{pdf:fr.result});const d=await r.json();if(!r.ok){msg.innerHTML='<p class="erro-ia">'+(d.erro||'Erro')+'</p>';return}document.getElementById('adm_mats').value=d.alunos.map(a=>a.matricula+(a.nome?' - '+a.nome:'')).join('\n');msg.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif;font-size:.85rem"><b>'+d.alunos.length+' alunos encontrados.</b> Revise e clique em Adicionar ou Substituir.</p>';}catch(e){msg.innerHTML='<p class="erro-ia">Falha: '+e.message+'</p>';}};fr.readAsDataURL(f);inp.value='';}
+function importarPdfAlunos(inp){const f=inp.files&&inp.files[0];if(!f)return;const msg=document.getElementById('adm_msg');msg.innerHTML='<p style="font-family:Arial,sans-serif;font-size:.85rem"><span class="spinner"></span>Lendo o PDF com IA...</p>';const fr=new FileReader();fr.onload=async function(){try{const r=await apiPost('/api/extrair-pdf',{pdf:fr.result});const d=await r.json();if(!r.ok){msg.innerHTML='<p class="erro-ia">'+esc(d.erro||'Erro')+'</p>';return}document.getElementById('adm_mats').value=d.alunos.map(a=>a.matricula+(a.nome?' - '+a.nome:'')).join('\n');msg.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif;font-size:.85rem"><b>'+Number(d.alunos.length||0)+' alunos encontrados.</b> Revise e clique em Adicionar ou Substituir.</p>';}catch(e){msg.innerHTML='<p class="erro-ia">Falha: '+esc(e.message)+'</p>';}};fr.readAsDataURL(f);inp.value='';}
 
 // ---- Gastos (Administrador e Coordenação) ----
 function mesBR(x){const p=x.split('-');const n=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];return n[parseInt(p[1],10)-1]+'/'+p[0]}
@@ -657,7 +684,7 @@ async function profGastos(mes){
    +'<div id="gx"><p><span class="spinner"></span>Carregando...</p></div>';
   try{const r=await apiGet('/api/gastos');const d=await r.json();
     const gx=document.getElementById('gx');
-    if(!r.ok){gx.innerHTML='<p class="erro-ia">'+(d.erro||'Erro')+'</p>';return}
+    if(!r.ok){gx.innerHTML='<p class="erro-ia">'+esc(d.erro||'Erro')+'</p>';return}
     if(!d.meses.length){gx.innerHTML='<div class="card"><p>Nenhum uso de IA registrado ainda. A partir de agora, cada chamada (correções, enunciados, gabaritos) fica registrada aqui.</p></div>';return}
     const m=(mes&&d.meses.includes(mes))?mes:d.meses[0];
     const abas='<div class="botoes" style="flex-wrap:wrap;margin-bottom:10px">'+d.meses.map(x=>'<button class="'+(x===m?'primario':'')+'" onclick="profGastos(\''+x+'\')">'+mesBR(x)+'</button>').join('')+'</div>';
@@ -692,7 +719,7 @@ async function carregarPainel(tid){
   if(!tid){el.innerHTML='<div class="card"><p>Escolha uma turma.</p></div>';return}
   el.innerHTML='<p><span class="spinner"></span>Calculando indicadores...</p>';
   try{const r=await apiGet('/api/painel?turma='+encodeURIComponent(tid));const d=await r.json();
-    if(!r.ok){el.innerHTML='<p class="erro-ia">'+(d.erro||'Erro')+'</p>';return}
+    if(!r.ok){el.innerHTML='<p class="erro-ia">'+esc(d.erro||'Erro')+'</p>';return}
     const z=d.resumo;
     let html='<div class="metricas">'
       +'<div class="metrica"><b>'+d.turma.alunos+'</b><span>alunos na turma</span></div>'
@@ -718,7 +745,7 @@ async function baixarPlanilha(){
   const fb=document.getElementById('nt_fb');
   if(!tid){fb.innerHTML='<p class="erro-ia">Escolha a turma.</p>';return}
   try{const r=await apiGet('/api/notas.csv?turma='+encodeURIComponent(tid));
-    if(!r.ok){fb.innerHTML='<p class="erro-ia">'+(await r.text())+'</p>';return}
+    if(!r.ok){fb.innerHTML='<p class="erro-ia">'+esc(await r.text())+'</p>';return}
     const blob=await r.blob();const a=document.createElement('a');a.href=URL.createObjectURL(blob);
     const tNome=((window.__turmas||[]).find(t=>t.id===tid)||{}).nome||'turma';
     a.download='notas-'+tNome.toLowerCase().replace(/[^a-z0-9]+/g,'-')+'.csv';a.click();fb.innerHTML='';
@@ -758,10 +785,10 @@ async function zerarTudo(){
 async function profProfessores(){
   conteudo.innerHTML='<h2 class="titulo-peca">Professores(as)</h2><div id="lpr"><p><span class="spinner"></span>Carregando...</p></div>';
   try{const r=await apiGet('/api/professores');const d=await r.json();
-    if(!r.ok){document.getElementById('lpr').innerHTML='<p class="erro-ia">'+(d.erro||'Erro')+'</p>';return}
+    if(!r.ok){document.getElementById('lpr').innerHTML='<p class="erro-ia">'+esc(d.erro||'Erro')+'</p>';return}
     const admin=!!d.souAdmin;
     let form='<div class="card"><h3>Cadastrar '+(admin?'Professor(a) ou Coordenador(a)':'Professor(a)')+'</h3>'
-      +'<p style="font-size:.85rem;color:var(--cinza)">A senha inicial é o próprio login; a pessoa troca no primeiro acesso.</p>'
+      +'<p style="font-size:.85rem;color:var(--cinza)">O sistema gera uma senha temporária forte, exibida uma única vez.</p>'
       +'<div style="display:flex;gap:8px;flex-wrap:wrap;font-family:Arial,sans-serif;align-items:center">'
       +'<input id="pr_login" placeholder="Login (sem espaços)" style="padding:8px;border:1px solid #cfc9b8;border-radius:6px">'
       +'<input id="pr_nome" placeholder="Nome completo" style="padding:8px;border:1px solid #cfc9b8;border-radius:6px">'
@@ -772,7 +799,7 @@ async function profProfessores(){
       const podeMexer=!p.admin && p.login!==d.meuLogin && (admin || !/coorden/i.test(p.papel||''));
       let acoes='<span style="color:var(--cinza)">—</span>';
       if(p.login===d.meuLogin) acoes='<span style="color:var(--dourado)">você</span>';
-      else if(podeMexer) acoes='<a style="cursor:pointer;color:var(--azul)" onclick="resetProfessor(\''+p.login+'\')">resetar senha</a> · <a style="cursor:pointer;color:var(--vermelho)" onclick="excluirProfessor(\''+p.login+'\')">excluir</a>';
+      else if(podeMexer){const chave=encodeURIComponent(p.login);acoes='<a style="cursor:pointer;color:var(--azul)" onclick="resetProfessor(decodeURIComponent(\''+chave+'\'))">resetar senha</a> · <a style="cursor:pointer;color:var(--vermelho)" onclick="excluirProfessor(decodeURIComponent(\''+chave+'\'))">excluir</a>';}
       tab+='<tr><td>'+esc(p.login)+'</td><td>'+esc(p.nome||'—')+'</td><td>'+esc(rotuloPapel(p.papel))+(p.admin?' 👑':'')+'</td><td>'+(p.mudouSenha?'✓ trocada':'inicial')+'</td><td>'+acoes+'</td></tr>';
     }
     tab+='</table></div>';
@@ -786,8 +813,8 @@ async function salvarProfessor(){
   const fb=document.getElementById('pr_fb');
   if(!login){fb.innerHTML='<p class="erro-ia">Informe o login.</p>';return}
   const r=await apiPost('/api/professores/salvar',{login,nome,papel});const d=await r.json();
-  if(!r.ok){fb.innerHTML='<p class="erro-ia">'+(d.erro||'Erro')+'</p>';return}
-  if(d.novo)alert('Cadastrado(a)!\n\nLogin: '+login+'\nSenha inicial: '+login+'\n\nA pessoa troca a senha no primeiro acesso.');
+  if(!r.ok){fb.innerHTML='<p class="erro-ia">'+esc(d.erro||'Erro')+'</p>';return}
+  if(d.novo)alert('Cadastrado(a)!\n\nLogin: '+login+'\nSenha temporária: '+d.senhaInicial+'\n\nCopie agora: ela não será exibida novamente.');
   profProfessores();
 }
 async function excluirProfessor(login){
@@ -800,7 +827,7 @@ async function resetProfessor(login){
   if(!confirm('Resetar a senha de '+login+' para o próprio login? A pessoa troca no próximo acesso.'))return;
   const r=await apiPost('/api/professores/reset',{login});const d=await r.json();
   if(!r.ok){alert(d.erro||'Erro');return}
-  alert('Senha resetada. Nova senha inicial: '+login);
+  alert('Senha resetada. Senha temporária: '+d.senhaTemporaria+'\n\nCopie agora: ela não será exibida novamente.');
   profProfessores();
 }
 
@@ -829,7 +856,7 @@ async function telaAluno(){
   conteudo.innerHTML='<h2 class="titulo-peca">Peças para entregar'+(professorEmVisaoAluno()?' <span class="badge">visão aluno</span>':'')+'</h2><div id="la"><p><span class="spinner"></span>Carregando...</p></div>';
   if(professorEmVisaoAluno()&&!TURMA_ATUACAO){document.getElementById('la').innerHTML='<p class="erro-ia">Selecione uma turma para ver o sistema como aluno(a).</p>';return}
   try{const r=await apiGet('/api/pecas-aluno');const d=await r.json();
-    if(!r.ok){document.getElementById('la').innerHTML='<p class="erro-ia">'+(d.erro||'Erro')+'</p>';return}
+    if(!r.ok){document.getElementById('la').innerHTML='<p class="erro-ia">'+esc(d.erro||'Erro')+'</p>';return}
     if(!d.pecas.length){document.getElementById('la').innerHTML='<div class="card" style="text-align:center;padding:40px"><h3 style="color:var(--azul)">⏳ Aguarde o envio do(a) Professor(a)</h3><p style="color:var(--cinza)">Nenhuma peça foi publicada ainda para a sua turma. Assim que o(a) professor(a) enviar uma peça, ela aparecerá aqui com o prazo de entrega.</p></div>'+bannerOAB();return}
     let cards='';
     for(const p of d.pecas){
@@ -846,10 +873,15 @@ async function telaAluno(){
   }catch(e){document.getElementById('la').innerHTML='<p class="erro-ia">Falha ao carregar.</p>';}
 }
 async function carregarTurmasAtuacao(){
-  if(TURMAS_ATUACAO.length)return;
   try{
     const r=await apiGet('/api/turmas');const d=await r.json();
-    if(r.ok)TURMAS_ATUACAO=d.turmas||[];
+    if(r.ok){
+      TURMAS_ATUACAO=d.turmas||[];
+      if(!TURMAS_ATUACAO.some(t=>t.id===TURMA_ATUACAO)){
+        TURMA_ATUACAO=TURMAS_ATUACAO.length?TURMAS_ATUACAO[0].id:'';
+        sset('turma_atuacao',TURMA_ATUACAO);
+      }
+    }
   }catch(e){TURMAS_ATUACAO=[];}
 }
 function seletorTurmaAtuacao(){
@@ -858,7 +890,7 @@ function seletorTurmaAtuacao(){
   return '<div class="grupo">Turma da visão aluno</div>'
    +'<div style="margin:2px 12px 14px"><select onchange="trocarTurmaAtuacao(this.value)" style="width:100%;padding:8px;border-radius:6px;border:1px solid #3a5478;background:#fff;color:#20304a;font-family:Arial,sans-serif">'+opts+'</select></div>';
 }
-function trocarTurmaAtuacao(id){TURMA_ATUACAO=id;sset('turma_atuacao',id);telaAluno();}
+function trocarTurmaAtuacao(id){if(!TURMAS_ATUACAO.some(t=>t.id===id))return;TURMA_ATUACAO=id;sset('turma_atuacao',id);telaAluno();}
 // Menu do aluno. "Sair" = logout (volta ao login). "Descadastrar-me" = sai da turma e perde o acesso.
 function menuAluno(ativo){
   return (AUTH&&AUTH.tipo==='professor'?seletorVisao()+seletorTurmaAtuacao():'')
@@ -897,7 +929,7 @@ async function confirmarDescadastro(){
   if(v!=='DESCADASTRAR'){fb.innerHTML='<p class="erro-ia">Digite DESCADASTRAR para confirmar.</p>';return}
   fb.innerHTML='<p style="font-family:Arial,sans-serif;font-size:.88rem"><span class="spinner"></span>Processando...</p>';
   try{const r=await apiPost('/api/descadastrar',{});const d=await r.json();
-    if(!r.ok){fb.innerHTML='<p class="erro-ia">'+(d.erro||'Não foi possível concluir o descadastro.')+'</p>';return}
+    if(!r.ok){fb.innerHTML='<p class="erro-ia">'+esc(d.erro||'Não foi possível concluir o descadastro.')+'</p>';return}
     sair('Você foi descadastrado(a) da turma e não tem mais acesso ao sistema.');
   }catch(e){fb.innerHTML='<p class="erro-ia">Falha de conexão. Tente novamente.</p>';}
 }
@@ -935,20 +967,20 @@ async function transcreverFotos(inp,id){
   try{
     const imagens=[];for(const f of files)imagens.push(await redimensionarFoto(f));
     const r=await apiPost('/api/aluno/transcrever',{imagens});const d=await r.json();
-    if(!r.ok){let m=d.erro||'Erro';if(m==='LIMITE_CREDITOS')m='⛔ Limite mensal de uso da IA atingido. Avise o professor.';fb.innerHTML='<p class="erro-ia">'+m+'</p>';return}
+    if(!r.ok){let m=d.erro||'Erro';if(m==='LIMITE_CREDITOS')m='⛔ Limite mensal de uso da IA atingido. Avise o professor.';fb.innerHTML='<p class="erro-ia">'+esc(m)+'</p>';return}
     const t=document.getElementById('al_texto');
     t.value=(t.value.trim()?t.value.trim()+'\n\n':'')+d.texto;
     sset('peca_'+id,t.value);
     fb.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif;font-size:.85rem">✅ Transcrição pronta! <b>Confira o texto abaixo e corrija o que precisar</b> — trechos que a IA não conseguiu ler estão marcados como [ilegível]. Só envie depois de revisar.</p>';
     t.scrollIntoView({behavior:'smooth',block:'center'});
-  }catch(e){fb.innerHTML='<p class="erro-ia">Falha ao processar as fotos: '+e.message+'</p>';}
+  }catch(e){fb.innerHTML='<p class="erro-ia">Falha ao processar as fotos: '+esc(e.message)+'</p>';}
 }
 async function enviarPeca(id){
   const texto=document.getElementById('al_texto').value.trim();const fb=document.getElementById('al_fb');
   if(texto.length<80){fb.innerHTML='<p class="erro-ia">Escreva sua peça antes de enviar.</p>';return}
   if(!confirm('Enviar sua peça ao professor? Após o prazo pode não ser possível reenviar.'))return;
   try{const r=await apiPost('/api/entregar',{id,texto});const d=await r.json();
-  if(!r.ok){let m=(d.erro||'Erro');if(m==='PRAZO')m='⏰ O prazo desta peça encerrou ('+dataHoraBR(d.prazo)+'). Fale com o(a) professor(a) para renovar ou liberar sua entrega.';fb.innerHTML='<p class="erro-ia">'+m+'</p>';return}
+  if(!r.ok){let m=(d.erro||'Erro');if(m==='PRAZO')m='⏰ O prazo desta peça encerrou ('+dataHoraBR(d.prazo)+'). Fale com o(a) professor(a) para renovar ou liberar sua entrega.';fb.innerHTML='<p class="erro-ia">'+esc(m)+'</p>';return}
   sset('peca_'+id,'');
   fb.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif">📨 Peça enviada! O professor foi avisado. Você receberá a correção por e-mail.</p>';
   setTimeout(telaAluno,1200);
@@ -956,7 +988,19 @@ async function enviarPeca(id){
 }
 function verMinhaCorrecao(id){alert('A correção validada foi enviada ao seu e-mail cadastrado. Confira sua caixa de entrada (e o spam).');}
 
-iniciar();
+async function restaurarSessao(){
+  if(!AUTH){renderLogin();return}
+  const tokenLegado=AUTH.token||'';
+  try{
+    const h=tokenLegado?{authorization:'Bearer '+tokenLegado}:{};
+    const r=await fetch('/api/sessao',{headers:h,credentials:'same-origin'});
+    if(!r.ok){sset('auth','');AUTH=null;renderLogin();return}
+    const d=await r.json();
+    AUTH={tipo:d.tipo,usuario:d.usuario,nome:d.nome||'',papel:d.papel||'',admin:!!d.admin,gereProf:!!d.gereProf,gereCoord:!!d.gereCoord,turmaAtiva:d.turmaAtiva,precisaTrocarSenha:d.precisaTrocarSenha,precisaAceitarPrivacidade:d.precisaAceitarPrivacidade,emailVerificado:d.emailVerificado,email:d.email||''};
+    sset('auth',JSON.stringify(AUTH));iniciar();
+  }catch(e){renderLogin('Não foi possível validar a sessão. Tente novamente.');}
+}
+restaurarSessao();
 </script>
 </body>
 </html>

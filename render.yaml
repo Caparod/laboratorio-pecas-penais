@@ -1,0 +1,40 @@
+services:
+  - type: web
+    name: laboratorio-pecas-penais
+    runtime: node
+    rootDir: render-app
+    plan: free
+    buildCommand: npm ci
+    startCommand: npm start
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: 24
+      - key: APP_URL
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_STATE_TABLE
+        value: app_state
+      - key: SUPABASE_STATE_ID
+        value: main
+      - key: SESSAO_DIAS
+        value: 7
+      - key: CONFIAR_PROXY
+        value: true
+      - key: CRIAR_CONTAS_DEMO
+        value: false
+      - key: HTTP_TIMEOUT_MS
+        value: 120000
+      - key: PROF_LOGIN
+        sync: false
+      - key: PROF_SENHA
+        sync: false
+      - key: GMAIL_USER
+        sync: false
+      - key: GMAIL_APP_PASSWORD
+        sync: false
