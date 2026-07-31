@@ -11,7 +11,7 @@ const base = `http://127.0.0.1:${port}`;
 const adminLogin = 'admin-teste';
 const server = spawn(process.execPath, ['server.js'], {
   cwd: appDir,
-  env: Object.assign({}, process.env, { DATA_DIR: dataDir, PORT: String(port), PROF_LOGIN: adminLogin, SUPABASE_URL: '', SUPABASE_SERVICE_ROLE_KEY: '' }),
+  env: Object.assign({}, process.env, { DATA_DIR: dataDir, PORT: String(port), PROF_LOGIN: adminLogin, PROF_SENHA: adminLogin, CRIAR_CONTAS_DEMO: 'true', SUPABASE_URL: '', SUPABASE_SERVICE_ROLE_KEY: '' }),
   stdio: ['ignore', 'pipe', 'pipe']
 });
 
@@ -53,7 +53,7 @@ async function executar() {
 
   let r = await requisitar('/api/professores/salvar', coordenador, { login: 'prof-teste', nome: 'Professor Teste', papel: 'Professor' });
   assert.equal(r.status, 200);
-  const professor = await login('prof-teste', 'prof-teste', 'Prof-Zerar-2026');
+  const professor = await login('prof-teste', r.body.senhaInicial, 'Prof-Zerar-2026');
 
   r = await requisitar('/api/turmas/salvar', coordenador, { nome: 'Turma do Professor', professores: ['prof-teste'] });
   assert.equal(r.status, 200); const turmaPropria = r.body.id;
@@ -62,9 +62,10 @@ async function executar() {
 
   r = await requisitar('/api/admin', coordenador, { turmaId: turmaPropria, matriculas: [{ matricula: '9000001', nome: 'Aluno Próprio' }] });
   assert.equal(r.status, 200);
+  const senhaAlunoProprio = r.body.credenciaisIniciais[0].senha;
   r = await requisitar('/api/admin', coordenador, { turmaId: turmaAlheia, matriculas: [{ matricula: '9000002', nome: 'Aluno Alheio' }] });
   assert.equal(r.status, 200);
-  const alunoProprio = await login('9000001', '9000001', 'Aluno-Zerar-2026', 'aluno@example.test');
+  const alunoProprio = await login('9000001', senhaAlunoProprio, 'Aluno-Zerar-2026', 'aluno@example.test');
 
   r = await requisitar('/api/peca/salvar', professor, { nomePeca: 'Peça da turma própria', caso: 'Caso de teste com conteúdo suficiente.', gab: 'Gabarito de teste.', turmaId: turmaPropria, publicada: true });
   assert.equal(r.status, 200, JSON.stringify(r.body));

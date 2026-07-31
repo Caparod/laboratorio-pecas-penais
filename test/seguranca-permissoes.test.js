@@ -11,7 +11,7 @@ const base = `http://127.0.0.1:${port}`;
 const adminLogin = 'admin-auditoria';
 const server = spawn(process.execPath, ['server.js'], {
   cwd: appDir,
-  env: Object.assign({}, process.env, { DATA_DIR: dataDir, PORT: String(port), PROF_LOGIN: adminLogin, SUPABASE_URL: '', SUPABASE_SERVICE_ROLE_KEY: '' }),
+  env: Object.assign({}, process.env, { DATA_DIR: dataDir, PORT: String(port), PROF_LOGIN: adminLogin, PROF_SENHA: adminLogin, CRIAR_CONTAS_DEMO: 'true', SUPABASE_URL: '', SUPABASE_SERVICE_ROLE_KEY: '' }),
   stdio: ['ignore', 'pipe', 'pipe']
 });
 
@@ -27,8 +27,8 @@ async function esperarServidor() {
   throw new Error('Servidor não iniciou.\n' + serverLog);
 }
 
-async function requisitar(url, token, body) {
-  const headers = {};
+async function requisitar(url, token, body, extras) {
+  const headers = Object.assign({}, extras || {});
   if (body !== undefined) headers['content-type'] = 'application/json';
   if (token) headers.authorization = 'Bearer ' + token;
   const r = await fetch(base + url, { method: body === undefined ? 'GET' : 'POST', headers, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -71,10 +71,21 @@ async function executar() {
   const admin = adminInicial.token;
   r = await requisitar('/api/admin', admin, {});
   assert.equal(r.status, 200);
+  const loginCookie = await requisitar('/api/login', null, { usuario: adminLogin, senha: 'Admin-Segura-2026' });
+  const setCookie = loginCookie.headers.get('set-cookie') || '';
+  assert.match(setCookie, /lab_session=/);
+  assert.match(setCookie, /HttpOnly/i);
+  assert.match(setCookie, /SameSite=Strict/i);
+  await requisitar('/api/logout', loginCookie.body.token, {});
+  let banco = JSON.parse(fs.readFileSync(path.join(dataDir, 'db.json'), 'utf8'));
+  assert.ok(Object.keys(banco.sessoes || {}).every(chave => /^[a-f0-9]{64}$/.test(chave)), 'sessões persistidas devem usar somente hash do token');
+  assert.ok(!JSON.stringify(banco).includes(admin), 'token bruto não pode ser persistido no banco');
 
   r = await requisitar('/api/professores/salvar', coordenador, { login: 'prof-auditoria', nome: 'Professor Auditoria', papel: 'Professor' });
   assert.equal(r.status, 200);
-  const profInicial = await loginBruto('prof-auditoria', 'prof-auditoria');
+  const senhaInicialProfessor = r.body.senhaInicial;
+  assert.ok(senhaInicialProfessor && senhaInicialProfessor !== 'prof-auditoria');
+  const profInicial = await loginBruto('prof-auditoria', senhaInicialProfessor);
   await trocarSenha(profInicial.token, 'Prof-Segura-2026');
   const professor = profInicial.token;
 
@@ -85,9 +96,11 @@ async function executar() {
 
   r = await requisitar('/api/admin', coordenador, { turmaId: turmaB, matriculas: [{ matricula: '9100002', nome: 'Aluno B' }] });
   assert.equal(r.status, 200);
+  const senhaInicialAlunoB = r.body.credenciaisIniciais[0].senha;
+  assert.ok(senhaInicialAlunoB && senhaInicialAlunoB !== '9100002');
   r = await requisitar('/api/admin', professor, { turmaId: turmaA, matriculas: [{ matricula: '9100002', nome: 'Aluno B' }] });
   assert.equal(r.status, 200, 'matrícula existente pode ser adicionada a outra turma');
-  let banco = JSON.parse(fs.readFileSync(path.join(dataDir, 'db.json'), 'utf8'));
+  banco = JSON.parse(fs.readFileSync(path.join(dataDir, 'db.json'), 'utf8'));
   assert.deepEqual(new Set(banco.alunos['9100002'].turmaIds), new Set([turmaA, turmaB]), 'aluno deve manter os dois vínculos');
   r = await requisitar('/api/admin', coordenador, { excluirTodos: true, confirmacao: 'EXCLUIR TODOS' });
   assert.equal(r.status, 403, 'coordenação não pode excluir todos os alunos do sistema');
@@ -96,7 +109,8 @@ async function executar() {
 
   r = await requisitar('/api/admin', coordenador, { turmaId: turmaA, matriculas: [{ matricula: '9100001', nome: 'Aluno A' }] });
   assert.equal(r.status, 200);
-  const alunoInicial = await loginBruto('9100001', '9100001');
+  const senhaInicialAlunoA = r.body.credenciaisIniciais[0].senha;
+  const alunoInicial = await loginBruto('9100001', senhaInicialAlunoA);
   await trocarSenha(alunoInicial.token, 'Aluno-Seguro-2026', 'aluno-a@example.test');
   banco = JSON.parse(fs.readFileSync(path.join(dataDir, 'db.json'), 'utf8'));
   const codigo = banco.alunos['9100001'].codigoVerif;
@@ -107,7 +121,7 @@ async function executar() {
   assert.equal(r.status, 200, JSON.stringify(r.body)); const pecaId = r.body.id;
   r = await requisitar('/api/peca/salvar', coordenador, { nomePeca: 'Peça da segunda turma', caso: 'Segundo caso de teste com conteúdo suficiente para a auditoria.', gab: 'Segundo gabarito.', turmaId: turmaB, publicar: true });
   assert.equal(r.status, 200, JSON.stringify(r.body)); const pecaBId = r.body.id;
-  const alunoBInicial = await loginBruto('9100002', '9100002');
+  const alunoBInicial = await loginBruto('9100002', senhaInicialAlunoB);
   await trocarSenha(alunoBInicial.token, 'Aluno-Duas-Turmas-2026', 'aluno-b@example.test');
   r = await requisitar('/api/pecas-aluno', alunoBInicial.token);
   assert.equal(r.status, 200);
@@ -130,6 +144,12 @@ async function executar() {
   assert.equal(r.status, 403, 'professor removido da turma não pode ler peça que criou');
   r = await requisitar('/api/peca/excluir', professor, { id: pecaId });
   assert.equal(r.status, 403, 'professor removido da turma não pode excluir peça que criou');
+
+  r = await requisitar('/api/pecas-aluno', professor, undefined, { 'x-modo-atuacao': 'aluno', 'x-turma-atuacao': turmaA });
+  assert.equal(r.status, 400, 'turma antiga na visão aluno não deve invalidar uma sessão válida');
+  assert.equal(r.body.erro, 'TURMA_ATUACAO_INVALIDA');
+  r = await requisitar('/api/admin', professor, {});
+  assert.equal(r.status, 200, 'sessão do professor deve continuar válida após contexto de turma inválido');
 
   r = await requisitar('/api/turmas/excluir', coordenador, { id: turmaA });
   assert.equal(r.status, 200, JSON.stringify(r.body));
@@ -161,4 +181,3 @@ executar().catch(e => { console.error(e.stack || e); process.exitCode = 1; }).fi
   server.kill();
   fs.rmSync(dataDir, { recursive: true, force: true });
 });
-
