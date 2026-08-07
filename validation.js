@@ -4,6 +4,15 @@ function normalizar(valor) {
   return String(valor || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 }
 
+function limparEnunciadoIA(texto) {
+  return String(texto || '')
+    .replace(/\*\*/g, '')
+    .replace(/^\s*#*\s*CASO\b\s*:?\s*/i, '')
+    .replace(/^\s*<enunciado>\s*/i, '')
+    .replace(/\s*<\/enunciado>\s*$/i, '')
+    .trim();
+}
+
 function resultado(erros, detalhes) {
   return { ok: erros.length === 0, erros, detalhes: detalhes || {} };
 }
@@ -12,6 +21,7 @@ function validarEnunciado(texto) {
   const t = String(texto || '').trim();
   const n = normalizar(t);
   const erros = [];
+  if (/<\/?enunciado>/i.test(t)) erros.push('O enunciado contém marcação interna da IA.');
   if (t.length < 300) erros.push('O enunciado está curto demais.');
   if (t.length > 20000) erros.push('O enunciado ultrapassa 20.000 caracteres.');
   if (!/na\s+condi[cç][aã]o\s+de\s+advogad[oa]\s*\(?a?\)?/i.test(t)) erros.push('Falta o comando final iniciado por “Na condição de advogado(a) de...”.');
@@ -84,6 +94,49 @@ function analisarEspelho(texto) {
     if (m) total = numeroBR(m[1]);
   }
   return { bloco, itens, soma: Math.round(soma * 100) / 100, total };
+}
+
+function normalizarEspelhoCinco(texto) {
+  const linhas = String(texto || '').split(/\r?\n/);
+  const inicio = linhas.findIndex(l => /^\s*##\s+/.test(l) && normalizar(l).includes('espelho de correcao'));
+  if (inicio < 0) return String(texto || '');
+  let fim = linhas.length;
+  for (let i = inicio + 1; i < linhas.length; i++) {
+    if (/^\s*##\s+/.test(linhas[i])) { fim = i; break; }
+  }
+  const itens = [];
+  let total = null;
+  for (let i = inicio + 1; i < fim; i++) {
+    if (!linhas[i].includes('|') || /^\s*\|?\s*:?-{2,}/.test(linhas[i])) continue;
+    const partes = linhas[i].split('|');
+    const preenchidas = partes.map((p, indice) => p.trim() ? indice : -1).filter(indice => indice >= 0);
+    if (preenchidas.length < 2) continue;
+    const rotulo = normalizar(partes[preenchidas[0]]);
+    if (/pontuacao/.test(rotulo) && /item/.test(rotulo)) continue;
+    const indiceNota = preenchidas[preenchidas.length - 1];
+    const valor = valorPontuacao(partes[indiceNota]);
+    if (valor == null) continue;
+    const registro = { linha: i, partes, indiceNota, valor };
+    if (rotulo.includes('total')) total = registro;
+    else itens.push(registro);
+  }
+  if (!itens.length) return String(texto || '');
+  const soma = Math.round(itens.reduce((s, item) => s + item.valor, 0) * 100) / 100;
+  const diferenca = Math.round((5 - soma) * 100) / 100;
+  if (Math.abs(diferenca) > 0.001) {
+    const alvo = itens.reduce((maior, item) => item.valor > maior.valor ? item : maior, itens[0]);
+    const novoValor = Math.round((alvo.valor + diferenca) * 100) / 100;
+    if (novoValor < 0) return String(texto || '');
+    alvo.partes[alvo.indiceNota] = ' ' + novoValor.toFixed(2).replace('.', ',') + ' ';
+    linhas[alvo.linha] = alvo.partes.join('|');
+  }
+  if (total) {
+    total.partes[total.indiceNota] = ' **5,00** ';
+    linhas[total.linha] = total.partes.join('|');
+  } else {
+    linhas.splice(fim, 0, '| **Total** | **5,00** |');
+  }
+  return linhas.join('\n');
 }
 
 function nomeCompativel(bloco, nomePeca) {
@@ -159,4 +212,4 @@ function validarCorrecao(texto) {
   return resultado(erros, { nota });
 }
 
-module.exports = { normalizar, validarEnunciado, analisarEspelho, detectarJurisprudencia, similaridadeNarrativa, validarGabarito, validarCorrecao };
+module.exports = { normalizar, limparEnunciadoIA, validarEnunciado, analisarEspelho, normalizarEspelhoCinco, detectarJurisprudencia, similaridadeNarrativa, validarGabarito, validarCorrecao };
