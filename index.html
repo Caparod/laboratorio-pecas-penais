@@ -382,7 +382,7 @@ async function profPecas(){
     for(const p of d.pecas){
       const minha=(p.autor===AUTH.usuario)||souAdminAgora();
       h+='<tr><td><b>'+p.num+'</b></td><td>'+esc(p.nomePeca)+'</td><td>'+esc(p.autorNome||'—')+(minha&&p.autor===AUTH.usuario?' <span style="color:var(--dourado);font-size:.75rem">(você)</span>':'')+'</td><td>'+esc(p.disc)+'</td><td>'+(p.prazo?dataBR(p.prazo):'—')+'</td>'
-      +'<td>'+(p.publicada?'✅ publicada':'✏️ rascunho')+'</td><td>'+p.entregas+' ('+p.validadas+' corrigidas)</td>'
+      +'<td>'+(p.revisaoObrigatoria?'⚠️ revisar gabarito':(p.publicada?'✅ publicada':'✏️ rascunho'))+'</td><td>'+p.entregas+' ('+p.validadas+' corrigidas)</td>'
       +'<td><a style="cursor:pointer;color:var(--azul)" onclick="abrirPeca(\''+p.id+'\')">abrir</a></td></tr>';
     }
     h+='</table>';document.getElementById('lp').innerHTML='<div class="card painel">'+h+'</div>';
@@ -402,12 +402,13 @@ async function abrirPeca(id){
     ent+='</table>';}
   window.__peca=p;
   const liberadosCount=Object.keys(d.liberados||{}).length;
-  const souAutor=(p.autor===AUTH.usuario)||souAdminAgora();
+  const souAutor=(p.autor===AUTH.usuario)||podeGerirAgora();
   conteudo.innerHTML='<div class="botoes" style="margin-bottom:10px"><button onclick="irAba(\'pecas\')">← Voltar</button>'
-   +'<button onclick="editarPeca(\''+id+'\')">✏️ Editar peça/gabarito</button>'
+   +(souAutor?'<button onclick="editarPeca(\''+id+'\')">✏️ Editar peça/gabarito</button>':'')
    +(souAutor?'<button style="border-color:var(--vermelho);color:var(--vermelho)" onclick="excluirPeca(\''+id+'\')">🗑 Excluir peça</button>':'')+'</div>'
    +'<span class="badge">Peça '+p.num+' · '+esc(p.disc)+'</span><h2 class="titulo-peca">'+esc(p.nomePeca)+'</h2>'
    +'<p style="color:var(--cinza);font-family:Arial,sans-serif;font-size:.85rem">Autor: '+esc((p.autor===AUTH.usuario)?'você':(p.autor||'—'))+' · Prazo: '+(p.prazo?dataHoraBR(p.prazo):'sem prazo')+' · '+(p.publicada?'publicada':'rascunho')+'</p>'
+   +(p.revisaoObrigatoria?'<p class="erro-ia">⚠️ Este gabarito é anterior às validações atuais ou está inconsistente. Revise e salve novamente antes de corrigir ou liberar aos alunos.</p>':'')
    +classificacaoHtml(p.classificacao)
    +(p.publicada
      ?('<div class="card"><h3>Prazo de entrega</h3>'
@@ -583,7 +584,7 @@ async function gerarGabarito(){
   const caso=document.getElementById('np_caso').value.trim();const fb=document.getElementById('np_gabfb');
   if(caso.length<40){fb.innerHTML='<p class="erro-ia">Escreva/gere o enunciado primeiro.</p>';return}
   const prog=progresso(fb,ETAPAS_GAB,70);
-  try{const r=await apiPost('/api/peca/gerar-gabarito',{caso});const d=await r.json();prog.fim();
+  try{const r=await apiPost('/api/peca/gerar-gabarito',{caso,nomePeca:(document.getElementById('np_nome')||{}).value||''});const d=await r.json();prog.fim();
     if(!r.ok){let m=(d&&d.erro)||'Erro';if(m==='LIMITE_CREDITOS')m='⛔ Limite mensal de uso da IA atingido. A IA volta quando o limite for renovado ou aumentado no painel do provedor.';fb.innerHTML='<p class="erro-ia">'+esc(m)+'</p>';return}
     document.getElementById('np_gab').value=d.gab;atualizarBotaoGabarito();fb.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif;font-size:.85rem">Gabarito gerado — confira e edite à vontade.</p>';
   }catch(e){prog.fim();fb.innerHTML='<p class="erro-ia">Falha: '+esc(e.message)+'</p>';}
@@ -593,7 +594,7 @@ async function salvarPeca(publicar){
   const nome=document.getElementById('np_nome').value;const prazo=document.getElementById('np_prazo').value;
   const fb=document.getElementById('np_salvarfb');
   if(caso.length<40){fb.innerHTML='<p class="erro-ia">A peça precisa de um enunciado.</p>';return}
-  if(publicar&&!gab){if(!confirm('Publicar SEM gabarito? Você não conseguirá corrigir com IA depois sem um gabarito.'))return;}
+  if(publicar&&!gab){fb.innerHTML='<p class="erro-ia">Gere ou escreva um gabarito válido antes de publicar.</p>';return;}
   const turmaId=(document.getElementById('np_turma')||{}).value||null;
   const classificacao={classe:(document.getElementById('np_tpu_classe')||{}).value||'',assunto:(document.getElementById('np_tpu_assunto')||{}).value||'',documento:(document.getElementById('np_tpu_documento')||{}).value||'',fase:(document.getElementById('np_fase')||{}).value||'',orgao:(document.getElementById('np_orgao')||{}).value||''};
   try{const r=await apiPost('/api/peca/salvar',Object.assign({id:RASCUNHO.id,nomePeca:nome,disc:turmaSelecionadaNome(),turmaId,caso,gab,prazo,publicar},classificacaoPayload({classificacao})));
@@ -690,13 +691,13 @@ async function profGastos(mes){
     const abas='<div class="botoes" style="flex-wrap:wrap;margin-bottom:10px">'+d.meses.map(x=>'<button class="'+(x===m?'primario':'')+'" onclick="profGastos(\''+x+'\')">'+mesBR(x)+'</button>').join('')+'</div>';
     const regs=Object.values(d.gastos[m]||{}).sort((a,b)=>b.valor-a.valor);
     let totVal=0,totCham=0;
-    let h='<table><tr><th>Usuário</th><th>Perfil</th><th>Turma</th><th>Chamadas de IA</th><th>Tokens</th><th>Gasto com IA</th></tr>';
+    let h='<table><tr><th>Usuário</th><th>Perfil</th><th>Turma</th><th>Chamadas de IA</th><th>Tokens</th><th>Custo estimado da API</th></tr>';
     for(const g of regs){totVal+=g.valor;totCham+=g.chamadas;
       h+='<tr><td>'+esc(g.nome)+'</td><td>'+esc(g.tipo)+'</td><td>'+esc(g.turma||'—')+'</td><td>'+g.chamadas+'</td><td>'+(g.tokens||0).toLocaleString('pt-BR')+'</td><td><b>'+usdBR(g.valor)+'</b></td></tr>';}
     h+='<tr><td colspan="5" style="text-align:right">Subtotal de uso:</td><td><b>'+usdBR(totVal)+'</b></td></tr>';
-    h+='<tr><td colspan="5" style="text-align:right">Assinatura Claude:</td><td><b>'+usdBR(d.assinatura)+'</b></td></tr>';
+    if(d.assinatura)h+='<tr><td colspan="5" style="text-align:right">Custo fixo configurado:</td><td><b>'+usdBR(d.assinatura)+'</b></td></tr>';
     h+='<tr style="background:#f2eee0"><td colspan="5" style="text-align:right"><b>TOTAL do mês:</b></td><td><b>'+usdBR(totVal+d.assinatura)+'</b></td></tr></table>';
-    gx.innerHTML=abas+'<div class="card painel">'+h+'<p class="aviso" style="margin-top:8px">'+totCham+' chamadas de IA neste mês. Somente quem usou o sistema aparece na lista.</p></div>';
+    gx.innerHTML=abas+'<div class="card painel">'+h+'<p class="aviso" style="margin-top:8px">'+totCham+' chamadas de IA neste mês. Fator configurado: '+Number(d.fator||1).toLocaleString('pt-BR')+'. Valores são estimativas; confira a fatura do provedor.</p></div>';
   }catch(e){document.getElementById('gx').innerHTML='<p class="erro-ia">Falha ao carregar.</p>';}
 }
 

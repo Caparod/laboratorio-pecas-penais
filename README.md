@@ -13,12 +13,14 @@ A chave de IA fica apenas no servidor, pela variável `ANTHROPIC_API_KEY`. O nav
    - `ANTHROPIC_API_KEY`: chave da Anthropic.
    - `APP_URL`: URL pública do sistema no Render.
    - `MODELO`: opcional, padrão definido no servidor.
+   - Para o fluxo validado, mantenha `MODELO=claude-sonnet-5`; o servidor desativa o raciocínio adaptativo nessa versão para reservar a saída ao documento final.
    - `PROF_LOGIN`: login do administrador principal.
    - `PROF_SENHA`: senha inicial forte do administrador principal. É obrigatória ao criar uma base nova.
    - `GMAIL_USER` e `GMAIL_APP_PASSWORD`: opcionais, para avisos por e-mail.
    - `SESSAO_DIAS`: opcional; na implantação fornecida, 7 dias.
-   - `CONFIAR_PROXY`: `true` no Render, para usar corretamente o IP encaminhado pelo proxy.
+   - `CONFIAR_PROXY`: `true` no Render. As rotas autenticadas de IA são limitadas por usuário, evitando bloquear toda a rede da instituição.
    - `CRIAR_CONTAS_DEMO`: mantenha `false` em produção. Use `true` somente nos testes automatizados.
+   - `FATOR_MANUTENCAO` e `ASSINATURA_MENSAL_USD`: opcionais; padrões `1` e `0`. Quando usados, aparecem explicitamente no painel de custos.
 
 ## Supabase
 
@@ -57,7 +59,11 @@ Como a leitura e a escrita são feitas pelo servidor com `SUPABASE_SERVICE_ROLE_
 
 ## Proteções incluídas
 
-- Acesso de professores limitado às próprias turmas, exceto administração/coordenação.
+- Acesso de professores limitado às próprias turmas, exceto administração/coordenação; apenas autor, administração ou coordenação podem editar o conteúdo de uma peça.
+- Enunciados, gabaritos e correções gerados por IA só são aceitos completos. Truncamentos, recusas, estruturas ausentes e notas inconsistentes são descartados.
+- O espelho é analisado item a item e precisa somar exatamente 5,00; a auditoria jurídica por fontes oficiais é obrigatória e falha de forma bloqueante.
+- Cada alteração de caso/gabarito cria uma versão. Toda entrega conserva uma fotografia do caso e do gabarito que o aluno recebeu.
+- Gabaritos antigos incompatíveis são sinalizados como “revisão obrigatória”, não são liberados aos alunos e não podem ser usados pela correção automática até serem revisados.
 - Um aluno pode participar de várias turmas e recebe as peças de todas elas; remover/zerar uma turma preserva sua conta quando houver outro vínculo.
 - Professor(a) pode zerar somente as turmas em que leciona; coordenação pode zerar qualquer turma e apenas a administração pode zerar o sistema inteiro.
 - Ao zerar uma turma, vínculos, peças, entregas e notas dela são apagados; contas sem outra turma também são removidas, mas o cadastro da turma e seus professores são preservados.
@@ -70,7 +76,7 @@ Como a leitura e a escrita são feitas pelo servidor com `SUPABASE_SERVICE_ROLE_
 - A persistência local usa gravação temporária, cópia de segurança `db.json.bak` e substituição atômica.
 - Falhas temporárias de escrita no Supabase são repetidas com espera progressiva.
 - Integrações HTTP e SMTP possuem tempo limite.
-- A leitura de PDF usa PDF.js 6.1.200 com execução dinâmica desativada (`isEvalSupported: false`), e o envio de e-mail usa Nodemailer 9.0.3.
+- A leitura de PDF usa PDF.js 6.2.108 com avaliação dinâmica e scripting desativados (`isEvalSupported: false`, `enableScripting: false`), e o envio de e-mail usa Nodemailer 9.0.3.
 - O uso de IA exige ciência do aviso de privacidade; consulte `privacidade.html` e `PRIVACIDADE.md`.
 - CSV de notas tratado para reduzir risco de fórmula maliciosa no Excel.
 - Prazos calculados em horário de Brasília.
@@ -85,3 +91,5 @@ Como a leitura e a escrita são feitas pelo servidor com `SUPABASE_SERVICE_ROLE_
 ## Observação
 
 No plano Free do Render o serviço pode dormir após inatividade; a primeira visita após pausa pode demorar cerca de 1 minuto.
+
+Antes de uma aula, confirme no painel que não existem peças com o status “revisar gabarito” e execute `npm test` no pacote que será implantado. A publicação exige gabarito válido e prazo definido.
