@@ -1,4 +1,5 @@
 const assert = require('assert');
+const { casoTeste, gabaritoTeste } = require('./fixture-peca');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -117,9 +118,13 @@ async function executar() {
   r = await requisitar('/api/verificar-email', alunoInicial.token, { codigo });
   assert.equal(r.status, 200);
 
-  r = await requisitar('/api/peca/salvar', professor, { nomePeca: 'Peça auditada', caso: 'Caso de teste com conteúdo suficiente para a auditoria.', gab: 'Gabarito de teste.', turmaId: turmaA, publicar: true });
+  r = await requisitar('/api/peca/salvar', professor, { nomePeca: 'Peça inválida', caso: casoTeste(), gab: 'Gabarito sem espelho.', turmaId: turmaA, prazo: '2099-12-31T23:59', publicar: true });
+  assert.equal(r.status, 400, 'publicação deve bloquear gabarito sem estrutura e soma verificáveis');
+  r = await requisitar('/api/peca/salvar', professor, { nomePeca: 'Peça sem prazo', caso: casoTeste(), gab: gabaritoTeste('Peça sem prazo'), turmaId: turmaA, publicar: true });
+  assert.equal(r.status, 400, 'publicação deve exigir prazo explícito');
+  r = await requisitar('/api/peca/salvar', professor, { nomePeca: 'Peça auditada', caso: casoTeste(), gab: gabaritoTeste('Peça auditada'), turmaId: turmaA, prazo: '2099-12-31T23:59', publicar: true });
   assert.equal(r.status, 200, JSON.stringify(r.body)); const pecaId = r.body.id;
-  r = await requisitar('/api/peca/salvar', coordenador, { nomePeca: 'Peça da segunda turma', caso: 'Segundo caso de teste com conteúdo suficiente para a auditoria.', gab: 'Segundo gabarito.', turmaId: turmaB, publicar: true });
+  r = await requisitar('/api/peca/salvar', coordenador, { nomePeca: 'Peça da segunda turma', caso: casoTeste(), gab: gabaritoTeste('Peça da segunda turma'), turmaId: turmaB, prazo: '2099-12-31T23:59', publicar: true });
   assert.equal(r.status, 200, JSON.stringify(r.body)); const pecaBId = r.body.id;
   const alunoBInicial = await loginBruto('9100002', senhaInicialAlunoB);
   await trocarSenha(alunoBInicial.token, 'Aluno-Duas-Turmas-2026', 'aluno-b@example.test');
@@ -128,6 +133,14 @@ async function executar() {
   assert.deepEqual(new Set(r.body.pecas.map(p => p.id)), new Set([pecaId, pecaBId]), 'aluno deve acessar peças das duas turmas');
   r = await requisitar('/api/entregar', alunoInicial.token, { id: pecaId, texto: 'Texto de entrega suficientemente longo para validar a limpeza completa de dados da turma durante o teste automatizado.' });
   assert.equal(r.status, 200, JSON.stringify(r.body));
+  const casoOriginal = casoTeste();
+  r = await requisitar('/api/peca/salvar', professor, { id: pecaId, nomePeca: 'Peça auditada', caso: casoOriginal + ' Versão posterior publicada pelo professor.', gab: gabaritoTeste('Peça auditada'), turmaId: turmaA, prazo: '2099-12-31T23:59', publicar: true });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.versao, 2, 'alteração de conteúdo deve criar nova versão');
+  r = await requisitar('/api/entrega?id=' + encodeURIComponent(pecaId) + '&matricula=9100001', professor);
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.peca.caso, casoOriginal, 'entrega deve permanecer vinculada ao enunciado original');
+  assert.equal(r.body.peca.versao, 1, 'entrega deve permanecer vinculada à versão original');
   r = await requisitar('/api/gabarito', alunoInicial.token, { peca: { nome: 'Teste', gab: 'Teste' } });
   assert.equal(r.status, 403, 'aluno não pode acionar gabarito de IA reservado ao professor');
   r = await requisitar('/api/gerar-caso', alunoInicial.token, { peca: { nome: 'Teste' } });

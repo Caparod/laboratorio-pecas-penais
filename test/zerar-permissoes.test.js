@@ -1,4 +1,5 @@
 const assert = require('assert');
+const { casoTeste, gabaritoTeste } = require('./fixture-peca');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -67,9 +68,9 @@ async function executar() {
   assert.equal(r.status, 200);
   const alunoProprio = await login('9000001', senhaAlunoProprio, 'Aluno-Zerar-2026', 'aluno@example.test');
 
-  r = await requisitar('/api/peca/salvar', professor, { nomePeca: 'Peça da turma própria', caso: 'Caso de teste com conteúdo suficiente.', gab: 'Gabarito de teste.', turmaId: turmaPropria, publicada: true });
+  r = await requisitar('/api/peca/salvar', professor, { nomePeca: 'Peça da turma própria', caso: casoTeste(), gab: gabaritoTeste('Peça da turma própria'), turmaId: turmaPropria, prazo: '2099-12-31T23:59', publicar: true });
   assert.equal(r.status, 200, JSON.stringify(r.body));
-  r = await requisitar('/api/peca/salvar', coordenador, { nomePeca: 'Peça da turma alheia', caso: 'Outro caso de teste com conteúdo suficiente.', gab: 'Outro gabarito.', turmaId: turmaAlheia, publicada: true });
+  r = await requisitar('/api/peca/salvar', coordenador, { nomePeca: 'Peça da turma alheia', caso: casoTeste(), gab: gabaritoTeste('Peça da turma alheia'), turmaId: turmaAlheia, prazo: '2099-12-31T23:59', publicar: true });
   assert.equal(r.status, 200, JSON.stringify(r.body));
 
   r = await requisitar('/api/zerar', professor, { escopo: 'turma', turmaId: turmaAlheia, confirmacao: 'ZERAR TURMA' });
