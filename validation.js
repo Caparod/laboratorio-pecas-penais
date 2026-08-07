@@ -19,6 +19,13 @@ function limparGabaritoIA(texto) {
   return inicio >= 0 ? t.slice(inicio).trim() : t;
 }
 
+function normalizarGabaritoPenal(texto) {
+  return limparGabaritoIA(texto)
+    .replace(/\bdias úteis\b/gi, 'dias corridos')
+    .replace(/cont[ií]nuo,\s*e\s*n[aã]o\s*em\s*dias\s*corridos/gi, 'contínuo, em dias corridos')
+    .replace(/art\.\s*564,\s*IV\s*e\s*V(?:,\s*do\s+CPP|,\s*CPP|\s+do\s+CPP)?/gi, 'art. 563 do CPP');
+}
+
 function resultado(erros, detalhes) {
   return { ok: erros.length === 0, erros, detalhes: detalhes || {} };
 }
@@ -188,6 +195,8 @@ function validarGabarito(texto, nomePeca) {
   const n = normalizar(t);
   if (!/^\s*##\s+/.test(t)) erros.push('O gabarito deve iniciar diretamente pela primeira seção, sem comentários da IA.');
   if (/\bdias úteis\b/i.test(t)) erros.push('Prazos processuais penais não devem ser apresentados como dias úteis.');
+  if (/cont[ií]nuo,\s*e\s*n[aã]o\s*em\s*dias\s*corridos/i.test(t)) erros.push('A descrição do prazo penal está contraditória.');
+  if (/art\.\s*564,\s*IV\s*e\s*V/i.test(t)) erros.push('O gabarito cita inciso inexistente do art. 564 do CPP.');
   for (const titulo of obrigatorias) if (!new RegExp('^\\s*##\\s+.*' + titulo.replace(/ /g, '.*'), 'mi').test(n)) erros.push('Falta a seção “' + titulo + '”.');
   const espelho = analisarEspelho(t);
   if (!espelho.bloco) erros.push('O espelho de correção não foi encontrado.');
@@ -224,4 +233,4 @@ function validarCorrecao(texto) {
   return resultado(erros, { nota });
 }
 
-module.exports = { normalizar, limparEnunciadoIA, limparGabaritoIA, validarEnunciado, analisarEspelho, normalizarEspelhoCinco, detectarJurisprudencia, similaridadeNarrativa, validarGabarito, validarCorrecao };
+module.exports = { normalizar, limparEnunciadoIA, limparGabaritoIA, normalizarGabaritoPenal, validarEnunciado, analisarEspelho, normalizarEspelhoCinco, detectarJurisprudencia, similaridadeNarrativa, validarGabarito, validarCorrecao };

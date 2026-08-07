@@ -4,7 +4,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { limparEnunciadoIA, limparGabaritoIA, validarEnunciado, analisarEspelho, normalizarEspelhoCinco, detectarJurisprudencia, similaridadeNarrativa, validarGabarito, validarCorrecao } = require('./validation');
+const { limparEnunciadoIA, limparGabaritoIA, normalizarGabaritoPenal, validarEnunciado, analisarEspelho, normalizarEspelhoCinco, detectarJurisprudencia, similaridadeNarrativa, validarGabarito, validarCorrecao } = require('./validation');
 
 const OWNER_LOGIN = process.env.PROF_LOGIN || '500686';
 const CONTAS_DEMO_ATIVAS = process.env.CRIAR_CONTAS_DEMO === 'true';
@@ -1502,7 +1502,7 @@ async function pecaGerarGabarito(req, res) {
   if (!ra.ok) return json(res, 502, { erro: 'A auditoria jurídica não foi concluída; o gabarito não foi liberado. ' + (ra.erro || '') });
   const audit = limparGabaritoIA(ra.texto);
   if (!/##\s+Verifica[cç][aã]o de cita[cç][oõ]es/i.test(audit)) return json(res, 502, { erro: 'A auditoria jurídica retornou sem o relatório obrigatório; o gabarito foi bloqueado.' });
-  gab = normalizarEspelhoCinco(garantirLinksFontes(audit, true)).replace(/\bdias úteis\b/gi, 'dias corridos');
+  gab = normalizarEspelhoCinco(normalizarGabaritoPenal(garantirLinksFontes(audit, true)));
   estrutura = validarGabarito(gab, nomePeca);
   if (!estrutura.ok) return json(res, 502, { erro: 'A auditoria alterou indevidamente a estrutura do gabarito: ' + estrutura.erros.join(' ') });
   if (tinhaJurisprudencia && !/(CONFIRMADA|REMOVIDA)/i.test(audit)) return json(res, 502, { erro: 'As referências jurisprudenciais não foram individualmente verificadas; o gabarito foi bloqueado.' });
