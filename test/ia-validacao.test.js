@@ -1,10 +1,11 @@
 'use strict';
 const assert = require('assert');
-const { limparEnunciadoIA, validarEnunciado, analisarEspelho, normalizarEspelhoCinco, detectarJurisprudencia, similaridadeNarrativa, validarGabarito, validarCorrecao } = require('../validation');
+const { limparEnunciadoIA, limparGabaritoIA, validarEnunciado, analisarEspelho, normalizarEspelhoCinco, detectarJurisprudencia, similaridadeNarrativa, validarGabarito, validarCorrecao } = require('../validation');
 
 const enunciadoMarcado = '<enunciado>\n**Texto integral do caso.**\n</enunciado>';
 assert.equal(limparEnunciadoIA(enunciadoMarcado), 'Texto integral do caso.', 'marcação interna da IA deve ser removida');
 assert.ok(validarEnunciado(enunciadoMarcado).erros.some(e => /marca[cç][aã]o interna/i.test(e)), 'marcação interna não pode chegar à interface');
+assert.equal(limparGabaritoIA('Analisando as fontes...\n## Peça cabível\nApelação.'), '## Peça cabível\nApelação.', 'comentário técnico antes do gabarito deve ser removido');
 
 const enunciado = 'No processo nº 0712345-67.2026.8.07.0001, em 10/03/2026, João da Silva foi condenado pela Vara Criminal de Brasília. A defesa foi intimada em 16/03/2026 e todos os elementos probatórios relevantes foram descritos nos autos fictícios. O acusado pretende impugnar integralmente a sentença e apresentou ao advogado cópia da decisão e das provas. Na condição de advogado(a) de João da Silva, elabore a medida processual cabível, vedado o uso de habeas corpus. (Valor: 5,00)';
 assert.equal(validarEnunciado(enunciado).ok, true, 'enunciado completo deve passar');
@@ -47,6 +48,8 @@ const gabaritoNormalizado = normalizarEspelhoCinco(gabaritoComExcesso);
 assert.equal(analisarEspelho(gabaritoComExcesso).soma, 5.1, 'cenário real de excesso deve ser reproduzido');
 assert.equal(analisarEspelho(gabaritoNormalizado).soma, 5, 'normalização determinística deve fechar em 5,00');
 assert.equal(validarGabarito(gabaritoNormalizado, 'Apelação Criminal').ok, true, 'gabarito normalizado deve permanecer válido');
+assert.ok(!/\|\s*\d+,\d*[12346789]\s*\|/.test(gabaritoNormalizado), 'pontuações devem usar incrementos compatíveis com 0,05');
+assert.equal(validarGabarito(gabarito.replace('Cinco dias.', 'Cinco dias úteis.'), 'Apelação Criminal').ok, false, 'prazo penal em dias úteis deve ser bloqueado');
 assert.equal(espelho.soma, 5);
 assert.equal(espelho.total, 5);
 assert.equal(validarGabarito(gabarito, 'Apelação Criminal').ok, true, 'gabarito íntegro deve passar');
