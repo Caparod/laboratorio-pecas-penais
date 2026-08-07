@@ -622,6 +622,7 @@ async function profAlunos(dadosPrev){
   if(!podeGerirAgora())listaAlunos=listaAlunos.filter(a=>(a.turmaIds||[a.turmaId]).some(id=>idsTurmas.has(id)));
   window.__turmas=turmas;
   const botaoExcluirTodos=AUTH&&AUTH.admin?'<button style="border-color:var(--vermelho);color:var(--vermelho)" onclick="excluirTodosAl()">🗑 Excluir todos</button>':'';
+  const botaoSenhaTurma=AUTH&&AUTH.admin?'<button onclick="redefinirSenhasTurma()">🔑 Senha temporária da turma</button>':'';
   const optsTurma=turmas.map(t=>'<option value="'+t.id+'">'+esc(t.nome)+'</option>').join('');
   const turmasAluno=(a)=>{const ids=a.turmaIds||[a.turmaId].filter(Boolean);const info=(a.turmas||ids.map(id=>{const t=turmas.find(x=>x.id===id);return{id,nome:t?t.nome:id}}));const tags=info.map(t=>'<span style="display:inline-block;background:#eef3f8;border-radius:10px;padding:3px 7px;margin:2px">'+esc(t.nome)+(idsTurmas.has(t.id)?' <a style="cursor:pointer;color:var(--vermelho)" title="Remover desta turma" onclick="alterarTurmaAluno(\''+a.matricula+'\',\''+t.id+'\',\'remover\')">×</a>':'')+'</span>').join('');const disp=turmas.filter(t=>!ids.includes(t.id));const add=disp.length?'<select onchange="if(this.value)alterarTurmaAluno(\''+a.matricula+'\',this.value,\'adicionar\')" style="padding:4px 6px;border:1px solid #cfc9b8;border-radius:5px;font-size:.8rem"><option value="">＋ adicionar turma</option>'+disp.map(t=>'<option value="'+t.id+'">'+esc(t.nome)+'</option>').join('')+'</select>':'';return tags+add;};
   let linhas='';
@@ -638,7 +639,7 @@ async function profAlunos(dadosPrev){
    +'<p style="font-size:.88rem;color:var(--cinza)">Cole matrículas (uma por linha; pode ser "matrícula - nome") ou importe do PDF do diário. Adicionar uma matrícula existente cria mais um vínculo, sem removê-la das outras turmas. “Substituir lista” altera somente a turma escolhida.</p>'
    +'<div class="botoes" style="margin-bottom:8px"><label class="primario" style="padding:9px 18px;border-radius:6px;background:var(--azul);color:#fff;cursor:pointer;font-size:.85rem;font-family:Arial,sans-serif">📄 Importar PDF<input type="file" accept="application/pdf" style="display:none" onchange="importarPdfAlunos(this)"></label></div>'
    +'<textarea id="adm_mats" placeholder="500123 - Fulano"></textarea>'
-   +'<div class="botoes" style="align-items:center"><span style="font-family:Arial,sans-serif;font-size:.85rem">Turma de destino: <select id="adm_turma" style="padding:6px;border:1px solid #cfc9b8;border-radius:6px">'+(optsTurma||'<option value="">— sem turma</option>')+'</select></span><button class="primario" onclick="salvarAlunos(false)">Adicionar</button><button onclick="if(confirm(\'Substituir TODA a lista?\'))salvarAlunos(true)">Substituir lista</button>'+botaoExcluirTodos+'</div><div id="adm_msg"></div>'
+   +'<div class="botoes" style="align-items:center"><span style="font-family:Arial,sans-serif;font-size:.85rem">Turma de destino: <select id="adm_turma" style="padding:6px;border:1px solid #cfc9b8;border-radius:6px">'+(optsTurma||'<option value="">— sem turma</option>')+'</select></span><button class="primario" onclick="salvarAlunos(false)">Adicionar</button><button onclick="if(confirm(\'Substituir TODA a lista?\'))salvarAlunos(true)">Substituir lista</button>'+botaoSenhaTurma+botaoExcluirTodos+'</div><div id="adm_msg"></div>'
    +'<table><tr><th>Matrícula</th><th>Nome</th><th>Turma</th><th>Senha</th><th></th></tr>'+(linhas||'<tr><td colspan="5">Nenhum aluno.</td></tr>')+'</table></div>';
   if(podeGerirAgora())carregarProfsSelect();
 }
@@ -671,6 +672,17 @@ async function resetSenha(m){
   if(!r.ok){alert(d.erro||'Erro');return}
   const cred=(d.credenciaisIniciais||[])[0];if(cred)alert('Senha temporária de '+m+': '+cred.senha+'\n\nCopie agora: ela não será exibida novamente.');
   profAlunos(d);
+}
+async function redefinirSenhasTurma(){
+  const turmaId=(document.getElementById('adm_turma')||{}).value;
+  if(!turmaId){alert('Selecione a turma.');return}
+  const senha=prompt('Senha temporária para TODOS os alunos desta turma:');
+  if(senha===null)return;
+  if(senha.length<8){alert('A senha temporária precisa ter ao menos 8 caracteres.');return}
+  if(!confirm('Redefinir a senha de TODOS os alunos da turma? As sessões atuais serão encerradas e todos deverão criar outra senha no primeiro acesso.'))return;
+  const r=await apiPost('/api/admin',{redefinirSenhasTurma:turmaId,senhaTemporaria:senha,confirmacao:'REDEFINIR SENHAS'});const d=await r.json();
+  if(!r.ok){alert(d.erro||'Erro');return}
+  alert((d.credenciaisIniciais||[]).length+' senha(s) redefinida(s).');profAlunos(d);
 }
 async function excluirAl(m){if(!confirm((AUTH&&AUTH.admin||podeGerirAgora()?'Excluir a conta ':'Remover das suas turmas o aluno ')+m+'?'))return;const r=await apiPost('/api/admin',{excluirAluno:m});const d=await r.json();if(!r.ok){alert(d.erro||'Erro');return}profAlunos(d);}
 async function excluirTodosAl(){if(!confirm('Excluir TODOS os alunos do sistema?'))return;const c=prompt('Para confirmar, digite EXCLUIR TODOS (em maiúsculas):');if(c!=='EXCLUIR TODOS'){alert('Cancelado.');return}const r=await apiPost('/api/admin',{excluirTodos:true,confirmacao:c});const d=await r.json();if(!r.ok){alert(d.erro||'Erro');return}profAlunos(d);}
