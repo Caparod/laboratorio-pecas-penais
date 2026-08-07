@@ -4,7 +4,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { validarEnunciado, analisarEspelho, detectarJurisprudencia, validarGabarito, validarCorrecao } = require('./validation');
+const { validarEnunciado, analisarEspelho, detectarJurisprudencia, similaridadeNarrativa, validarGabarito, validarCorrecao } = require('./validation');
 
 const OWNER_LOGIN = process.env.PROF_LOGIN || '500686';
 const CONTAS_DEMO_ATIVAS = process.env.CRIAR_CONTAS_DEMO === 'true';
@@ -54,6 +54,8 @@ function migrarDb() {
   if (typeof db.proximoNum !== 'number') db.proximoNum = 1 + Object.keys(db.pecas).length;
   if (!db.entregas) db.entregas = {};
   if (!db.sessoes) db.sessoes = {}; // sessões persistidas (sobrevivem a reinícios/deploys)
+  if (!Array.isArray(db.historicoGeracoes)) db.historicoGeracoes = [];
+  db.historicoGeracoes = db.historicoGeracoes.slice(-24);
   // professor principal (Rodrigo) — mantém o registro legado db.professor
   if (!db.professor) db.professor = { login: OWNER_LOGIN, senha: hashSenha(senhaInicialAdmin()), mudouSenha: false };
   db.professores[db.professor.login] = db.professor; // espelha o principal na coleção
@@ -1239,7 +1241,8 @@ async function gabaritoIA(req, res) {
 }
 
 // ================= PEÇAS, ENTREGAS, NOTAS (fluxo professor↔aluno) =================
-const SISTEMA_GABPECA = 'Você é o Professor Me. Rodrigo Silva Pereira (IESB), prática penal. Receberá o ENUNCIADO de uma peça (caso simulado). Elabore o GABARITO DEFINITIVO no PADRÃO DA 2ª FASE DA OAB (FGV) para o professor conferir, com estas seções em markdown (##), nesta ordem: 1. Peça cabível (seja direto: indique APENAS a peça correta e seu fundamento legal — NÃO justifique por que outras peças não cabem, sem listas de peças descartadas); 2. Endereçamento; 3. Prazo; 4. Teses principais e subsidiárias — TODAS, cada uma com os dispositivos legais e o INCISO exato quando a norma for casuística; 5. Pedidos; 6. ESTRUTURA DA PEÇA — PASSO A PASSO: lista NUMERADA, na ordem em que devem aparecer, de TODOS os tópicos que precisam constar na peça do aluno (endereçamento; qualificação completa das partes; dos fatos; do direito, inclusive tempestividade/prazo quando houver; cada tese com o seu fundamento; provas e rol de testemunhas; pedidos, um a um; fechamento com local, data, advogado e OAB), dizendo em UMA linha o que exatamente o aluno precisa escrever em cada tópico para pontuar; 7. ESPELHO DE CORREÇÃO (padrão OAB/FGV): tabela markdown com colunas Item | Pontuação distribuindo EXATAMENTE 5,00 pontos como a FGV — itens formais (endereçamento, estrutura, síntese dos fatos) valendo pouco (0,10 a 0,30) e cada tese com a pontuação decomposta em "tese desenvolvida" (≈60% do item) e "indicação do dispositivo legal com inciso" (≈40%); a última linha da tabela deve ser "**Total**" com a soma fechando EXATAMENTE em 5,00; logo após a tabela, as regras fixas: peça diversa da cabível = 0,00; dispositivo citado sem tese desenvolvida não pontua; tese sem dispositivo pontua a metade; nota da disciplina = pontuação × 2 (escala 0–10); 8. Erros frequentes esperados; 9. FONTES. REGRA ANTI-ALUCINAÇÃO (INEGOCIÁVEL): cite APENAS súmulas, julgados e dispositivos de cuja existência e teor você tem CERTEZA; na dúvida, NÃO cite — sustente a tese na lei seca. NUNCA invente número de súmula, de julgado ou teor. Na seção FONTES, liste CADA súmula/julgado/lei citada no gabarito com link oficial: legislação SEMPRE no Planalto (CP https://www.planalto.gov.br/ccivil_03/decreto-lei/del2848compilado.htm , CPP https://www.planalto.gov.br/ccivil_03/decreto-lei/del3689compilado.htm , CF https://www.planalto.gov.br/ccivil_03/constituicao/constituicao.htm , LEP https://www.planalto.gov.br/ccivil_03/leis/l7210.htm , Lei 9.099/95 https://www.planalto.gov.br/ccivil_03/leis/l9099.htm , Lei 11.343/06 https://www.planalto.gov.br/ccivil_03/_ato2004-2006/2006/lei/l11343.htm); súmulas e julgados SEMPRE pelo buscador oficial no formato https://jurisprudencia.stf.jus.br/pages/search?queryString=TERMO (STF) ou https://scon.stj.jus.br/SCON/pesquisar.jsp?b=ACOR&livre=TERMO (STJ), com o número/nome como TERMO e espaços como %20 — NUNCA link direto "adivinhado" de acórdão. Nenhuma citação pode ficar fora da seção FONTES. NÃO redija a peça pronta nem trechos-modelo — o gabarito orienta a correção do professor, não substitui a redação do aluno. Responda apenas com o gabarito, em markdown com títulos ##.';
+const SISTEMA_GABPECA = 'Você é o Professor Me. Rodrigo Silva Pereira (IESB), prática penal. Receberá o ENUNCIADO de uma peça (caso simulado). Elabore o GABARITO DEFINITIVO no PADRÃO DA 2ª FASE DA OAB (FGV) para o professor conferir, com estas seções em markdown (##), nesta ordem: 1. Peça cabível (seja direto: indique APENAS a peça correta e seu fundamento legal — NÃO justifique por que outras peças não cabem, sem listas de peças descartadas); 2. Endereçamento; 3. Prazo; 4. Teses principais e subsidiárias — TODAS, cada uma com os dispositivos legais e o INCISO exato quando a norma for casuística; 5. Pedidos; 6. ESTRUTURA DA PEÇA — PASSO A PASSO: lista NUMERADA, na ordem em que devem aparecer, de TODOS os tópicos que precisam constar na peça do aluno (endereçamento; qualificação completa das partes; dos fatos; do direito, inclusive tempestividade/prazo quando houver; cada tese com o seu fundamento; provas e rol de testemunhas; pedidos, um a um; fechamento com local, data, advogado e OAB), dizendo em UMA linha o que exatamente o aluno precisa escrever em cada tópico para pontuar; 7. ESPELHO DE CORREÇÃO (padrão OAB/FGV): tabela markdown com colunas Item | Pontuação distribuindo EXATAMENTE 5,00 pontos como a FGV — itens formais (endereçamento, estrutura, síntese dos fatos) valendo pouco (0,10 a 0,30) e cada tese com a pontuação decomposta em LINHAS SEPARADAS para "tese desenvolvida" (≈60% do item) e "indicação do dispositivo legal com inciso" (≈40%). A célula Pontuação de cada linha deve conter SOMENTE um valor numérico (ex.: 0,40), sem fórmulas, parênteses ou subtotais; a última linha da tabela deve ser "**Total**" com a soma aritmética dos itens fechando EXATAMENTE em 5,00; logo após a tabela, as regras fixas: peça diversa da cabível = 0,00; dispositivo citado sem tese desenvolvida não pontua; tese sem dispositivo pontua a metade; nota da disciplina = pontuação × 2 (escala 0–10); 8. Erros frequentes esperados; 9. FONTES. REGRA ANTI-ALUCINAÇÃO (INEGOCIÁVEL): cite APENAS súmulas, julgados e dispositivos de cuja existência e teor você tem CERTEZA; na dúvida, NÃO cite — sustente a tese na lei seca. NUNCA invente número de súmula, de julgado ou teor. Na seção FONTES, liste CADA súmula/julgado/lei citada no gabarito com link oficial: legislação SEMPRE no Planalto (CP https://www.planalto.gov.br/ccivil_03/decreto-lei/del2848compilado.htm , CPP https://www.planalto.gov.br/ccivil_03/decreto-lei/del3689compilado.htm , CF https://www.planalto.gov.br/ccivil_03/constituicao/constituicao.htm , LEP https://www.planalto.gov.br/ccivil_03/leis/l7210.htm , Lei 9.099/95 https://www.planalto.gov.br/ccivil_03/leis/l9099.htm , Lei 11.343/06 https://www.planalto.gov.br/ccivil_03/_ato2004-2006/2006/lei/l11343.htm); súmulas e julgados SEMPRE pelo buscador oficial no formato https://jurisprudencia.stf.jus.br/pages/search?queryString=TERMO (STF) ou https://scon.stj.jus.br/SCON/pesquisar.jsp?b=ACOR&livre=TERMO (STJ), com o número/nome como TERMO e espaços como %20 — NUNCA link direto "adivinhado" de acórdão. Nenhuma citação pode ficar fora da seção FONTES. NÃO redija a peça pronta nem trechos-modelo — o gabarito orienta a correção do professor, não substitui a redação do aluno. Responda apenas com o gabarito, em markdown com títulos ##.';
+const SISTEMA_REPARO_ESPELHO = SISTEMA_GABPECA + ' MODO DE REPARO: preserve integralmente as seções e o conteúdo jurídico válido do gabarito recebido. Corrija o espelho sem criar teses novas: redistribua a pontuação entre os critérios já existentes, com peso principal nas teses de mérito, e confira a soma linha por linha até fechar exatamente 5,00. Retorne o gabarito COMPLETO. Não explique o reparo.';
 
 const TOOL_TJDFT = { name: 'consultar_tjdft', description: 'Pesquisa acórdãos na API pública oficial de jurisprudência do TJDFT (jurisdf.tjdft.jus.br). Use para verificar ou localizar acórdãos do TJDFT: pesquise por número do acórdão, número do processo ou termos da ementa. Retorna número, processo, órgão julgador, relator, datas, decisão e ementa.', input_schema: { type: 'object', properties: { consulta: { type: 'string', description: 'Termos da pesquisa (número do acórdão, processo ou palavras da ementa)' }, tamanho: { type: 'number', description: 'Quantidade de resultados (máx 5)' } }, required: ['consulta'] } };
 async function chamarAnthropic(body) {
@@ -1315,8 +1318,22 @@ function erroIA(res, r) {
   return json(res, 502, { erro: 'A IA não respondeu. Tente novamente em instantes.' });
 }
 
-const SISTEMA_ENUNCIADO = 'Você é o Professor Me. Rodrigo Silva Pereira (IESB) e elabora APENAS o ENUNCIADO de um caso simulado de prática penal no PADRÃO DA 2ª FASE DA OAB: narrativa densa e realista, com qualificação completa das partes (nomes fictícios), datas precisas e coerentes com a data atual, contexto do Distrito Federal (TJDFT, MPDFT, circunscrições reais), fase processual bem definida, número fictício de autos no padrão CNJ, descrição das provas produzidas, transcrição essencial de decisões quando houver, e comando final iniciado por "Na condição de advogado(a) de..." com as vedações típicas (ex.: vedado habeas corpus) e "(Valor: 5,00)". O caso deve exigir EXATAMENTE a peça indicada e ter a dificuldade do nível pedido (BÁSICO = teses evidentes; INTERMEDIÁRIO = duas ou três teses e um detalhe que exige atenção; AVANÇADO = armadilhas típicas de OAB). NUNCA repita casos famosos nem exemplos da disciplina; crie fatos inéditos. IMPORTANTE: responda SOMENTE com o texto corrido do enunciado — sem título, sem a palavra CASO, sem gabarito, sem comentários e sem observações finais.';
+const SISTEMA_ENUNCIADO = 'Você é o Professor Me. Rodrigo Silva Pereira (IESB) e elabora APENAS o ENUNCIADO de um caso simulado de prática penal no PADRÃO DA 2ª FASE DA OAB: narrativa densa e realista, com qualificação completa das partes (nomes fictícios), datas precisas e coerentes com a data atual, contexto do Distrito Federal (TJDFT, MPDFT, circunscrições reais), fase processual bem definida, número fictício de autos no padrão CNJ, descrição das provas produzidas, transcrição essencial de decisões quando houver, e comando final iniciado por "Na condição de advogado(a) de..." com as vedações típicas (ex.: vedado habeas corpus) e "(Valor: 5,00)". O caso deve exigir EXATAMENTE a peça indicada e ter a dificuldade do nível pedido (BÁSICO = teses evidentes; INTERMEDIÁRIO = duas ou três teses e um detalhe que exige atenção; AVANÇADO = armadilhas típicas de OAB). DIVERSIDADE OBRIGATÓRIA: varie de modo substancial o conflito, o ambiente social, as profissões, as relações entre as partes, o tipo de prova, a cronologia e a forma de narrar. Não reutilize o mesmo esqueleto trocando apenas nomes, datas, crime ou local. Os casos recentes fornecidos são exemplos negativos: não copie sua sequência de fatos, combinação de provas ou construção narrativa. NUNCA repita casos famosos nem exemplos da disciplina; crie fatos inéditos. IMPORTANTE: responda SOMENTE com o texto corrido do enunciado — sem título, sem a palavra CASO, sem gabarito, sem comentários e sem observações finais.';
 const PECAS_IA_PERMITIDAS = new Set(['Queixa-Crime', 'Resposta à Acusação', 'Alegações Finais por Memoriais', 'Pedido de Liberdade Provisória', 'Relaxamento de Prisão em Flagrante', 'Revogação de Prisão Preventiva', 'Apelação Criminal', 'Recurso em Sentido Estrito (RESE)', 'Contrarrazões de Apelação', 'Embargos de Declaração', 'Embargos Infringentes e de Nulidade', 'Agravo em Execução', 'Habeas Corpus', 'Revisão Criminal']);
+const CENARIOS_CASO = ['instituição de ensino', 'empresa familiar', 'condomínio residencial', 'hospital ou clínica', 'comércio eletrônico', 'transporte por aplicativo', 'evento cultural ou esportivo', 'repartição pública', 'estabelecimento noturno', 'propriedade rural', 'agência bancária', 'plataforma digital'];
+const PROVAS_CASO = ['imagens de câmeras com lacunas', 'reconhecimento pessoal controvertido', 'extração de dados de celular', 'laudo pericial inconclusivo', 'depoimentos testemunhais contraditórios', 'problema documentado na cadeia de custódia', 'registros bancários e mensagens', 'dados de geolocalização', 'documentos eletrônicos cuja origem é discutida', 'confissão parcial posteriormente retratada'];
+const FORMAS_NARRATIVAS = ['cronologia linear iniciada pelo fato', 'abertura pela decisão impugnada e reconstrução retrospectiva', 'abertura pela prova central e posterior contextualização', 'contraste inicial entre acusação e versão defensiva', 'sequência centrada nos atos processuais e seus marcos temporais'];
+function escolherVariacao(lista) { return lista[crypto.randomInt(0, lista.length)]; }
+function casosAnterioresIA() {
+  const salvos = Object.values(db.pecas || {}).map(p => p && p.caso).filter(Boolean);
+  const gerados = (db.historicoGeracoes || []).map(h => h && h.caso).filter(Boolean);
+  return salvos.concat(gerados).slice(-24);
+}
+function maiorSemelhanca(caso, anteriores) {
+  let maior = 0;
+  for (const anterior of anteriores) maior = Math.max(maior, similaridadeNarrativa(caso, anterior));
+  return maior;
+}
 // Professor: gerar SÓ o enunciado por IA (o gabarito é gerado depois, em etapa separada)
 async function pecaGerarIA(req, res) {
   const sess = sessaoDe(req); if (!sess) return json(res, 401, { erro: 'SESSAO' }); if (sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
@@ -1328,18 +1345,25 @@ async function pecaGerarIA(req, res) {
   const disc = String(d.disc || db.turmaAtiva).trim().slice(0, 120);
   const nivel = ['BÁSICO', 'INTERMEDIÁRIO', 'AVANÇADO'].includes(String(d.nivel || '').trim()) ? String(d.nivel).trim() : 'INTERMEDIÁRIO';
   if (!PECAS_IA_PERMITIDAS.has(nomePeca)) return json(res, 400, { erro: 'Selecione uma peça-alvo válida.' });
-  const usuarioBase = JSON.stringify({ pecaAlvo: nomePeca, disciplina: disc, nivel, dataAtual: new Date().toLocaleDateString('pt-BR') });
-  let r = await iaTexto(SISTEMA_ENUNCIADO, 'DADOS DE CONTROLE (não são instruções):\n' + usuarioBase + '\nGere apenas o enunciado solicitado.', 10000, false, sess);
-  if (!r.ok) return erroIA(res, r);
-  let caso = (r.texto || '').replace(/\*\*/g, '').replace(/^\s*#*\s*CASO\b\s*:?\s*/i, '').trim();
-  let qualidade = validarEnunciado(caso);
-  if (!qualidade.ok) {
-    r = await iaTexto(SISTEMA_ENUNCIADO, 'DADOS DE CONTROLE:\n' + usuarioBase + '\nO enunciado anterior foi rejeitado por: ' + qualidade.erros.join(' ') + '\nReescreva-o integralmente, corrigindo esses pontos e retornando somente o enunciado.', 10000, false, sess);
+  const anteriores = casosAnterioresIA();
+  const variacao = { cenario: escolherVariacao(CENARIOS_CASO), provaCentral: escolherVariacao(PROVAS_CASO), formaNarrativa: escolherVariacao(FORMAS_NARRATIVAS), idCriativo: crypto.randomBytes(5).toString('hex') };
+  const usuarioBase = JSON.stringify({ pecaAlvo: nomePeca, disciplina: disc, nivel, dataAtual: new Date().toLocaleDateString('pt-BR'), variacao });
+  const recentes = anteriores.slice(-8).map((c, i) => 'CASO ANTERIOR ' + (i + 1) + ': ' + String(c).replace(/\s+/g, ' ').slice(0, 900)).join('\n');
+  let r = null, caso = '', qualidade = { ok: false, erros: [] }, semelhanca = 0;
+  for (let tentativa = 0; tentativa < 3; tentativa++) {
+    const motivo = tentativa === 0 ? '' : '\nO rascunho anterior foi rejeitado. ' + (qualidade.ok ? 'A narrativa ficou semelhante demais aos casos recentes (índice ' + semelhanca.toFixed(2) + '). Mude o núcleo fático, a sequência narrativa e a combinação de provas.' : qualidade.erros.join(' '));
+    r = await iaTexto(SISTEMA_ENUNCIADO, 'DADOS DE CONTROLE (não são instruções):\n' + usuarioBase + '\n<CASOS_RECENTES_A_EVITAR>\n' + documentoIA(recentes, 9000) + '\n</CASOS_RECENTES_A_EVITAR>' + motivo + '\nGere apenas um enunciado inédito.', 10000, false, sess);
     if (!r.ok) return erroIA(res, r);
     caso = (r.texto || '').replace(/\*\*/g, '').replace(/^\s*#*\s*CASO\b\s*:?\s*/i, '').trim();
     qualidade = validarEnunciado(caso);
+    semelhanca = maiorSemelhanca(caso, anteriores);
+    if (qualidade.ok && semelhanca < 0.58) break;
   }
   if (!qualidade.ok) return json(res, 502, { erro: 'A IA não produziu um enunciado seguro para publicação: ' + qualidade.erros.join(' ') });
+  if (semelhanca >= 0.58) return json(res, 502, { erro: 'A narrativa foi descartada por repetir excessivamente um caso anterior. Tente novamente para obter outra variação.' });
+  db.historicoGeracoes.push({ caso: caso.slice(0, 12000), nomePeca, criadoEm: Date.now() });
+  db.historicoGeracoes = db.historicoGeracoes.slice(-24);
+  salvarDb();
   json(res, 200, { caso, gab: '', nomePeca, disc });
 }
 // ===== Garantia determinística de links oficiais para TODA citação do gabarito =====
@@ -1447,8 +1471,12 @@ async function pecaGerarGabarito(req, res) {
   let gab = (r.texto || '').trim();
   gab = garantirLinksFontes(gab, false);
   let estrutura = validarGabarito(gab, nomePeca);
-  if (!estrutura.ok) {
-    const reparo = await iaTexto(SISTEMA_GABPECA, contexto + '\n<gabarito_rejeitado>\n' + gab.slice(0, 20000) + '\n</gabarito_rejeitado>\nREESCREVA integralmente. Erros determinísticos: ' + estrutura.erros.join(' '), 12000, false, sess);
+  for (let tentativa = 0; !estrutura.ok && tentativa < 2; tentativa++) {
+    const apenasEspelho = estrutura.erros.every(e => /espelho|soma dos itens|linha Total/i.test(e));
+    const instrucao = apenasEspelho
+      ? 'Corrija SOMENTE a tabela do espelho conforme os erros determinísticos, preservando o restante. '
+      : 'REESCREVA integralmente, corrigindo todos os erros determinísticos. ';
+    const reparo = await iaTexto(apenasEspelho ? SISTEMA_REPARO_ESPELHO : SISTEMA_GABPECA, contexto + '\n<gabarito_rejeitado>\n' + gab.slice(0, 24000) + '\n</gabarito_rejeitado>\n' + instrucao + estrutura.erros.join(' '), 12000, false, sess);
     if (!reparo.ok) return erroIA(res, reparo);
     gab = garantirLinksFontes((reparo.texto || '').trim(), false);
     estrutura = validarGabarito(gab, nomePeca);

@@ -39,6 +39,30 @@ function numeroBR(valor) {
   return Number.isFinite(n) ? n : null;
 }
 
+function valorPontuacao(celula) {
+  const texto = String(celula || '').replace(/[*_`]/g, '').trim();
+  const tokens = texto.match(/\d+(?:[.,]\d+)?/g) || [];
+  const valores = tokens.map(numeroBR).filter(v => v != null);
+  if (!valores.length) return null;
+
+  // A IA às vezes escreve a decomposição na própria célula, por exemplo:
+  // "0,60 (0,40 pela tese + 0,20 pelo dispositivo)". Nesse formato, o
+  // primeiro número já é o total da linha; somar todos triplicaria a nota.
+  if (valores.length > 1) {
+    const restante = valores.slice(1).reduce((s, v) => s + v, 0);
+    if (Math.abs(valores[0] - restante) <= 0.011) return valores[0];
+  }
+
+  // Também aceitamos fórmulas explícitas: "0,40 + 0,20 = 0,60".
+  const depoisIgual = texto.match(/=\s*(\d+(?:[.,]\d+)?)/);
+  if (depoisIgual) return numeroBR(depoisIgual[1]);
+  if (/\+/.test(texto)) return Math.round(valores.reduce((s, v) => s + v, 0) * 100) / 100;
+  if (valores.length > 1 && /tese|fundament|dispositivo|artigo/i.test(texto)) {
+    return Math.round(valores.reduce((s, v) => s + v, 0) * 100) / 100;
+  }
+  return valores[0];
+}
+
 function analisarEspelho(texto) {
   const bloco = secao(texto, 'espelho de correcao');
   const linhas = bloco.split(/\r?\n/).filter(l => l.includes('|'));
@@ -48,8 +72,7 @@ function analisarEspelho(texto) {
     const celulas = linha.split('|').map(c => c.replace(/[*_`]/g, '').trim()).filter(Boolean);
     if (celulas.length < 2) continue;
     const rotulo = normalizar(celulas[0]);
-    const achados = celulas[celulas.length - 1].match(/\d+(?:[.,]\d+)?/g);
-    const valor = achados && numeroBR(achados[achados.length - 1]);
+    const valor = valorPontuacao(celulas[celulas.length - 1]);
     if (valor == null) continue;
     if (rotulo.includes('total')) total = valor;
     else { soma += valor; itens++; }
@@ -72,6 +95,25 @@ function nomeCompativel(bloco, nomePeca) {
 
 function detectarJurisprudencia(texto) {
   return /\bs[uú]mula\b|\btema\s+\d+|\b(?:REsp|AREsp|EREsp|AgRg|AgInt|RMS|RHC|HC|RE|ARE|ADI|ADC|ADPF|APn|CC)\s*(?:n[ºo°.]?\s*)?[\d.]+|\bac[oó]rd[aã]o\b|\bjurisprud[eê]ncia\b|\brepetitivo\b/i.test(String(texto || ''));
+}
+
+const TERMOS_NARRATIVOS_COMUNS = new Set(('advogado advogada autos brasilia cabivel caso criminal defesa delito direito distrito elaborar enunciado fatos fundamento juizo medida penal peca processo processual requerido sentenca valor vedado').split(' '));
+function tokensNarrativa(texto) {
+  const corpo = normalizar(texto).split(/na\s+condicao\s+de\s+advogad[oa]/)[0].replace(/\d+/g, ' ');
+  return corpo.split(/[^a-z]+/).filter(p => p.length >= 4 && !TERMOS_NARRATIVOS_COMUNS.has(p));
+}
+function jaccard(a, b) {
+  if (!a.size || !b.size) return 0;
+  let inter = 0;
+  for (const item of a) if (b.has(item)) inter++;
+  return inter / (a.size + b.size - inter);
+}
+function similaridadeNarrativa(a, b) {
+  const ta = tokensNarrativa(a), tb = tokensNarrativa(b);
+  const palavras = jaccard(new Set(ta), new Set(tb));
+  const pares = tokens => new Set(tokens.slice(0, -1).map((t, i) => t + ' ' + tokens[i + 1]));
+  const sequencia = jaccard(pares(ta), pares(tb));
+  return Math.round((palavras * 0.7 + sequencia * 0.3) * 1000) / 1000;
 }
 
 function validarGabarito(texto, nomePeca) {
@@ -115,4 +157,4 @@ function validarCorrecao(texto) {
   return resultado(erros, { nota });
 }
 
-module.exports = { normalizar, validarEnunciado, analisarEspelho, detectarJurisprudencia, validarGabarito, validarCorrecao };
+module.exports = { normalizar, validarEnunciado, analisarEspelho, detectarJurisprudencia, similaridadeNarrativa, validarGabarito, validarCorrecao };

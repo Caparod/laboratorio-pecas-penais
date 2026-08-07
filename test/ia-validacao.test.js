@@ -1,10 +1,14 @@
 'use strict';
 const assert = require('assert');
-const { validarEnunciado, analisarEspelho, detectarJurisprudencia, validarGabarito, validarCorrecao } = require('../validation');
+const { validarEnunciado, analisarEspelho, detectarJurisprudencia, similaridadeNarrativa, validarGabarito, validarCorrecao } = require('../validation');
 
 const enunciado = 'Em 10/03/2026, João da Silva foi condenado pela Vara Criminal de Brasília. A defesa foi intimada em 16/03/2026 e todos os elementos probatórios relevantes foram descritos nos autos fictícios. O acusado pretende impugnar integralmente a sentença e apresentou ao advogado cópia da decisão e das provas. Na condição de advogado(a) de João da Silva, elabore a medida processual cabível, vedado o uso de habeas corpus. (Valor: 5,00)';
 assert.equal(validarEnunciado(enunciado).ok, true, 'enunciado completo deve passar');
 assert.equal(validarEnunciado('Caso curto sem datas.').ok, false, 'enunciado incompleto deve falhar');
+const narrativaQuaseIgual = enunciado.replace('João da Silva', 'Marcos Pereira').replace('10/03/2026', '11/04/2026').replace('16/03/2026', '17/04/2026');
+const narrativaDiferente = 'Em 02/02/2026, uma médica de hospital particular recebeu arquivos eletrônicos atribuídos a um paciente. Após perícia inconclusiva e depoimentos divergentes, o Ministério Público ofereceu denúncia por fato ocorrido em 28/01/2026. O juízo determinou sua citação e juntou apenas parte dos registros técnicos. Na condição de advogado(a) da acusada, apresente a medida adequada, vedado habeas corpus. (Valor: 5,00)';
+assert.ok(similaridadeNarrativa(enunciado, narrativaQuaseIgual) >= 0.58, 'troca superficial de nomes e datas deve ser detectada');
+assert.ok(similaridadeNarrativa(enunciado, narrativaDiferente) < 0.58, 'núcleos fáticos distintos não devem ser bloqueados');
 
 const gabarito = `## Peça cabível
 Apelação Criminal, com fundamento no CPP.
@@ -37,6 +41,13 @@ assert.equal(espelho.soma, 5);
 assert.equal(espelho.total, 5);
 assert.equal(validarGabarito(gabarito, 'Apelação Criminal').ok, true, 'gabarito íntegro deve passar');
 assert.equal(validarGabarito(gabarito.replace('| Pedidos | 1,50 |', '| Pedidos | 1,40 |'), 'Apelação Criminal').ok, false, 'soma diferente de 5 deve falhar');
+const espelhoComDetalhamento = gabarito
+  .replace('| Cabimento | 0,50 |', '| Cabimento | 0,50 (0,30 pela tese + 0,20 pelo dispositivo) |')
+  .replace('| Endereçamento | 0,50 |', '| Endereçamento | 0,50 (0,30 pela forma + 0,20 pela competência) |');
+assert.equal(analisarEspelho(espelhoComDetalhamento).soma, 5, 'o caso que antes aparecia como 4,40 deve fechar em 5,00');
+assert.equal(validarGabarito(espelhoComDetalhamento, 'Apelação Criminal').ok, true, 'espelho FGV com decomposição deve ser aceito');
+const espelhoComFormula = gabarito.replace('| Pedidos | 1,50 |', '| Pedidos | 1,00 + 0,50 = 1,50 |');
+assert.equal(analisarEspelho(espelhoComFormula).soma, 5, 'fórmula explícita deve usar o total após o sinal de igual');
 assert.equal(validarGabarito(gabarito, 'Habeas Corpus').ok, false, 'peça divergente deve falhar');
 assert.equal(detectarJurisprudencia('Aplicação do Tema 1.234 do STJ.'), true);
 assert.equal(detectarJurisprudencia('Fundamentação somente no Código Penal.'), false);
