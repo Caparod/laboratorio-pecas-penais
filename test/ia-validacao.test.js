@@ -2,9 +2,10 @@
 const assert = require('assert');
 const { validarEnunciado, analisarEspelho, detectarJurisprudencia, similaridadeNarrativa, validarGabarito, validarCorrecao } = require('../validation');
 
-const enunciado = 'Em 10/03/2026, João da Silva foi condenado pela Vara Criminal de Brasília. A defesa foi intimada em 16/03/2026 e todos os elementos probatórios relevantes foram descritos nos autos fictícios. O acusado pretende impugnar integralmente a sentença e apresentou ao advogado cópia da decisão e das provas. Na condição de advogado(a) de João da Silva, elabore a medida processual cabível, vedado o uso de habeas corpus. (Valor: 5,00)';
+const enunciado = 'No processo nº 0712345-67.2026.8.07.0001, em 10/03/2026, João da Silva foi condenado pela Vara Criminal de Brasília. A defesa foi intimada em 16/03/2026 e todos os elementos probatórios relevantes foram descritos nos autos fictícios. O acusado pretende impugnar integralmente a sentença e apresentou ao advogado cópia da decisão e das provas. Na condição de advogado(a) de João da Silva, elabore a medida processual cabível, vedado o uso de habeas corpus. (Valor: 5,00)';
 assert.equal(validarEnunciado(enunciado).ok, true, 'enunciado completo deve passar');
 assert.equal(validarEnunciado('Caso curto sem datas.').ok, false, 'enunciado incompleto deve falhar');
+assert.equal(validarEnunciado(enunciado.replace('0712345-67.2026.8.07.0001', '2026.008installer-4')).ok, false, 'identificador corrompido deve ser bloqueado');
 const narrativaQuaseIgual = enunciado.replace('João da Silva', 'Marcos Pereira').replace('10/03/2026', '11/04/2026').replace('16/03/2026', '17/04/2026');
 const narrativaDiferente = 'Em 02/02/2026, uma médica de hospital particular recebeu arquivos eletrônicos atribuídos a um paciente. Após perícia inconclusiva e depoimentos divergentes, o Ministério Público ofereceu denúncia por fato ocorrido em 28/01/2026. O juízo determinou sua citação e juntou apenas parte dos registros técnicos. Na condição de advogado(a) da acusada, apresente a medida adequada, vedado habeas corpus. (Valor: 5,00)';
 assert.ok(similaridadeNarrativa(enunciado, narrativaQuaseIgual) >= 0.58, 'troca superficial de nomes e datas deve ser detectada');
