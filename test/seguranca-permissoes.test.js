@@ -182,6 +182,15 @@ async function executar() {
   assert.equal(r.status, 200, 'sessão do aluno compartilhado deve continuar válida');
   assert.deepEqual(r.body.pecas.map(p => p.id), [pecaBId]);
 
+  r = await requisitar('/api/admin', coordenador, { redefinirSenhasTurma: turmaB, senhaTemporaria: '12345678', confirmacao: 'REDEFINIR SENHAS' });
+  assert.equal(r.status, 403, 'coordenação não pode impor senha comum a uma turma inteira');
+  r = await requisitar('/api/admin', admin, { redefinirSenhasTurma: turmaB, senhaTemporaria: '12345678', confirmacao: 'REDEFINIR SENHAS' });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.credenciaisIniciais.length, 1);
+  const alunoComSenhaTemporaria = await loginBruto('9100002', '12345678');
+  assert.ok(alunoComSenhaTemporaria.token, 'senha temporária comum deve permitir somente o acesso inicial');
+  assert.equal(alunoComSenhaTemporaria.precisaTrocarSenha, true);
+
   r = await requisitar('/api/logout', coordenador, {});
   assert.equal(r.status, 200);
   r = await requisitar('/api/admin', coordenador, {});

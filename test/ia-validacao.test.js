@@ -12,6 +12,9 @@ const enunciado = 'No processo nº 0712345-67.2026.8.07.0001, em 10/03/2026, Jo�
 assert.equal(validarEnunciado(enunciado).ok, true, 'enunciado completo deve passar');
 assert.equal(validarEnunciado('Caso curto sem datas.').ok, false, 'enunciado incompleto deve falhar');
 assert.equal(validarEnunciado(enunciado.replace('0712345-67.2026.8.07.0001', '2026.008installer-4')).ok, false, 'identificador corrompido deve ser bloqueado');
+const queixaSemProcesso = enunciado.replace('No processo nº 0712345-67.2026.8.07.0001, ', '').replace('medida processual cabível', 'Queixa-Crime cabível');
+assert.equal(validarEnunciado(queixaSemProcesso, 'Queixa-Crime').ok, true, 'Queixa-Crime inaugural não deve exigir número CNJ');
+assert.equal(validarEnunciado(queixaSemProcesso, 'Apelação Criminal').ok, false, 'peça em processo existente deve continuar exigindo número CNJ');
 const narrativaQuaseIgual = enunciado.replace('João da Silva', 'Marcos Pereira').replace('10/03/2026', '11/04/2026').replace('16/03/2026', '17/04/2026');
 const narrativaDiferente = 'Em 02/02/2026, uma médica de hospital particular recebeu arquivos eletrônicos atribuídos a um paciente. Após perícia inconclusiva e depoimentos divergentes, o Ministério Público ofereceu denúncia por fato ocorrido em 28/01/2026. O juízo determinou sua citação e juntou apenas parte dos registros técnicos. Na condição de advogado(a) da acusada, apresente a medida adequada, vedado habeas corpus. (Valor: 5,00)';
 assert.ok(similaridadeNarrativa(enunciado, narrativaQuaseIgual) >= 0.58, 'troca superficial de nomes e datas deve ser detectada');
