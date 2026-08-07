@@ -104,30 +104,6 @@ function migrarDb() {
     a.turmaIds = Array.from(new Set(ids.map(String).filter(id => db.turmas[id])));
     a.turmaId = a.turmaIds[0] || null;
   }
-  // Migração operacional única: redefine a senha temporária dos alunos da turma
-  // atual solicitada pela administração. O marcador persistido impede repetição.
-  const resetTurma20260807 = 'senha-temporaria-ocjudm3bb-2026-08-07-v1';
-  if (SUPABASE_ATIVO && !(db.migracoes && db.migracoes[resetTurma20260807])) {
-    const turmaReset = Object.values(db.turmas).find(t => String(t.nome || '').trim().toUpperCase() === 'OCJUDM3BB');
-    if (turmaReset) {
-      const matriculasReset = new Set();
-      const senhaReset = Buffer.from('MTIzNDU2Nzg=', 'base64').toString('utf8');
-      for (const [matricula, aluno] of Object.entries(db.alunos || {})) {
-        if (!aluno.turmaIds.includes(String(turmaReset.id))) continue;
-        aluno.senha = hashSenha(senhaReset);
-        aluno.mudouSenha = false;
-        aluno.senhaTemporariaCriadaEm = Date.now();
-        matriculasReset.add(matricula);
-      }
-      for (const [tokenHash, sessao] of Object.entries(db.sessoes || {})) {
-        if (sessao && sessao.tipo === 'aluno' && matriculasReset.has(String(sessao.usuario))) delete db.sessoes[tokenHash];
-      }
-      if (matriculasReset.size) {
-        db.migracoes = db.migracoes || {};
-        db.migracoes[resetTurma20260807] = { aplicadaEm: Date.now(), turmaId: turmaReset.id, quantidade: matriculasReset.size };
-      }
-    }
-  }
   // ===== Gastos: livro-razão PERMANENTE (nunca é apagado, nem no zerar) =====
   if (!db.gastos) db.gastos = {};
   // Conteúdo avaliativo passa a ser versionado. Entregas antigas recebem uma
