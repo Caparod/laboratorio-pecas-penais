@@ -19,6 +19,8 @@ function validarEnunciado(texto) {
   const datasNumericas = t.match(/\b\d{1,2}[\/-]\d{1,2}[\/-]\d{4}\b/g) || [];
   const datasExtenso = t.match(/\b\d{1,2}\s+de\s+[a-zç]+\s+de\s+\d{4}\b/gi) || [];
   if (datasNumericas.length + datasExtenso.length < 2) erros.push('O caso precisa de ao menos duas datas completas para permitir a conferência da cronologia e do prazo.');
+  if (/\b\d[\d.\/-]*[a-zç]{2,}[\w.\/-]*/i.test(t) || /\bnot\b/i.test(t)) erros.push('O enunciado contém identificador corrompido ou fragmento textual incompatível com o português.');
+  if (!/\b\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}\b/.test(t)) erros.push('Falta um número fictício de processo no padrão CNJ válido.');
   if (/^\s*#{1,3}\s*(gabarito|espelho|resposta)/im.test(t) || n.includes('## espelho de correcao')) erros.push('A resposta contém conteúdo de gabarito, não apenas o enunciado.');
   return resultado(erros, { tamanho: t.length });
 }
