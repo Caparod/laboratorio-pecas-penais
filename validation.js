@@ -13,6 +13,12 @@ function limparEnunciadoIA(texto) {
     .trim();
 }
 
+function limparGabaritoIA(texto) {
+  const t = String(texto || '').trim();
+  const inicio = t.search(/^\s*##\s+/m);
+  return inicio >= 0 ? t.slice(inicio).trim() : t;
+}
+
 function resultado(erros, detalhes) {
   return { ok: erros.length === 0, erros, detalhes: detalhes || {} };
 }
@@ -121,14 +127,18 @@ function normalizarEspelhoCinco(texto) {
     else itens.push(registro);
   }
   if (!itens.length) return String(texto || '');
+  for (const item of itens) item.valor = Math.round(item.valor * 20) / 20;
   const soma = Math.round(itens.reduce((s, item) => s + item.valor, 0) * 100) / 100;
   const diferenca = Math.round((5 - soma) * 100) / 100;
   if (Math.abs(diferenca) > 0.001) {
     const alvo = itens.reduce((maior, item) => item.valor > maior.valor ? item : maior, itens[0]);
     const novoValor = Math.round((alvo.valor + diferenca) * 100) / 100;
     if (novoValor < 0) return String(texto || '');
-    alvo.partes[alvo.indiceNota] = ' ' + novoValor.toFixed(2).replace('.', ',') + ' ';
-    linhas[alvo.linha] = alvo.partes.join('|');
+    alvo.valor = novoValor;
+  }
+  for (const item of itens) {
+    item.partes[item.indiceNota] = ' ' + item.valor.toFixed(2).replace('.', ',') + ' ';
+    linhas[item.linha] = item.partes.join('|');
   }
   if (total) {
     total.partes[total.indiceNota] = ' **5,00** ';
@@ -176,6 +186,8 @@ function validarGabarito(texto, nomePeca) {
   const erros = [];
   const obrigatorias = ['peca cabivel', 'enderecamento', 'prazo', 'teses', 'pedidos', 'estrutura da peca', 'espelho de correcao', 'erros frequentes', 'fontes'];
   const n = normalizar(t);
+  if (!/^\s*##\s+/.test(t)) erros.push('O gabarito deve iniciar diretamente pela primeira seção, sem comentários da IA.');
+  if (/\bdias úteis\b/i.test(t)) erros.push('Prazos processuais penais não devem ser apresentados como dias úteis.');
   for (const titulo of obrigatorias) if (!new RegExp('^\\s*##\\s+.*' + titulo.replace(/ /g, '.*'), 'mi').test(n)) erros.push('Falta a seção “' + titulo + '”.');
   const espelho = analisarEspelho(t);
   if (!espelho.bloco) erros.push('O espelho de correção não foi encontrado.');
@@ -212,4 +224,4 @@ function validarCorrecao(texto) {
   return resultado(erros, { nota });
 }
 
-module.exports = { normalizar, limparEnunciadoIA, validarEnunciado, analisarEspelho, normalizarEspelhoCinco, detectarJurisprudencia, similaridadeNarrativa, validarGabarito, validarCorrecao };
+module.exports = { normalizar, limparEnunciadoIA, limparGabaritoIA, validarEnunciado, analisarEspelho, normalizarEspelhoCinco, detectarJurisprudencia, similaridadeNarrativa, validarGabarito, validarCorrecao };
