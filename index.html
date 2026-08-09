@@ -682,10 +682,10 @@ async function profAlunos(dadosPrev){
    +(podeGerirAgora()?'<div style="margin-top:10px;font-family:Arial,sans-serif;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input id="tur_nome" placeholder="Nome da nova turma" style="padding:8px;border:1px solid #cfc9b8;border-radius:6px"><select id="tur_prof" style="padding:8px;border:1px solid #cfc9b8;border-radius:6px"></select><button class="primario" onclick="criarTurma()">➕ Criar turma</button></div><div id="tur_fb"></div>':'')
    +'</div>'
    +'<div class="card painel"><h3>Matrículas ('+listaAlunos.length+')</h3>'
-   +'<p style="font-size:.88rem;color:var(--cinza)">Cole matrículas (uma por linha; pode ser "matrícula - nome") ou importe do PDF do diário. Adicionar uma matrícula existente cria mais um vínculo, sem removê-la das outras turmas. “Substituir lista” altera somente a turma escolhida.</p>'
+   +'<p style="font-size:.88rem;color:var(--cinza)">Cole matrículas (uma por linha; pode ser "matrícula - nome") ou importe do PDF do diário. Ao sincronizar, o sistema cria somente os alunos novos com a senha temporária <b>12345678</b>, mantém intocados os alunos que continuam e mostra quem ficou fora da lista para o professor confirmar antes de qualquer exclusão.</p>'
    +'<div class="botoes" style="margin-bottom:8px"><label class="primario" style="padding:9px 18px;border-radius:6px;background:var(--azul);color:#fff;cursor:pointer;font-size:.85rem;font-family:Arial,sans-serif">📄 Importar PDF<input type="file" accept="application/pdf" style="display:none" onchange="importarPdfAlunos(this)"></label></div>'
    +'<textarea id="adm_mats" placeholder="500123 - Fulano"></textarea>'
-   +'<div class="botoes" style="align-items:center"><span style="font-family:Arial,sans-serif;font-size:.85rem">Turma de destino: <select id="adm_turma" style="padding:6px;border:1px solid #cfc9b8;border-radius:6px">'+(optsTurma||'<option value="">— sem turma</option>')+'</select></span><button class="primario" onclick="salvarAlunos(false)">Adicionar</button><button onclick="if(confirm(\'Substituir TODA a lista?\'))salvarAlunos(true)">Substituir lista</button>'+botaoSenhaTurma+botaoExcluirTodos+'</div><div id="adm_msg"></div>'
+   +'<div class="botoes" style="align-items:center"><span style="font-family:Arial,sans-serif;font-size:.85rem">Turma de destino: <select id="adm_turma" style="padding:6px;border:1px solid #cfc9b8;border-radius:6px">'+(optsTurma||'<option value="">— sem turma</option>')+'</select></span><button class="primario" onclick="sincronizarListaTurma()">Sincronizar lista nova</button><button onclick="salvarAlunos(false)">Apenas adicionar</button>'+botaoSenhaTurma+botaoExcluirTodos+'</div><div id="adm_msg"></div>'
    +'<table><tr><th>Matrícula</th><th>Nome</th><th>Turma</th><th>Contato</th><th>Cadastro</th><th></th></tr>'+(linhas||'<tr><td colspan="6">Nenhum aluno.</td></tr>')+'</table></div>';
   if(podeGerirAgora())carregarProfsSelect();
 }
@@ -712,6 +712,30 @@ async function salvarAlunos(sub){
     m.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif;font-size:.85rem"><b>'+(d.novas||0)+' novo(s).</b> '+((d.existentes||0)?d.existentes+' já existiam (ignorados).':'')+'</p>'+bloco;
   },80)
 }
+async function sincronizarListaTurma(ausentesConfirmados){
+  const msg=document.getElementById('adm_msg');
+  const txt=(document.getElementById('adm_mats')||{}).value||'';
+  const mats=txt.split(/\n+/).map(x=>x.trim()).filter(x=>x);
+  const turmaId=(document.getElementById('adm_turma')||{}).value||null;
+  if(!mats.length){msg.innerHTML='<p class="erro-ia">Cole ou importe ao menos uma matrícula.</p>';return}
+  if(!turmaId){msg.innerHTML='<p class="erro-ia">Selecione a turma que receberá a lista nova.</p>';return}
+  msg.innerHTML='<p style="font-family:Arial,sans-serif;font-size:.85rem"><span class="spinner"></span>Comparando a lista nova com a turma...</p>';
+  const r=await apiPost('/api/admin',{sincronizarLista:true,matriculas:mats,turmaId,ausentesConfirmados:ausentesConfirmados||[]});
+  const d=await r.json();
+  if(r.status===409&&d.requerConfirmacao){
+    const ausentes=((d.resumo||{}).ausentes||[]);
+    const lista=ausentes.map(a=>'• '+a.matricula+(a.nome?' — '+a.nome:'')+(a.contaSeraExcluida?' (conta será excluída)':' (será removido somente desta turma)')).join('\n');
+    const contas=ausentes.filter(a=>a.contaSeraExcluida).length;
+    const pergunta='A lista nova não contém '+ausentes.length+' aluno(s):\n\n'+lista+'\n\n'+(contas?contas+' conta(s) sem vínculo com outra turma serão excluídas do sistema. ':'Os alunos permanecem vinculados às outras turmas. ')+'Deseja confirmar essas remoções?';
+    if(!confirm(pergunta)){msg.innerHTML='<p style="color:var(--cinza);font-family:Arial,sans-serif;font-size:.85rem"><b>Sincronização cancelada.</b> Nenhum aluno foi criado, alterado ou removido.</p>';return}
+    return sincronizarListaTurma(ausentes.map(a=>a.matricula));
+  }
+  if(!r.ok){msg.innerHTML='<p class="erro-ia">'+esc(d.erro||'Erro ao sincronizar a lista.')+'</p>';return}
+  profAlunos(d);setTimeout(()=>{const m=document.getElementById('adm_msg');if(!m)return;const creds=d.credenciaisIniciais||[];
+    const bloco=creds.length?'<p><b>Novos acessos — copie agora:</b></p><pre style="white-space:pre-wrap">'+creds.map(c=>esc(c.matricula+' — senha temporária '+c.senha)).join('\n')+'</pre>':'';
+    m.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif;font-size:.85rem"><b>Lista sincronizada.</b> '+(d.novas||0)+' novo(s), '+(d.mantidos||0)+' mantido(s) sem alterações, '+(d.vinculadosExistentes||0)+' vínculo(s) acrescentado(s) e '+(d.removidosDaTurma||0)+' removido(s) da turma.</p>'+bloco;
+  },80)
+}
 async function resetSenha(m){
   if(!confirm('Gerar uma nova senha temporária para '+m+'?'))return;
   const r=await apiPost('/api/admin',{resetarSenha:m});const d=await r.json();
@@ -732,7 +756,7 @@ async function redefinirSenhasTurma(){
 }
 async function excluirAl(m){if(!confirm((AUTH&&AUTH.admin||podeGerirAgora()?'Excluir a conta ':'Remover das suas turmas o aluno ')+m+'?'))return;const r=await apiPost('/api/admin',{excluirAluno:m});const d=await r.json();if(!r.ok){alert(d.erro||'Erro');return}profAlunos(d);}
 async function excluirTodosAl(){if(!confirm('Excluir TODOS os alunos do sistema?'))return;const c=prompt('Para confirmar, digite EXCLUIR TODOS (em maiúsculas):');if(c!=='EXCLUIR TODOS'){alert('Cancelado.');return}const r=await apiPost('/api/admin',{excluirTodos:true,confirmacao:c});const d=await r.json();if(!r.ok){alert(d.erro||'Erro');return}profAlunos(d);}
-function importarPdfAlunos(inp){const f=inp.files&&inp.files[0];if(!f)return;const msg=document.getElementById('adm_msg');msg.innerHTML='<p style="font-family:Arial,sans-serif;font-size:.85rem"><span class="spinner"></span>Lendo o PDF com IA...</p>';const fr=new FileReader();fr.onload=async function(){try{const r=await apiPost('/api/extrair-pdf',{pdf:fr.result});const d=await r.json();if(!r.ok){msg.innerHTML='<p class="erro-ia">'+esc(d.erro||'Erro')+'</p>';return}document.getElementById('adm_mats').value=d.alunos.map(a=>a.matricula+(a.nome?' - '+a.nome:'')).join('\n');msg.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif;font-size:.85rem"><b>'+Number(d.alunos.length||0)+' alunos encontrados.</b> Revise e clique em Adicionar ou Substituir.</p>';}catch(e){msg.innerHTML='<p class="erro-ia">Falha: '+esc(e.message)+'</p>';}};fr.readAsDataURL(f);inp.value='';}
+function importarPdfAlunos(inp){const f=inp.files&&inp.files[0];if(!f)return;const msg=document.getElementById('adm_msg');msg.innerHTML='<p style="font-family:Arial,sans-serif;font-size:.85rem"><span class="spinner"></span>Lendo o PDF com IA...</p>';const fr=new FileReader();fr.onload=async function(){try{const r=await apiPost('/api/extrair-pdf',{pdf:fr.result});const d=await r.json();if(!r.ok){msg.innerHTML='<p class="erro-ia">'+esc(d.erro||'Erro')+'</p>';return}document.getElementById('adm_mats').value=d.alunos.map(a=>a.matricula+(a.nome?' - '+a.nome:'')).join('\n');msg.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif;font-size:.85rem"><b>'+Number(d.alunos.length||0)+' alunos encontrados.</b> Revise a relação e clique em Sincronizar lista nova.</p>';}catch(e){msg.innerHTML='<p class="erro-ia">Falha: '+esc(e.message)+'</p>';}};fr.readAsDataURL(f);inp.value='';}
 
 // ---- Gastos (Administrador e Coordenação) ----
 function mesBR(x){const p=x.split('-');const n=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];return n[parseInt(p[1],10)-1]+'/'+p[0]}

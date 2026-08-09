@@ -1166,6 +1166,96 @@ async function alunoTurma(req, res) {
   salvarDb();
   json(res, 200, { ok: true });
 }
+
+function normalizarListaAlunos(itens) {
+  const vistos = new Set();
+  const lista = [];
+  for (const item of (Array.isArray(itens) ? itens : [])) {
+    let aluno = null;
+    if (typeof item === 'string') {
+      const m = item.match(/^\s*([0-9]{4,15})\s*[-–—,;:.]?\s*(.*)$/);
+      if (m) aluno = { matricula: m[1], nome: (m[2] || '').trim() };
+    } else if (item && item.matricula) {
+      aluno = { matricula: String(item.matricula).trim(), nome: String(item.nome || '').trim() };
+    }
+    if (!aluno || !/^[0-9]{4,15}$/.test(aluno.matricula) || vistos.has(aluno.matricula)) continue;
+    vistos.add(aluno.matricula);
+    lista.push(aluno);
+  }
+  return lista;
+}
+
+function mesmasMatriculas(a, b) {
+  const aa = Array.from(new Set((a || []).map(String))).sort();
+  const bb = Array.from(new Set((b || []).map(String))).sort();
+  return aa.length === bb.length && aa.every((m, i) => m === bb[i]);
+}
+
+function sincronizarListaDaTurma(res, turmaId, itens, ausentesConfirmados) {
+  const lista = normalizarListaAlunos(itens);
+  if (!lista.length) return json(res, 400, { erro: 'A lista nova precisa ter ao menos uma matrícula válida.' });
+
+  const desejadas = new Set(lista.map(a => a.matricula));
+  const atuais = Object.entries(db.alunos || {}).filter(([, aluno]) => alunoNaTurma(aluno, turmaId));
+  const ausentes = atuais.filter(([matricula]) => !desejadas.has(matricula)).map(([matricula, aluno]) => {
+    const outrasTurmas = turmasDoAluno(aluno).filter(id => id !== turmaId && db.turmas[id]).map(id => db.turmas[id].nome);
+    return { matricula, nome: aluno.nome || '', outrasTurmas, contaSeraExcluida: outrasTurmas.length === 0 };
+  });
+  const novos = lista.filter(a => !db.alunos[a.matricula]);
+  const existentesParaVincular = lista.filter(a => db.alunos[a.matricula] && !alunoNaTurma(db.alunos[a.matricula], turmaId));
+  const mantidos = lista.filter(a => db.alunos[a.matricula] && alunoNaTurma(db.alunos[a.matricula], turmaId));
+  const resumo = {
+    novos: novos.map(a => ({ matricula: a.matricula, nome: a.nome })),
+    existentesParaVincular: existentesParaVincular.map(a => ({ matricula: a.matricula, nome: db.alunos[a.matricula].nome || '' })),
+    mantidos: mantidos.map(a => ({ matricula: a.matricula, nome: db.alunos[a.matricula].nome || '' })),
+    ausentes
+  };
+
+  const matriculasAusentes = ausentes.map(a => a.matricula);
+  if (matriculasAusentes.length && !mesmasMatriculas(ausentesConfirmados, matriculasAusentes)) {
+    return json(res, 409, {
+      erro: 'CONFIRMAR_EXCLUSOES',
+      mensagem: 'Confirme quais alunos ausentes devem ser removidos antes de sincronizar a turma.',
+      requerConfirmacao: true,
+      resumo
+    });
+  }
+
+  const credenciaisIniciais = [];
+  for (const alunoNovo of novos) {
+    db.alunos[alunoNovo.matricula] = {
+      senha: hashSenha('12345678'),
+      mudouSenha: false,
+      usos: {},
+      nome: alunoNovo.nome || '',
+      turmaIds: [],
+      senhaTemporariaCriadaEm: Date.now()
+    };
+    adicionarTurmaAluno(db.alunos[alunoNovo.matricula], turmaId);
+    credenciaisIniciais.push({ matricula: alunoNovo.matricula, senha: '12345678' });
+  }
+  for (const alunoExistente of existentesParaVincular) adicionarTurmaAluno(db.alunos[alunoExistente.matricula], turmaId);
+
+  let vinculosRemovidos = 0, contasExcluidas = 0;
+  for (const ausente of ausentes) {
+    const resultado = removerAlunoDaTurma(ausente.matricula, turmaId);
+    vinculosRemovidos += resultado.vinculosRemovidos || 0;
+    contasExcluidas += resultado.alunosApagados || 0;
+  }
+  salvarDb();
+  return json(res, 200, {
+    ok: true,
+    sincronizado: true,
+    novas: novos.length,
+    vinculadosExistentes: existentesParaVincular.length,
+    mantidos: mantidos.length,
+    removidosDaTurma: vinculosRemovidos,
+    contasExcluidas,
+    credenciaisIniciais,
+    resumo
+  });
+}
+
 async function apiAdmin(req, res) {
   const sess = sessaoDe(req); if (!sess) return json(res, 401, { erro: 'SESSAO' }); if (sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito ao professor.' });
   let d; try { d = await lerJson(req, 200000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
@@ -1194,6 +1284,10 @@ async function apiAdmin(req, res) {
   if (resetTurma && !db.turmas[resetTurma]) return json(res, 404, { erro: 'Turma não encontrada.' });
   if (resetTurma && d.confirmacao !== 'REDEFINIR SENHAS') return json(res, 400, { erro: 'Confirmação inválida.' });
   if (resetTurma && (senhaComum.length < 8 || senhaComum.length > 128)) return json(res, 400, { erro: 'A senha temporária deve ter entre 8 e 128 caracteres.' });
+  if (d.sincronizarLista === true) {
+    if (!turmaNova) return json(res, 400, { erro: 'Informe a turma cuja lista será sincronizada.' });
+    return sincronizarListaDaTurma(res, turmaNova, d.matriculas, d.ausentesConfirmados);
+  }
   if (Array.isArray(d.matriculas)) {
     const norm = d.matriculas.map(item => {
       if (typeof item === 'string') { const m = item.match(/^\s*([0-9]{4,15})\s*[-–—,;:.]?\s*(.*)$/); return m ? { matricula: m[1], nome: (m[2] || '').trim() } : null; }
