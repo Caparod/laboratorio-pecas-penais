@@ -144,6 +144,11 @@ const APP_VERSION='__APP_VERSION__';
 let store={};
 function sget(k,d){try{return localStorage.getItem(k)??d}catch(e){return store[k]??d}}
 function sset(k,v){try{localStorage.setItem(k,v)}catch(e){store[k]=v}}
+// A autenticação é deliberadamente limitada à aba/janela atual. Rascunhos
+// continuam no armazenamento local, mas os dados da sessão não sobrevivem ao
+// fechamento da janela e nunca incluem o token HttpOnly.
+function aget(){try{return sessionStorage.getItem('auth')||''}catch(e){return store.auth||''}}
+function aset(v){try{if(v)sessionStorage.setItem('auth',v);else sessionStorage.removeItem('auth');localStorage.removeItem('auth')}catch(e){store.auth=v||''}}
 let avisoNovaVersaoExibido=false;
 function mostrarAvisoNovaVersao(){
   if(avisoNovaVersaoExibido)return;avisoNovaVersaoExibido=true;
@@ -159,7 +164,7 @@ setTimeout(verificarNovaVersao,3000);
 setInterval(verificarNovaVersao,60000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)verificarNovaVersao()});
 const menu=document.getElementById('menu'),conteudo=document.getElementById('conteudo');
-let AUTH=null; try{AUTH=JSON.parse(sget('auth','null'))}catch(e){AUTH=null}
+let AUTH=null; try{localStorage.removeItem('auth');AUTH=JSON.parse(aget()||'null')}catch(e){AUTH=null}
 let MODO_VISAO=sget('modo_visao','');
 let TURMA_ATUACAO=sget('turma_atuacao','');
 let TURMAS_ATUACAO=[];
@@ -177,10 +182,10 @@ async function apiPost(u,b){
   if(r.status===401){let d=null;try{d=await r.clone().json()}catch(e){}
     if(d&&d.erro==='SESSAO'){sair('Sua sessão expirou. Entre novamente.');throw new Error('sessao')}}
   if(r.status===403){let d=null;try{d=await r.clone().json()}catch(e){}
-    if(d&&d.erro==='TROCAR_SENHA'&&AUTH){AUTH.precisaTrocarSenha=true;sset('auth',JSON.stringify(AUTH));renderTroca();throw new Error('trocar_senha')}
-    if(d&&d.erro==='COMPLETAR_CADASTRO'&&AUTH){AUTH.precisaCompletarCadastro=true;sset('auth',JSON.stringify(AUTH));renderTroca();throw new Error('completar_cadastro')}
-    if(d&&d.erro==='VERIFICAR_EMAIL'&&AUTH){AUTH.emailVerificado=false;sset('auth',JSON.stringify(AUTH));renderVerificarEmail();throw new Error('verificar_email')}
-    if(d&&d.erro==='ACEITAR_PRIVACIDADE'&&AUTH){AUTH.precisaAceitarPrivacidade=true;sset('auth',JSON.stringify(AUTH));renderPrivacidade();throw new Error('privacidade')}}
+    if(d&&d.erro==='TROCAR_SENHA'&&AUTH){AUTH.precisaTrocarSenha=true;aset(JSON.stringify(AUTH));renderTroca();throw new Error('trocar_senha')}
+    if(d&&d.erro==='COMPLETAR_CADASTRO'&&AUTH){AUTH.precisaCompletarCadastro=true;aset(JSON.stringify(AUTH));renderTroca();throw new Error('completar_cadastro')}
+    if(d&&d.erro==='VERIFICAR_EMAIL'&&AUTH){AUTH.emailVerificado=false;aset(JSON.stringify(AUTH));renderVerificarEmail();throw new Error('verificar_email')}
+    if(d&&d.erro==='ACEITAR_PRIVACIDADE'&&AUTH){AUTH.precisaAceitarPrivacidade=true;aset(JSON.stringify(AUTH));renderPrivacidade();throw new Error('privacidade')}}
   return r;
 }
 async function apiGet(u){
@@ -190,10 +195,10 @@ async function apiGet(u){
   if(r.status===401){let d=null;try{d=await r.clone().json()}catch(e){}
     if(d&&d.erro==='SESSAO'){sair('Sua sessão expirou. Entre novamente.');throw new Error('sessao')}}
   if(r.status===403){let d=null;try{d=await r.clone().json()}catch(e){}
-    if(d&&d.erro==='TROCAR_SENHA'&&AUTH){AUTH.precisaTrocarSenha=true;sset('auth',JSON.stringify(AUTH));renderTroca();throw new Error('trocar_senha')}
-    if(d&&d.erro==='COMPLETAR_CADASTRO'&&AUTH){AUTH.precisaCompletarCadastro=true;sset('auth',JSON.stringify(AUTH));renderTroca();throw new Error('completar_cadastro')}
-    if(d&&d.erro==='VERIFICAR_EMAIL'&&AUTH){AUTH.emailVerificado=false;sset('auth',JSON.stringify(AUTH));renderVerificarEmail();throw new Error('verificar_email')}
-    if(d&&d.erro==='ACEITAR_PRIVACIDADE'&&AUTH){AUTH.precisaAceitarPrivacidade=true;sset('auth',JSON.stringify(AUTH));renderPrivacidade();throw new Error('privacidade')}}
+    if(d&&d.erro==='TROCAR_SENHA'&&AUTH){AUTH.precisaTrocarSenha=true;aset(JSON.stringify(AUTH));renderTroca();throw new Error('trocar_senha')}
+    if(d&&d.erro==='COMPLETAR_CADASTRO'&&AUTH){AUTH.precisaCompletarCadastro=true;aset(JSON.stringify(AUTH));renderTroca();throw new Error('completar_cadastro')}
+    if(d&&d.erro==='VERIFICAR_EMAIL'&&AUTH){AUTH.emailVerificado=false;aset(JSON.stringify(AUTH));renderVerificarEmail();throw new Error('verificar_email')}
+    if(d&&d.erro==='ACEITAR_PRIVACIDADE'&&AUTH){AUTH.precisaAceitarPrivacidade=true;aset(JSON.stringify(AUTH));renderPrivacidade();throw new Error('privacidade')}}
   return r;
 }
 function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
@@ -270,7 +275,7 @@ function progresso(el,etapas,dur){
 const PECAS_ESTAGIO_I=['Queixa-Crime','Resposta à Acusação','Alegações Finais por Memoriais','Pedido de Liberdade Provisória','Relaxamento de Prisão em Flagrante','Revogação de Prisão Preventiva'];
 const PECAS_ESTAGIO_II=['Apelação Criminal','Recurso em Sentido Estrito (RESE)','Contrarrazões de Apelação','Embargos de Declaração','Embargos Infringentes e de Nulidade','Agravo em Execução','Habeas Corpus','Revisão Criminal'];
 // ================= Sessão / Login =================
-function sair(msg){sset('auth','');AUTH=null;renderLogin(msg);fetch('/api/logout',{method:'POST',credentials:'same-origin'}).catch(()=>{})}
+function sair(msg){aset('');AUTH=null;renderLogin(msg);fetch('/api/logout',{method:'POST',credentials:'same-origin'}).catch(()=>{})}
 function barra(){
   const el=document.getElementById('progresso');if(!el)return;
   if(!AUTH){el.innerHTML='';return}
@@ -310,7 +315,7 @@ async function fazerLogin(){
     AUTH={tipo:d.tipo,usuario:d.usuario||u,nome:d.nome||'',papel:d.papel||'',admin:!!d.admin,gereProf:!!d.gereProf,gereCoord:!!d.gereCoord,turmaAtiva:d.turmaAtiva,precisaTrocarSenha:d.precisaTrocarSenha,precisaCompletarCadastro:d.precisaCompletarCadastro,precisaAceitarPrivacidade:d.precisaAceitarPrivacidade,emailVerificado:d.emailVerificado,email:d.email||'',whatsapp:d.whatsapp||''};
     if(AUTH.tipo==='professor')MODO_VISAO=modoPadraoProfessor(); else MODO_VISAO='';
     sset('modo_visao',MODO_VISAO);
-    sset('auth',JSON.stringify(AUTH));iniciar();
+    aset(JSON.stringify(AUTH));iniciar();
   }catch(err){e.innerHTML='<p class="erro-ia">Erro de conexão: '+esc(err.message)+'</p>'}
 }
 // Primeiro acesso do aluno: senha + cadastro obrigatório de e-mail e WhatsApp.
@@ -338,8 +343,8 @@ async function salvarTroca(){
     const r=await apiPost('/api/trocar-senha',body);const d=await r.json();
     if(!r.ok){e.innerHTML='<p class="erro-ia">'+esc(d.erro||'Falha.')+'</p>';return}
     AUTH.precisaTrocarSenha=false;
-    if(AUTH.tipo==='aluno'){AUTH.email=d.email||body.email;AUTH.whatsapp=d.whatsapp||body.whatsapp;AUTH.precisaCompletarCadastro=false;AUTH.emailVerificado=!d.precisaVerificarEmail;sset('auth',JSON.stringify(AUTH));if(d.precisaVerificarEmail)renderVerificarEmail(d.emailEnviado);else iniciar();}
-    else{sset('auth',JSON.stringify(AUTH));iniciar();}
+    if(AUTH.tipo==='aluno'){AUTH.email=d.email||body.email;AUTH.whatsapp=d.whatsapp||body.whatsapp;AUTH.precisaCompletarCadastro=false;AUTH.emailVerificado=!d.precisaVerificarEmail;aset(JSON.stringify(AUTH));if(d.precisaVerificarEmail)renderVerificarEmail(d.emailEnviado);else iniciar();}
+    else{aset(JSON.stringify(AUTH));iniciar();}
   }catch(err){}
 }
 function renderVerificarEmail(enviado){
@@ -354,7 +359,7 @@ async function confirmarEmail(){
   const c=document.getElementById('vc').value.trim(),e=document.getElementById('vc_erro');
   try{const r=await apiPost('/api/verificar-email',{codigo:c});const d=await r.json();
   if(!r.ok){e.innerHTML='<p class="erro-ia">'+esc(d.erro||'Código incorreto.')+'</p>';return}
-  AUTH.emailVerificado=true;sset('auth',JSON.stringify(AUTH));iniciar();}catch(err){}
+  AUTH.emailVerificado=true;aset(JSON.stringify(AUTH));iniciar();}catch(err){}
 }
 async function reenviarCodigo(){try{await apiPost('/api/reenviar-codigo',{});alert('Novo código enviado.')}catch(e){}}
 function trocarMinhaSenha(){AUTH.precisaTrocarSenha=true;renderTroca();}
@@ -364,7 +369,7 @@ function renderPrivacidade(){
 }
 async function confirmarPrivacidade(){
   const fb=document.getElementById('priv_fb');if(!document.getElementById('priv_ok').checked){fb.innerHTML='<p class="erro-ia">Marque a confirmação para continuar.</p>';return}
-  try{const r=await apiPost('/api/aceitar-privacidade',{aceite:true});const d=await r.json();if(!r.ok){fb.innerHTML='<p class="erro-ia">'+esc(d.erro||'Falha')+'</p>';return}AUTH.precisaAceitarPrivacidade=false;sset('auth',JSON.stringify(AUTH));iniciar();}catch(e){}
+  try{const r=await apiPost('/api/aceitar-privacidade',{aceite:true});const d=await r.json();if(!r.ok){fb.innerHTML='<p class="erro-ia">'+esc(d.erro||'Falha')+'</p>';return}AUTH.precisaAceitarPrivacidade=false;aset(JSON.stringify(AUTH));iniciar();}catch(e){}
 }
 function iniciar(){
   if(!AUTH){renderLogin();return}
@@ -1138,10 +1143,10 @@ async function restaurarSessao(){
   try{
     const h=tokenLegado?{authorization:'Bearer '+tokenLegado}:{};
     const r=await fetch('/api/sessao',{headers:h,credentials:'same-origin'});
-    if(!r.ok){sset('auth','');AUTH=null;renderLogin();return}
+    if(!r.ok){aset('');AUTH=null;renderLogin();return}
     const d=await r.json();
     AUTH={tipo:d.tipo,usuario:d.usuario,nome:d.nome||'',papel:d.papel||'',admin:!!d.admin,gereProf:!!d.gereProf,gereCoord:!!d.gereCoord,turmaAtiva:d.turmaAtiva,precisaTrocarSenha:d.precisaTrocarSenha,precisaCompletarCadastro:d.precisaCompletarCadastro,precisaAceitarPrivacidade:d.precisaAceitarPrivacidade,emailVerificado:d.emailVerificado,email:d.email||'',whatsapp:d.whatsapp||''};
-    sset('auth',JSON.stringify(AUTH));iniciar();
+    aset(JSON.stringify(AUTH));iniciar();
   }catch(e){renderLogin('Não foi possível validar a sessão. Tente novamente.');}
 }
 restaurarSessao();

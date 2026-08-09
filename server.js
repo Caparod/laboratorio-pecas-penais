@@ -323,8 +323,10 @@ function requisicaoSegura(req) {
 }
 function definirCookieSessao(req, res, token) {
   const secure = requisicaoSegura(req) ? '; Secure' : '';
-  const maxAge = Math.max(0, Math.floor(SESSAO_MS / 1000));
-  res.setHeader('set-cookie', COOKIE_SESSAO + '=' + encodeURIComponent(token) + '; Path=/; HttpOnly; SameSite=Strict; Max-Age=' + maxAge + secure);
+  // Cookie de sessão: sem Max-Age/Expires, o navegador o descarta ao encerrar.
+  // O prazo em SESSAO_MS continua sendo o limite máximo no servidor caso a
+  // janela permaneça aberta por vários dias.
+  res.setHeader('set-cookie', COOKIE_SESSAO + '=' + encodeURIComponent(token) + '; Path=/; HttpOnly; SameSite=Strict' + secure);
 }
 function limparCookieSessao(req, res) {
   const secure = requisicaoSegura(req) ? '; Secure' : '';

@@ -77,6 +77,8 @@ async function executar() {
   assert.match(setCookie, /lab_session=/);
   assert.match(setCookie, /HttpOnly/i);
   assert.match(setCookie, /SameSite=Strict/i);
+  assert.doesNotMatch(setCookie, /Max-Age=\d+/i, 'cookie de login deve terminar com a sessão do navegador');
+  assert.doesNotMatch(setCookie, /Expires=/i, 'cookie de login não deve ter expiração persistente');
   await requisitar('/api/logout', loginCookie.body.token, {});
   let banco = JSON.parse(fs.readFileSync(path.join(dataDir, 'db.json'), 'utf8'));
   assert.ok(Object.keys(banco.sessoes || {}).every(chave => /^[a-f0-9]{64}$/.test(chave)), 'sessões persistidas devem usar somente hash do token');

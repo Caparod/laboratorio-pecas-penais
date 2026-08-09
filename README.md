@@ -19,7 +19,7 @@ A chave de IA fica apenas no servidor, pela variável `ANTHROPIC_API_KEY`. O nav
    - `PROF_LOGIN`: login do administrador principal.
    - `PROF_SENHA`: senha inicial forte do administrador principal. É obrigatória ao criar uma base nova.
    - `GMAIL_USER` e `GMAIL_APP_PASSWORD`: opcionais, para avisos por e-mail.
-   - `SESSAO_DIAS`: opcional; na implantação fornecida, 7 dias.
+- `SESSAO_DIAS`: opcional; limita a validade máxima da sessão no servidor (7 dias na implantação fornecida). O cookie de autenticação não é persistente e é descartado ao encerrar o navegador.
    - `CONFIAR_PROXY`: `true` no Render. As rotas autenticadas de IA são limitadas por usuário, evitando bloquear toda a rede da instituição.
    - `CRIAR_CONTAS_DEMO`: mantenha `false` em produção. Use `true` somente nos testes automatizados.
    - O painel de gastos soma a manutenção mensal do sistema aos gastos consolidados de IA e preserva o histórico de cada mês.
@@ -71,7 +71,7 @@ Como a leitura e a escrita são feitas pelo servidor com `SUPABASE_SERVICE_ROLE_
 - Ao zerar uma turma, vínculos, peças, entregas e notas dela são apagados; contas sem outra turma também são removidas, mas o cadastro da turma e seus professores são preservados.
 - Aluno(a) só visualiza e entrega peças das turmas das quais participa.
 - No primeiro acesso, o aluno precisa trocar a senha, cadastrar WhatsApp e cadastrar e confirmar o e-mail antes de acessar as demais APIs; troca/reset de senha invalida sessões antigas.
-- Logout encerra a sessão também no servidor. O navegador usa cookie `HttpOnly`, e somente o hash dos tokens é persistido.
+- Logout encerra a sessão também no servidor. O navegador usa cookie de sessão `HttpOnly`, sem `Max-Age` ou `Expires`, e somente o hash dos tokens é persistido. Os dados de autenticação da interface ficam em `sessionStorage`, de modo que fechar a aba ou a janela exige novo login.
 - Login possui limitação de tentativas e mensagens que não revelam se uma conta existe.
 - Exclusões removem entregas, liberações e sessões relacionadas, evitando dados órfãos.
 - Respostas incluem cabeçalhos de proteção do navegador e não armazenam dados de API em cache.
