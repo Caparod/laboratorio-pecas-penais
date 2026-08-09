@@ -780,7 +780,7 @@ function mesBR(x){const p=x.split('-');const n=['jan','fev','mar','abr','mai','j
 function usdBR(v){return 'US$ '+v.toFixed(2).replace('.',',')}
 async function profGastos(mes){
   conteudo.innerHTML='<h2 class="titulo-peca">Gastos com IA</h2>'
-   +'<p style="color:var(--cinza);font-family:Arial,sans-serif;font-size:.88rem;margin-bottom:12px">Registro <b>permanente</b> do uso da IA, mês a mês — não é apagado nem quando alunos ou turmas são excluídos. O crédito de <b>US$ 100 é renovado integralmente no início de cada mês</b> e o saldo anterior não acumula.</p>'
+   +'<p style="color:var(--cinza);font-family:Arial,sans-serif;font-size:.88rem;margin-bottom:12px">Registro <b>permanente</b> dos gastos do sistema, mês a mês — não é apagado nem quando alunos ou turmas são excluídos, nem ao zerar o sistema. Cada mês inclui a manutenção do sistema e o uso de IA correspondente ao período.</p>'
    +'<div id="gx"><p><span class="spinner"></span>Carregando...</p></div>';
   try{const r=await apiGet('/api/gastos');const d=await r.json();
     const gx=document.getElementById('gx');
@@ -789,18 +789,16 @@ async function profGastos(mes){
     const m=(mes&&d.meses.includes(mes))?mes:d.meses[0];
     const abas='<div class="botoes" style="flex-wrap:wrap;margin-bottom:10px">'+d.meses.map(x=>'<button class="'+(x===m?'primario':'')+'" onclick="profGastos(\''+x+'\')">'+mesBR(x)+'</button>').join('')+'</div>';
     const regs=Object.values(d.gastos[m]||{}).sort((a,b)=>b.valor-a.valor);
-    const rz=(d.resumos||{})[m]||{credito:100,consumido:0,saldo:100,excedido:0};
-    const pct=Math.min(100,Math.round((rz.consumido/Math.max(1,rz.credito))*100));
-    const renovacao=m===d.mesAtual?('Renova em '+new Date(d.renovacaoEm+'T12:00:00').toLocaleDateString('pt-BR')):'Crédito encerrado ao fim deste mês';
-    const credito='<div class="metricas"><div class="metrica"><b>'+usdBR(rz.credito)+'</b><span>crédito do mês</span></div><div class="metrica"><b>'+usdBR(rz.consumido)+'</b><span>consumido</span></div><div class="metrica"><b style="color:'+(rz.excedido?'var(--vermelho)':'var(--verde)')+'">'+(rz.excedido?('-'+usdBR(rz.excedido)):usdBR(rz.saldo))+'</b><span>'+(rz.excedido?'acima do crédito':'saldo disponível')+'</span></div></div><div class="barra-ind" style="height:12px"><span style="width:'+pct+'%;background:'+(rz.excedido?'var(--vermelho)':'var(--verde)')+'"></span></div><p class="aviso" style="margin-top:6px">'+renovacao+' · o saldo não é transferido para o mês seguinte.</p>';
+    const rz=(d.resumos||{})[m]||{manutencao:100,usoIA:0,total:100};
+    const resumo='<div class="metricas"><div class="metrica"><b>'+usdBR(rz.manutencao)+'</b><span>manutenção mensal</span></div><div class="metrica"><b>'+usdBR(rz.usoIA)+'</b><span>uso de IA</span></div><div class="metrica"><b style="color:var(--azul)">'+usdBR(rz.total)+'</b><span>total do mês</span></div></div>';
     let totVal=0,totCham=0;
-    let h='<table><tr><th>Usuário</th><th>Perfil</th><th>Turma</th><th>Chamadas de IA</th><th>Tokens</th><th>Custo estimado da API</th></tr>';
+    let h='<table><tr><th>Usuário</th><th>Perfil</th><th>Turma</th><th>Chamadas de IA</th><th>Tokens</th><th>Custo de IA</th></tr>';
     for(const g of regs){totVal+=g.valor;totCham+=g.chamadas;
       h+='<tr><td>'+esc(g.nome)+'</td><td>'+esc(g.tipo)+'</td><td>'+esc(g.turma||'—')+'</td><td>'+g.chamadas+'</td><td>'+(g.tokens||0).toLocaleString('pt-BR')+'</td><td><b>'+usdBR(g.valor)+'</b></td></tr>';}
     h+='<tr><td colspan="5" style="text-align:right">Subtotal de uso:</td><td><b>'+usdBR(totVal)+'</b></td></tr>';
-    if(d.assinatura)h+='<tr><td colspan="5" style="text-align:right">Custo fixo configurado:</td><td><b>'+usdBR(d.assinatura)+'</b></td></tr>';
-    h+='<tr style="background:#f2eee0"><td colspan="5" style="text-align:right"><b>TOTAL do mês:</b></td><td><b>'+usdBR(totVal+d.assinatura)+'</b></td></tr></table>';
-    gx.innerHTML=abas+'<div class="card">'+credito+'</div><div class="card painel">'+h+'<p class="aviso" style="margin-top:8px">'+totCham+' chamadas de IA neste mês. Fator configurado: '+Number(d.fator||1).toLocaleString('pt-BR')+'. Valores são estimativas; confira a fatura do provedor.</p></div>';
+    h+='<tr><td colspan="5" style="text-align:right">Manutenção mensal do sistema:</td><td><b>'+usdBR(rz.manutencao)+'</b></td></tr>';
+    h+='<tr style="background:#f2eee0"><td colspan="5" style="text-align:right"><b>TOTAL do mês:</b></td><td><b>'+usdBR(rz.total)+'</b></td></tr></table>';
+    gx.innerHTML=abas+'<div class="card">'+resumo+'</div><div class="card painel">'+h+'<p class="aviso" style="margin-top:8px">'+totCham+' chamadas de IA neste mês. Valores consolidados em dólares americanos.</p></div>';
   }catch(e){document.getElementById('gx').innerHTML='<p class="erro-ia">Falha ao carregar.</p>';}
 }
 

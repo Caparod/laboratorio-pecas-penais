@@ -22,7 +22,7 @@ A chave de IA fica apenas no servidor, pela variável `ANTHROPIC_API_KEY`. O nav
    - `SESSAO_DIAS`: opcional; na implantação fornecida, 7 dias.
    - `CONFIAR_PROXY`: `true` no Render. As rotas autenticadas de IA são limitadas por usuário, evitando bloquear toda a rede da instituição.
    - `CRIAR_CONTAS_DEMO`: mantenha `false` em produção. Use `true` somente nos testes automatizados.
-   - `FATOR_MANUTENCAO` e `ASSINATURA_MENSAL_USD`: opcionais; padrões `1` e `0`. Quando usados, aparecem explicitamente no painel de custos.
+   - O painel de gastos soma a manutenção mensal do sistema aos gastos consolidados de IA e preserva o histórico de cada mês.
 
 ## Supabase
 
