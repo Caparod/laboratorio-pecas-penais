@@ -421,6 +421,7 @@ function telaProfessor(){
   menu.innerHTML=seletorVisao()
    +'<div class="grupo">Painel</div>'
    +botaoMenu('pecas','📚 Banco de peças')
+   +botaoMenu('propostas','🗂️ Peças propostas')
    +botaoMenu('nova','➕ Nova peça')
    +botaoMenu('alunos','👥 Alunos')
    +botaoMenu('notas','📊 Painel / notas')
@@ -428,6 +429,7 @@ function telaProfessor(){
    +(podeGerirAgora()?botaoMenu('gastos','💰 Gastos'):'')
    +botaoMenu('config','⚙️ Sistema');
   if(ABA_PROF==='pecas')profPecas();
+  else if(ABA_PROF==='propostas')profPropostas();
   else if(ABA_PROF==='nova')profNova();
   else if(ABA_PROF==='alunos')profAlunos();
   else if(ABA_PROF==='notas')profNotas();
@@ -452,6 +454,25 @@ async function profPecas(){
     }
     h+='</table>';document.getElementById('lp').innerHTML='<div class="card painel">'+h+'</div>';
   }catch(e){}
+}
+async function profPropostas(){
+  conteudo.innerHTML='<h2 class="titulo-peca">Peças propostas</h2><p style="color:var(--cinza);font-family:Arial,sans-serif;font-size:.88rem;margin-bottom:12px">Entregas organizadas por rodada. Abra diretamente as peças que aguardam correção ou consulte as já corrigidas.</p><div id="lprop"><p><span class="spinner"></span>Carregando...</p></div>';
+  try{const r=await apiGet('/api/pecas');const d=await r.json();
+    if(!r.ok){document.getElementById('lprop').innerHTML='<p class="erro-ia">'+esc(d.erro||'Erro')+'</p>';return}
+    const propostas=(d.pecas||[]).filter(p=>p.publicada).sort((a,b)=>a.num-b.num);
+    if(!propostas.length){document.getElementById('lprop').innerHTML='<div class="card"><p>Nenhuma peça foi proposta aos alunos ainda.</p></div>';return}
+    let h='';
+    for(const p of propostas){
+      const pendentes=p.aCorrigir||[],corrigidas=p.corrigidas||[];
+      const linha=function(e,corrigida){return '<div style="padding:10px 0;border-bottom:1px solid #e7e2d7"><b>'+esc(e.nome||e.matricula)+'</b><div style="font: .79rem Arial,sans-serif;color:var(--cinza);margin-top:3px">Matrícula '+esc(e.matricula)+' · entregue em '+esc(dataHora(e.enviadoEm))+(corrigida&&e.nota!=null?' · nota '+esc(String(e.nota).replace('.',','))+'/10':'')+'</div><div class="botoes" style="margin-top:7px"><button '+(corrigida?'':'class="primario" ')+'onclick="abrirEntrega(\''+p.id+'\',\''+e.matricula+'\')">'+(corrigida?'Rever correção':'Corrigir agora')+'</button></div></div>'};
+      h+='<div class="card"><div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap"><div><span class="badge">Rodada · Peça '+p.num+'</span><h3 style="margin:8px 0 3px">'+esc(p.nomePeca)+'</h3><p style="font: .82rem Arial,sans-serif;color:var(--cinza);margin:0">'+esc(p.disc||'—')+' · prazo '+(p.prazo?esc(dataHoraBR(p.prazo)):'não informado')+'</p></div><button onclick="abrirPeca(\''+p.id+'\')">Abrir rodada</button></div>'
+       +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:14px;margin-top:16px">'
+       +'<section style="background:#fff8e8;border:1px solid #ead7a4;border-radius:8px;padding:14px"><h3 style="color:#8a6415;margin:0 0 8px">⏳ A corrigir ('+pendentes.length+')</h3>'+(pendentes.length?pendentes.map(e=>linha(e,false)).join(''):'<p style="font: .84rem Arial,sans-serif;color:var(--cinza)">Nenhuma entrega aguardando correção.</p>')+'</section>'
+       +'<section style="background:#eef7ef;border:1px solid #c9dfcc;border-radius:8px;padding:14px"><h3 style="color:var(--verde);margin:0 0 8px">✅ Corrigidas ('+corrigidas.length+')</h3>'+(corrigidas.length?corrigidas.map(e=>linha(e,true)).join(''):'<p style="font: .84rem Arial,sans-serif;color:var(--cinza)">Nenhuma entrega corrigida nesta rodada.</p>')+'</section>'
+       +'</div></div>';
+    }
+    document.getElementById('lprop').innerHTML=h;
+  }catch(e){document.getElementById('lprop').innerHTML='<p class="erro-ia">Falha ao carregar as peças propostas.</p>';}
 }
 function dataBR(iso){if(!iso)return '';const p=iso.split('T')[0].split('-');return p.length===3?(p[2]+'/'+p[1]+'/'+p[0]):iso;}
 function dataHoraBR(iso){if(!iso)return '';const t=iso.split('T');const dd=dataBR(t[0]);const hh=t[1]?(' às '+t[1].slice(0,5)):'';return dd+hh;}

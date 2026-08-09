@@ -11,6 +11,9 @@ for (const arquivo of [path.join(__dirname, '..', 'index.html'), path.join(__dir
     assert.doesNotMatch(html, /Banco Nacional de Precedentes/, 'atalho genérico sem relação com a peça não deve aparecer');
     assert.match(html, /Peças entregues/, 'área do aluno deve apresentar o histórico de peças entregues');
     assert.match(html, /Ver relatório e nota/, 'peça corrigida deve permitir abrir o relatório e a nota');
+    assert.match(html, /function profPropostas\(/, 'área do professor deve organizar as peças propostas por rodada');
+    assert.match(html, /Corrigir agora/, 'entrega pendente deve oferecer acesso direto à correção');
+    assert.match(html, /Rever correção/, 'entrega corrigida deve permanecer acessível ao professor');
   }
   if (arquivo.endsWith(path.join('render-app', 'index.html'))) {
     assert.match(html, /function mostrarSenhaTemporaria\(/);

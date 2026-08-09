@@ -1848,9 +1848,16 @@ async function pecaSalvar(req, res) {
 }
 function resumoPeca(p) {
   const ents = db.entregas[p.id] || {};
-  const total = Object.keys(ents).length;
-  const corrigidas = Object.values(ents).filter(e => e.validado).length;
-  return { id: p.id, num: p.num, nomePeca: p.nomePeca, disc: p.disc, prazo: p.prazo, publicada: p.publicada, criadoEm: p.criadoEm, entregas: total, validadas: corrigidas, autor: p.autor || '', autorNome: ((professorDe(p.autor) || {}).nome) || p.autor || '—', versao: p.versao || 1, revisaoObrigatoria: p.revisaoObrigatoria || null };
+  const registros = Object.keys(ents).filter(mat => entregaPertenceTurma(mat, ents[mat], p)).map(mat => ({
+    matricula: mat,
+    nome: nomeParticipanteEntrega(mat, ents[mat]),
+    enviadoEm: ents[mat].enviadoEm || null,
+    nota: ents[mat].validado ? ents[mat].nota : null,
+    validado: !!ents[mat].validado
+  }));
+  const aCorrigir = registros.filter(e => !e.validado).sort((a, b) => Number(a.enviadoEm || 0) - Number(b.enviadoEm || 0));
+  const corrigidas = registros.filter(e => e.validado).sort((a, b) => Number(b.enviadoEm || 0) - Number(a.enviadoEm || 0));
+  return { id: p.id, num: p.num, nomePeca: p.nomePeca, disc: p.disc, prazo: p.prazo, publicada: p.publicada, criadoEm: p.criadoEm, entregas: registros.length, validadas: corrigidas.length, aCorrigir, corrigidas, autor: p.autor || '', autorNome: ((professorDe(p.autor) || {}).nome) || p.autor || '—', versao: p.versao || 1, revisaoObrigatoria: p.revisaoObrigatoria || null };
 }
 async function pecasListar(req, res) {
   const sess = sessaoDe(req); if (!sess) return json(res, 401, { erro: 'SESSAO' }); if (sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
