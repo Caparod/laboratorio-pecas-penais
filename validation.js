@@ -224,13 +224,18 @@ function validarCorrecao(texto) {
   if (nota != null && (nota < 0 || nota > 10)) erros.push('A nota sugerida está fora da escala de 0 a 10.');
   const pontos = secao(t, 'pontuacao item a item');
   const pares = Array.from(pontos.matchAll(/(\d+(?:[.,]\d+)?)\s*\/\s*(\d+(?:[.,]\d+)?)/g)).map(m => [numeroBR(m[1]), numeroBR(m[2])]);
+  const tabelaOab = /\|\s*(?:item|crit[eé]rio avaliado)\s*\|/i.test(pontos)
+    && /\|[^\n]*(?:pontos obtidos|obtido)[^\n]*(?:poss[ií]veis|m[aá]ximo|\/)[^\n]*\|/i.test(pontos)
+    && /\|[^\n]*justificativa/i.test(pontos);
+  if (!tabelaOab) erros.push('A pontuação deve ser apresentada em tabela no formato de espelho OAB/FGV, com critério, pontos obtidos/possíveis e justificativa detalhada.');
+  if (pares.length < 5) erros.push('O espelho OAB/FGV precisa detalhar ao menos cinco itens pontuados.');
   if (nota != null && pares.length >= 2) {
     const obtido = pares.reduce((s, p) => s + p[0], 0);
     const possivel = pares.reduce((s, p) => s + p[1], 0);
     if (possivel >= 9.9 && possivel <= 10.1 && Math.abs(obtido - nota) > 0.11) erros.push('A nota sugerida não coincide com a soma dos itens.');
   }
   if (nota != null && nota > 0 && /(?:—|:)\s*INEXISTENTE(?:\/FALSA)?|CITA[CÇ][AÃ]O FALSA DETECTADA/i.test(t)) erros.push('Foi detectada citação falsa, mas a nota não foi zerada.');
-  if (t.length < 500) erros.push('O relatório está curto demais para uma correção completa.');
+  if (t.length < 900) erros.push('O relatório está curto demais para um espelho OAB/FGV detalhado.');
   if (!/https:\/\/(?:www\.)?(?:planalto\.gov\.br|stf\.jus\.br|stj\.jus\.br|tjdft\.jus\.br|jurisprudencia\.stf\.jus\.br|scon\.stj\.jus\.br)/i.test(t)) erros.push('A correção não contém links para fontes oficiais.');
   return resultado(erros, { nota });
 }

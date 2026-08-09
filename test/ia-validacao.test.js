@@ -75,23 +75,26 @@ const correcao = `## Acertos
 - Ajustar fechamento.
 ## Erros materiais (direito)
 - Aprofundar uma tese.
-## Pontuação item a item
-- Cabimento: 2,00/2,00
-- Tempestividade: 1,00/1,00
-- Fatos: 1,00/1,00
-- Fundamentação: 2,00/3,00
-- Pedidos: 1,00/1,50
-- Técnica: 1,00/1,50
+## Pontuação item a item — espelho OAB/FGV
+| Item | Critério avaliado | Pontos obtidos/possíveis | Justificativa detalhada |
+|---|---|---:|---|
+| 1 | Cabimento e endereçamento | 2,00/2,00 | A peça escolhida e o órgão destinatário correspondem integralmente ao gabarito. |
+| 2 | Tempestividade e legitimidade | 1,00/1,00 | O prazo e a capacidade postulatória foram tratados corretamente. |
+| 3 | Fatos e síntese | 1,00/1,00 | A narrativa preservou os fatos juridicamente relevantes do caso. |
+| 4 | Fundamentação e teses | 2,00/3,00 | A tese principal foi apresentada, mas faltou aprofundar o fundamento legal indicado no espelho. |
+| 5 | Pedidos | 1,00/1,50 | O pedido principal está correto, porém o pedido subsidiário exigido não foi formulado. |
+| 6 | Técnica, linguagem e forma | 1,00/1,50 | A estrutura é compreensível, mas o fechamento formal precisa ser ajustado. |
 ## Verificação de jurisprudência e citações
 - Artigos conferidos no texto oficial.
 ## Verificação de robotização e supervisão humana
 - Risco BAIXO. Não foram observados padrões formais suficientes para indicar produção automatizada sem revisão. Esta triagem não comprova autoria e a decisão permanece humana.
 NOTA SUGERIDA: 8,00/10
 ## Propostas de aprimoramento
-- Desenvolver a tese e indicar o dispositivo correspondente, sem copiar texto pronto. A análise deve permanecer orientativa e explicar os critérios ao estudante com clareza suficiente para a revisão humana pelo professor.
+- Desenvolver a tese e indicar o dispositivo correspondente, sem copiar texto pronto. A análise deve permanecer orientativa e explicar os critérios ao estudante com clareza suficiente para a revisão humana pelo professor. No pedido subsidiário, o aluno deve conferir a consequência jurídica prevista no gabarito e relacioná-la expressamente aos fatos. A organização em tópicos deve separar cabimento, mérito e pedidos, tornando visível a sequência lógica da argumentação.
 ## Fontes e links
 - [CPP](https://www.planalto.gov.br/ccivil_03/decreto-lei/del3689compilado.htm)`;
 assert.equal(validarCorrecao(correcao).ok, true, 'correção consistente deve passar');
+assert.equal(validarCorrecao(correcao.replace(/\| Item \|[\s\S]*?\| 6 \|[^\n]+/, '- Cabimento: 2,00/2,00\n- Tempestividade: 1,00/1,00\n- Fatos: 1,00/1,00\n- Fundamentação: 2,00/3,00\n- Pedidos: 1,00/1,50\n- Técnica: 1,00/1,50')).ok, false, 'lista sem tabela OAB/FGV deve falhar');
 assert.equal(validarCorrecao(correcao.replace('NOTA SUGERIDA: 8,00/10', 'NOTA SUGERIDA: 7,00/10')).ok, false, 'nota divergente da soma deve falhar');
 assert.equal(validarCorrecao(correcao.replace('- Artigos conferidos no texto oficial.', '- Súmula 9999 — INEXISTENTE/FALSA.')).ok, false, 'citação falsa exige nota zero');
 

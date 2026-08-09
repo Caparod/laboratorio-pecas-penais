@@ -45,6 +45,8 @@ textarea.redacao{width:100%;min-height:340px;margin-top:14px;padding:16px;font-f
 .botoes .btn-link{display:inline-block;padding:9px 18px;border-radius:6px;border:1px solid var(--azul);background:#fff;color:var(--azul);cursor:pointer;font-size:.85rem;text-decoration:none}
 .botoes button.primario{background:var(--azul);color:#fff}
 .botoes button:hover,.botoes .btn-link:hover{opacity:.88}
+.btn-app{padding:9px 18px;border-radius:6px;border:1px solid var(--azul);background:#fff;color:var(--azul);cursor:pointer;font:600 .85rem Arial,sans-serif;transition:opacity .15s,background .15s}
+.btn-app:hover{opacity:.88}.btn-app.primario{background:var(--azul);color:#fff}.btn-app.dourado{background:var(--dourado);border-color:var(--dourado);color:#17243a}
 .check{margin-top:10px}
 .check label{display:flex;gap:10px;align-items:flex-start;padding:7px 4px;font-size:.93rem;cursor:pointer;border-bottom:1px dashed #eee}
 .check input{margin-top:4px;accent-color:var(--azul)}
@@ -111,12 +113,15 @@ textarea.redacao{width:100%;min-height:340px;margin-top:14px;padding:16px;font-f
 .senha-modal button{padding:10px 16px;border:1px solid var(--azul);border-radius:6px;background:#fff;color:var(--azul);font-weight:600;cursor:pointer}
 .senha-modal button.primario{background:var(--azul);color:#fff}
 .senha-modal .status{min-height:20px;margin:8px 0 0;color:var(--verde);font-size:.82rem}
+.previa-modal{width:min(920px,100%);height:min(92vh,900px);display:flex;flex-direction:column;background:#fff;border-radius:12px;padding:16px;box-shadow:0 16px 48px rgba(0,0,0,.28)}
+.previa-modal .topo{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}.previa-modal .topo h3{color:var(--azul)}.previa-modal iframe{width:100%;flex:1;border:1px solid #d8d2c0;border-radius:8px;background:#eee}.previa-modal button{padding:9px 16px;border:1px solid var(--azul);border-radius:6px;background:#fff;color:var(--azul);cursor:pointer;font-weight:600}
 .painel table{width:100%;border-collapse:collapse;font-size:.88rem;font-family:Arial,sans-serif;margin-top:10px}
 .painel th,.painel td{border-bottom:1px solid #eee;padding:7px 8px;text-align:left}
 .md-tab{width:100%;border-collapse:collapse;font-size:.86rem;font-family:Arial,sans-serif;margin:10px 0;background:#fff}
 .md-tab td,.md-tab th{border:1px solid #d8d2c0;padding:6px 9px;text-align:left;vertical-align:top}
 .md-tab tr:first-child td{background:#f2eee0;font-weight:bold}
 .md-tab tr:last-child td{background:#eef5ee;font-weight:bold}
+.espelho-oab{background:#fff;border:1px solid #d8d2c0;border-top:5px solid var(--dourado);border-radius:8px;padding:18px 20px}.espelho-oab h4{color:var(--azul);border-bottom:1px solid #e2dccb;padding-bottom:6px;margin-top:20px}.espelho-oab .md-tab tr:first-child td{background:var(--azul);color:#fff;font-weight:bold}.espelho-oab .md-tab tr:last-child td{background:#fff;font-weight:normal}.espelho-oab .nota{background:var(--azul);color:#fff;display:inline-block;border-radius:6px;padding:8px 16px;font:700 1rem Arial,sans-serif;margin:12px 0}
 .painel textarea{width:100%;min-height:140px;padding:10px;border:1px solid #cfc9b8;border-radius:6px;font-family:monospace}
 .metricas{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:12px;margin:14px 0 18px}
 .metrica{background:#fff;border:1px solid #e3ded2;border-radius:9px;padding:14px 16px;font-family:Arial,sans-serif}
@@ -457,7 +462,7 @@ async function profPecas(){
   }catch(e){}
 }
 async function profPropostas(){
-  conteudo.innerHTML='<h2 class="titulo-peca">Peças propostas</h2><p style="color:var(--cinza);font-family:Arial,sans-serif;font-size:.88rem;margin-bottom:12px">A primeira peça publicada para cada turma é a Peça 1; as seguintes são numeradas pela ordem de publicação.</p><div class="botoes" style="margin-bottom:14px"><button onclick="escolherRodadaProposta()">Selecionar rodada</button></div><div id="lprop"><p><span class="spinner"></span>Carregando...</p></div>';
+  conteudo.innerHTML='<h2 class="titulo-peca">Peças propostas</h2><p style="color:var(--cinza);font-family:Arial,sans-serif;font-size:.88rem;margin-bottom:12px">A primeira peça publicada para cada turma é a Peça 1; as seguintes são numeradas pela ordem de publicação.</p><div class="abas"><button class="ativa">Rodadas</button><button onclick="profRecursos()">Recursos pendentes</button></div><div class="botoes" style="margin-bottom:14px"><button onclick="escolherRodadaProposta()">Selecionar rodada</button></div><div id="lprop"><p><span class="spinner"></span>Carregando...</p></div>';
   try{const r=await apiGet('/api/pecas');const d=await r.json();
     if(!r.ok){document.getElementById('lprop').innerHTML='<p class="erro-ia">'+esc(d.erro||'Erro')+'</p>';return}
     const propostas=(d.pecas||[]).filter(p=>p.publicada).sort((a,b)=>(a.rodada||a.num)-(b.rodada||b.num));
@@ -465,6 +470,11 @@ async function profPropostas(){
     window.__propostasProfessor=propostas;
     await escolherRodadaProposta(true);
   }catch(e){document.getElementById('lprop').innerHTML='<p class="erro-ia">Falha ao carregar as peças propostas.</p>';}
+}
+async function profRecursos(){
+  conteudo.innerHTML='<h2 class="titulo-peca">Peças propostas</h2><div class="abas"><button onclick="profPropostas()">Rodadas</button><button class="ativa">Recursos pendentes</button></div><div id="lrec"><p><span class="spinner"></span>Carregando recursos...</p></div>';
+  try{const r=await apiGet('/api/recursos');const d=await r.json(),alvo=document.getElementById('lrec');if(!r.ok){alvo.innerHTML='<p class="erro-ia">'+esc(d.erro||'Erro')+'</p>';return}const itens=d.recursos||[];if(!itens.length){alvo.innerHTML='<div class="card" style="text-align:center;padding:36px"><h3>Nenhum recurso pendente</h3><p style="color:var(--cinza);font-family:Arial,sans-serif">Os recursos apresentados pelos alunos aparecerão aqui para recorreção.</p></div>';return}alvo.innerHTML=itens.map(x=>'<div class="card"><span class="badge">Recurso · Peça '+x.rodada+'</span><h3>'+esc(x.aluno)+' · '+esc(x.nomePeca)+'</h3><p style="font: .82rem Arial,sans-serif;color:var(--cinza)">'+esc(x.turma)+' · matrícula '+esc(x.matricula)+' · nota recorrida '+esc(String(x.nota).replace('.',','))+'/10 · '+esc(dataHora(x.criadoEm))+'</p><div class="caso" style="margin-top:12px"><b>Razões do aluno:</b>\n'+esc(x.motivo)+'</div><div class="botoes"><button class="primario" onclick="abrirEntrega(\''+x.id+'\',\''+x.matricula+'\')">Abrir e recorrigir</button></div></div>').join('')}
+  catch(e){document.getElementById('lrec').innerHTML='<p class="erro-ia">Falha ao carregar recursos.</p>'}
 }
 function popupSelecionarRodada(propostas,atualId){
   return new Promise(resolve=>{
@@ -494,11 +504,37 @@ function renderRodadaProposta(id){
   const p=(window.__propostasProfessor||[]).find(x=>x.id===id);if(!p)return;
   const pendentes=p.aCorrigir||[],corrigidas=p.corrigidas||[];
   const linha=function(e,corrigida){return '<div style="padding:10px 0;border-bottom:1px solid #e7e2d7"><b>'+esc(e.nome||e.matricula)+'</b><div style="font: .79rem Arial,sans-serif;color:var(--cinza);margin-top:3px">Matrícula '+esc(e.matricula)+' · entregue em '+esc(dataHora(e.enviadoEm))+(corrigida&&e.nota!=null?' · nota '+esc(String(e.nota).replace('.',','))+'/10':'')+'</div><div class="botoes" style="margin-top:7px"><button '+(corrigida?'':'class="primario" ')+'onclick="abrirEntrega(\''+p.id+'\',\''+e.matricula+'\')">'+(corrigida?'Rever correção':'Corrigir agora')+'</button></div></div>'};
-  document.getElementById('lprop').innerHTML='<div class="card"><div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap"><div><span class="badge">Rodada · Peça '+(p.rodada||p.num)+'</span><h3 style="margin:8px 0 3px">'+esc(p.nomePeca)+'</h3><p style="font: .82rem Arial,sans-serif;color:var(--cinza);margin:0">'+esc(p.disc||'—')+' · prazo '+(p.prazo?esc(dataHoraBR(p.prazo)):'não informado')+'</p></div><button onclick="abrirPeca(\''+p.id+'\')">Abrir rodada</button></div>'
+  document.getElementById('lprop').innerHTML='<div class="card"><div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap"><div><span class="badge">Rodada · Peça '+(p.rodada||p.num)+'</span><h3 style="margin:8px 0 3px">'+esc(p.nomePeca)+'</h3><p style="font: .82rem Arial,sans-serif;color:var(--cinza);margin:0">'+esc(p.disc||'—')+' · prazo '+(p.prazo?esc(dataHoraBR(p.prazo)):'não informado')+'</p></div><div class="botoes" style="margin-top:0"><button class="primario" onclick="abrirPeca(\''+p.id+'\')">Abrir rodada</button>'+(pendentes.length?'<button class="primario" onclick="corrigirTodasRodada(\''+p.id+'\','+Number(p.rodada||p.num)+','+pendentes.length+')">🤖 Corrigir todas</button>':'')+'</div></div><div id="corrigir_todas_fb"></div>'
    +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:14px;margin-top:16px">'
    +'<section style="background:#fff8e8;border:1px solid #ead7a4;border-radius:8px;padding:14px"><h3 style="color:#8a6415;margin:0 0 8px">⏳ A corrigir ('+pendentes.length+')</h3>'+(pendentes.length?pendentes.map(e=>linha(e,false)).join(''):'<p style="font: .84rem Arial,sans-serif;color:var(--cinza)">Nenhuma entrega aguardando correção.</p>')+'</section>'
    +'<section style="background:#eef7ef;border:1px solid #c9dfcc;border-radius:8px;padding:14px"><h3 style="color:var(--verde);margin:0 0 8px">✅ Corrigidas ('+corrigidas.length+')</h3>'+(corrigidas.length?corrigidas.map(e=>linha(e,true)).join(''):'<p style="font: .84rem Arial,sans-serif;color:var(--cinza)">Nenhuma entrega corrigida nesta rodada.</p>')+'</section>'
    +'</div></div>';
+}
+async function atualizarPropostasProfessor(id){
+  const r=await apiGet('/api/pecas');const d=await r.json();
+  if(r.ok){window.__propostasProfessor=(d.pecas||[]).filter(p=>p.publicada).sort((a,b)=>(a.rodada||a.num)-(b.rodada||b.num));renderRodadaProposta(id)}
+}
+async function corrigirTodasRodada(id,rodada,total){
+  if(!confirm('Corrigir automaticamente '+total+' entrega(s) da Peça '+rodada+'? O sistema validará as notas e enviará os relatórios em PDF aos alunos SEM revisão do professor.'))return;
+  const fb=document.getElementById('corrigir_todas_fb');
+  fb.innerHTML='<div class="parecer-inicial"><p><span class="spinner"></span>Iniciando correção automática...</p></div>';
+  try{
+    const r=await apiPost('/api/entrega/corrigir-todas',{id});const d=await r.json();
+    if(!r.ok){fb.innerHTML='<p class="erro-ia">'+esc(d.erro||'Não foi possível iniciar.')+'</p>';return}
+    await acompanharCorrecaoTodas(id,d.jobId);
+  }catch(e){if(fb)fb.innerHTML='<p class="erro-ia">Falha de conexão. Tente novamente.</p>'}
+}
+async function acompanharCorrecaoTodas(pecaId,jobId){
+  const fb=document.getElementById('corrigir_todas_fb');if(!fb)return;
+  try{
+    const r=await apiGet('/api/entrega/corrigir-todas-status?job='+encodeURIComponent(jobId));const d=await r.json();
+    if(!r.ok){fb.innerHTML='<p class="erro-ia">'+esc(d.erro||'Não foi possível acompanhar a correção.')+'</p>';return}
+    const j=d.job||{},processadas=(j.concluidas||0)+(j.falhas||0),pct=j.total?Math.round(processadas*100/j.total):0;
+    fb.innerHTML='<div class="parecer-inicial"><p><b>Correção automática em andamento: '+processadas+' de '+j.total+'</b>'+(j.atual?' · '+esc(j.atual):'')+'</p><div class="pbar"><div class="trilho"><div class="fill" style="width:'+pct+'%"></div></div></div>'+(j.falhas?'<p class="erro-ia">Falhas até agora: '+j.falhas+'</p>':'')+'</div>';
+    if(j.status!=='concluido'){setTimeout(()=>acompanharCorrecaoTodas(pecaId,jobId),3000);return}
+    fb.innerHTML='<div class="parecer-inicial"><p style="color:var(--verde)"><b>✅ Lote concluído.</b> '+j.concluidas+' correção(ões) validada(s) e '+j.falhas+' falha(s).'+(j.semEmail?' '+j.semEmail+' aluno(s) sem e-mail verificado recebeu(ram) o PDF somente no sistema.':'')+'</p>'+((j.erros||[]).length?'<ul class="erro-ia">'+j.erros.map(x=>'<li>'+esc(x.aluno)+': '+esc(x.erro)+'</li>').join('')+'</ul>':'')+'</div>';
+    setTimeout(()=>atualizarPropostasProfessor(pecaId),1200);
+  }catch(e){fb.innerHTML='<p class="erro-ia">Falha ao acompanhar o lote. Atualize a página para consultar o resultado.</p>'}
 }
 function dataBR(iso){if(!iso)return '';const p=iso.split('T')[0].split('-');return p.length===3?(p[2]+'/'+p[1]+'/'+p[0]):iso;}
 function dataHoraBR(iso){if(!iso)return '';const t=iso.split('T');const dd=dataBR(t[0]);const hh=t[1]?(' às '+t[1].slice(0,5)):'';return dd+hh;}
@@ -588,9 +624,12 @@ async function abrirEntrega(id,mat){
   conteudo.innerHTML='<p><span class="spinner"></span>Abrindo entrega...</p>';
   const r=await apiGet('/api/entrega?id='+id+'&matricula='+mat);const d=await r.json();
   if(!r.ok){conteudo.innerHTML='<p class="erro-ia">'+esc(d.erro||'Erro')+'</p>';return}
-  window.__ent={id,mat};
+  window.__ent={id,mat,recurso:d.recurso||null};
+  const recursoPendente=d.recurso&&d.recurso.status==='pendente';
+  const recursoHtml=recursoPendente?'<div class="card" style="border-color:#d9bd64;background:#fffaf0"><span class="badge">Recurso pendente</span><h3>Razões apresentadas pelo aluno</h3><div class="caso">'+esc(d.recurso.motivo)+'</div><p style="font: .82rem Arial,sans-serif;color:var(--cinza);margin-top:10px">Nota recorrida: '+esc(String(d.recurso.notaRecorrida).replace('.',','))+'/10 · apresentado em '+esc(dataHora(d.recurso.criadoEm))+'</p><div class="botoes"><button class="primario" onclick="analisarRecursoIA()">🤖 Analisar recurso com IA</button></div><div id="recurso_ia_fb"></div></div>':'';
   conteudo.innerHTML='<div class="botoes" style="margin-bottom:10px"><button onclick="abrirPeca(\''+id+'\')">← Voltar</button></div>'
    +'<span class="badge">Peça '+d.peca.num+'</span><h2 class="titulo-peca">'+esc(d.aluno.nome)+' · '+d.aluno.matricula+'</h2>'
+   +recursoHtml
    +'<div class="card"><h3>Peça enviada pelo aluno</h3>'
    +(d.arquivo?'<p style="font: .8rem Arial,sans-serif;color:var(--cinza);margin-bottom:10px">📎 Texto importado de <b>'+esc(d.arquivo.nome)+'</b> · '+esc(d.arquivo.tipo.toUpperCase())+' · '+Math.max(1,Math.round(d.arquivo.tamanho/1024))+' KB</p>':'')
    +'<div class="caso" style="max-height:340px;overflow:auto">'+esc(d.texto)+'</div></div>'
@@ -599,8 +638,9 @@ async function abrirEntrega(id,mat){
    +'<div id="corrfb"></div>'
    +'<textarea id="relatorio" class="redacao" style="min-height:280px" placeholder="Relatório de correção (você pode escrever/editar livremente)...">'+esc(d.relatorio)+'</textarea>'
    +'<div style="font-family:Arial,sans-serif;margin-top:10px">Nota (0 a 10): <input id="nota" style="width:90px;padding:8px;border:1px solid #cfc9b8;border-radius:6px" value="'+(d.nota!==''?String(d.nota).replace('.',','):'')+'"></div>'
-   +'<div class="botoes" style="margin-top:12px"><button onclick="salvarEntrega(false)">💾 Salvar rascunho</button>'
-   +'<button class="primario" onclick="salvarEntrega(true)">✅ Validar e enviar ao aluno por e-mail</button></div>'
+   +(recursoPendente?'<div class="campo-grid" style="margin-top:14px"><label>Resultado do recurso<select id="resultado_recurso" style="display:block;width:100%;margin-top:4px;padding:9px;border:1px solid #cfc9b8;border-radius:6px"><option value="">Selecione</option><option>Deferido</option><option>Deferido parcialmente</option><option>Indeferido</option></select></label><label style="grid-column:1/-1">Decisão fundamentada<textarea id="decisao_recurso" class="redacao" style="min-height:110px;margin-top:4px" placeholder="Explique objetivamente a análise das razões do aluno e o resultado do recurso."></textarea></label></div>':'')
+   +'<div class="botoes" style="margin-top:12px"><button onclick="salvarEntrega(false)">💾 Salvar rascunho</button><button onclick="visualizarPreviaCorrecao()">👁 Visualizar prévia</button>'
+   +'<button class="primario" onclick="salvarEntrega(true)">'+(recursoPendente?'✅ Concluir recorreção e enviar decisão':'✅ Validar e enviar ao aluno por e-mail')+'</button></div>'
    +(d.validado?'<p class="aviso">Esta entrega já foi validada — validar de novo reenvia o e-mail ao aluno.</p>':'')
    +'<div id="valfb"></div></div>';
 }
@@ -621,9 +661,11 @@ async function salvarEntrega(validar){
   const fb=document.getElementById('valfb');
   if(!nota){fb.innerHTML='<p class="erro-ia">Informe a nota.</p>';return}
   if(validar&&!confirm('Validar e enviar o relatório e a nota '+nota+' ao e-mail do aluno?'))return;
-  try{const r=await apiPost('/api/entrega/validar',{id:window.__ent.id,matricula:window.__ent.mat,relatorio:rel,nota:nota,validar:!!validar});
+  const payload={id:window.__ent.id,matricula:window.__ent.mat,relatorio:rel,nota:nota,validar:!!validar};
+  if(validar&&window.__ent.recurso&&window.__ent.recurso.status==='pendente'){payload.resultadoRecurso=((document.getElementById('resultado_recurso')||{}).value||'');payload.decisaoRecurso=((document.getElementById('decisao_recurso')||{}).value||'').trim()}
+  try{const r=await apiPost('/api/entrega/validar',payload);
   const d=await r.json();if(!r.ok){fb.innerHTML='<p class="erro-ia">'+esc(d.erro||'Erro')+'</p>';return}
-  fb.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif">'+(validar?'✅ Validada e enviada ao aluno.':'💾 Rascunho salvo.')+'</p>';
+  fb.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif">'+(validar?(window.__ent.recurso?'✅ Recurso decidido, correção atualizada e enviada ao aluno.':'✅ Validada e enviada ao aluno.'):'💾 Rascunho salvo.')+'</p>';
   }catch(e){}
 }
 // ---- Nova peça (IA ou PDF ou manual) ----
@@ -1023,6 +1065,31 @@ async function telaAluno(){
     window.__pecasAluno=d.pecas;
   }catch(e){document.getElementById('la').innerHTML='<p class="erro-ia">Falha ao carregar.</p>';}
 }
+async function analisarRecursoIA(){
+  const fb=document.getElementById('recurso_ia_fb');if(!fb)return;const prog=progresso(fb,[[0,'📖 Lendo as razões do recurso...'],[25,'⚖️ Confrontando com o gabarito e a peça...'],[60,'🧮 Conferindo os itens e a nota...'],[82,'📝 Preparando recomendação consultiva...']],90);
+  try{const r=await apiPost('/api/recurso/analisar-ia',{id:window.__ent.id,matricula:window.__ent.mat}),d=await r.json();prog.fim();if(!r.ok){fb.innerHTML='<p class="erro-ia">'+esc(d.erro||'Não foi possível analisar o recurso.')+'</p>';return}fb.innerHTML='<div class="parecer-inicial"><p style="font:700 .8rem Arial,sans-serif;color:#8a6415">Análise consultiva — a decisão final é do professor</p>'+linkCitacoesHtml(md2html(d.analise))+'</div>'}catch(e){prog.fim();fb.innerHTML='<p class="erro-ia">Falha ao analisar o recurso.</p>'}
+}
+async function visualizarPreviaCorrecao(){
+  const rel=document.getElementById('relatorio').value.trim(),nota=document.getElementById('nota').value.trim(),fb=document.getElementById('valfb');
+  if(!rel||!nota){fb.innerHTML='<p class="erro-ia">Preencha o relatório e a nota para visualizar a prévia.</p>';return}
+  fb.innerHTML='<p style="font: .85rem Arial,sans-serif"><span class="spinner"></span>Preparando a prévia exatamente como o aluno receberá...</p>';
+  try{
+    const h={'content-type':'application/json'};aplicarCabecalhosVisao(h);
+    const previa={id:window.__ent.id,matricula:window.__ent.mat,relatorio:rel,nota};if(window.__ent.recurso&&window.__ent.recurso.status==='pendente'){previa.resultadoRecurso=((document.getElementById('resultado_recurso')||{}).value||'');previa.decisaoRecurso=((document.getElementById('decisao_recurso')||{}).value||'').trim()}
+    const r=await fetch('/api/entrega/previa-pdf',{method:'POST',headers:h,credentials:'same-origin',body:JSON.stringify(previa)});
+    if(!r.ok){const d=await r.json();fb.innerHTML='<p class="erro-ia">'+esc(d.erro||'Não foi possível gerar a prévia.')+'</p>';return}
+    const url=URL.createObjectURL(await r.blob());fb.innerHTML='';abrirPreviaPdf(url);
+  }catch(e){fb.innerHTML='<p class="erro-ia">Falha ao gerar a prévia.</p>'}
+}
+function abrirPreviaPdf(url){
+  const anterior=document.getElementById('previa_pdf_modal');if(anterior)anterior.remove();
+  const overlay=document.createElement('div');overlay.id='previa_pdf_modal';overlay.className='senha-overlay';overlay.setAttribute('role','dialog');overlay.setAttribute('aria-modal','true');
+  const modal=document.createElement('div');modal.className='previa-modal';
+  const topo=document.createElement('div');topo.className='topo';const titulo=document.createElement('h3');titulo.textContent='Prévia do espelho enviado ao aluno';const fechar=document.createElement('button');fechar.textContent='Fechar prévia';
+  const frame=document.createElement('iframe');frame.src=url;frame.title='Prévia do relatório em PDF';
+  const encerrar=()=>{document.removeEventListener('keydown',tecla);URL.revokeObjectURL(url);overlay.remove()};const tecla=e=>{if(e.key==='Escape')encerrar()};
+  fechar.onclick=encerrar;overlay.onclick=e=>{if(e.target===overlay)encerrar()};topo.append(titulo,fechar);modal.append(topo,frame);overlay.append(modal);document.body.append(overlay);document.addEventListener('keydown',tecla);
+}
 async function telaEntreguesAluno(){
   window.__abaAluno='entregues';
   if(professorEmVisaoAluno()){
@@ -1043,7 +1110,8 @@ async function telaEntreguesAluno(){
       cards+='<div class="card"><span class="badge">Peça '+p.num+'</span> <b>'+esc(p.nomePeca)+'</b>'
        +'<p style="font-family:Arial,sans-serif;font-size:.85rem;color:var(--cinza)">Entregue em '+esc(dataHora(p.enviadoEm))+'</p>'
        +'<p style="font-family:Arial,sans-serif;font-weight:bold;color:'+(corrigida?'var(--verde)':'var(--dourado)')+'">'+(corrigida?'✅ Corrigida · Nota '+(p.nota!=null?esc(String(p.nota).replace('.',',')):'—')+'/10':'⏳ A corrigir')+'</p>'
-       +(corrigida&&p.temRelatorio?'<div class="botoes"><button class="primario" onclick="verMinhaCorrecao(\''+p.id+'\')">Ver relatório e nota</button></div>':'')+'</div>';
+       +(corrigida&&p.temRelatorio?'<div class="botoes"><button class="primario" onclick="verMinhaCorrecao(\''+p.id+'\')">Ver relatório e nota</button><button onclick="baixarMinhaCorrecao(\''+p.id+'\')">Baixar PDF</button>'+(!p.recurso?'<button onclick="abrirRecursoAluno(\''+p.id+'\')">Apresentar recurso</button>':'')+'</div>':'')
+       +(p.recurso?'<p class="aviso" style="color:'+(p.recurso.status==='pendente'?'#8a6415':'var(--verde)')+'"><b>'+(p.recurso.status==='pendente'?'⏳ Recurso pendente de recorreção':'✅ Recurso decidido: '+esc(p.recurso.resultado))+'</b></p>':'')+'</div>';
     }
     document.getElementById('le').innerHTML=cards;
   }catch(e){document.getElementById('le').innerHTML='<p class="erro-ia">Falha ao carregar.</p>';}
@@ -1212,8 +1280,19 @@ function verMinhaCorrecao(id){
   conteudo.innerHTML='<div class="botoes" style="margin-bottom:10px"><button onclick="telaEntreguesAluno()">← Voltar às peças entregues</button></div>'
    +'<span class="badge">Peça '+p.num+'</span><h2 class="titulo-peca">'+esc(p.nomePeca)+'</h2>'
    +'<div class="card"><h3>Resultado da correção</h3><div class="nota">Nota '+esc(String(p.nota).replace('.',','))+'/10</div>'
-   +(p.validadoEm?'<p style="font: .82rem Arial,sans-serif;color:var(--cinza)">Correção liberada em '+esc(dataHora(p.validadoEm))+'.</p>':'')+'</div>'
-   +'<div class="card"><h3>Relatório do(a) professor(a)</h3><div class="resultado">'+linkCitacoesHtml(md2html(p.relatorio))+'</div></div>';
+   +(p.validadoEm?'<p style="font: .82rem Arial,sans-serif;color:var(--cinza)">Correção liberada em '+esc(dataHora(p.validadoEm))+'.</p>':'')+'<div class="botoes"><button class="primario" onclick="baixarMinhaCorrecao(\''+p.id+'\')">⬇ Baixar espelho em PDF</button>'+(!p.recurso?'<button onclick="abrirRecursoAluno(\''+p.id+'\')">Apresentar recurso</button>':'')+'</div></div>'
+   +(p.recurso?'<div class="card" style="border-color:#d9bd64;background:#fffaf0"><h3>'+(p.recurso.status==='pendente'?'Recurso aguardando recorreção':'Resultado do recurso — '+esc(p.recurso.resultado))+'</h3><p style="white-space:pre-wrap">'+esc(p.recurso.status==='pendente'?p.recurso.motivo:p.recurso.decisao)+'</p>'+(p.recurso.status==='decidido'?'<p class="aviso">Nota após o recurso: '+esc(String(p.recurso.notaAposRecurso).replace('.',','))+'/10</p>':'')+'</div>':'')
+   +'<div class="card"><h3>Espelho de correção — padrão OAB/FGV</h3><div class="resultado espelho-oab">'+linkCitacoesHtml(md2html(p.relatorio))+'</div></div>';
+}
+function abrirRecursoAluno(id){
+  const p=(window.__pecasEntregues||[]).find(x=>x.id===id);if(!p||p.recurso)return;
+  const anterior=document.getElementById('recurso_modal');if(anterior)anterior.remove();const overlay=document.createElement('div');overlay.id='recurso_modal';overlay.className='senha-overlay';
+  const modal=document.createElement('div');modal.className='senha-modal';modal.innerHTML='<h3>Apresentar recurso da Peça '+esc(p.num)+'</h3><p>Indique objetivamente quais itens do espelho você contesta, o motivo jurídico ou factual e a alteração pretendida. Não basta dizer apenas que discorda da nota.</p><textarea id="recurso_motivo" class="redacao" style="min-height:190px;margin-top:0" maxlength="4000" placeholder="Ex.: No item 4 do espelho, a correção afirma que... Contudo, na página/tópico... Por isso, peço..."></textarea><div id="recurso_fb"></div><div class="acoes"><button class="primario" id="recurso_enviar">Enviar recurso</button><button id="recurso_cancelar">Cancelar</button></div>';
+  const encerrar=()=>overlay.remove();modal.querySelector('#recurso_cancelar').onclick=encerrar;overlay.onclick=e=>{if(e.target===overlay)encerrar()};modal.querySelector('#recurso_enviar').onclick=async()=>{const motivo=modal.querySelector('#recurso_motivo').value.trim(),fb=modal.querySelector('#recurso_fb');if(motivo.length<80){fb.innerHTML='<p class="erro-ia">Explique os motivos em pelo menos 80 caracteres.</p>';return}const r=await apiPost('/api/recurso',{id,motivo}),d=await r.json();if(!r.ok){fb.innerHTML='<p class="erro-ia">'+esc(d.erro||'Não foi possível enviar.')+'</p>';return}encerrar();telaEntreguesAluno()};
+  overlay.append(modal);document.body.append(overlay);modal.querySelector('#recurso_motivo').focus();
+}
+async function baixarMinhaCorrecao(id){
+  try{const r=await apiGet('/api/minha-correcao.pdf?id='+encodeURIComponent(id));if(!r.ok){const d=await r.json();alert(d.erro||'PDF não disponível.');return}const url=URL.createObjectURL(await r.blob()),a=document.createElement('a');a.href=url;a.download='espelho-correcao.pdf';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2000)}catch(e){alert('Não foi possível baixar o PDF.')}
 }
 
 async function restaurarSessao(){
