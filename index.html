@@ -99,6 +99,8 @@ textarea.redacao{width:100%;min-height:340px;margin-top:14px;padding:16px;font-f
 .userbar a{color:#fff;cursor:pointer;text-decoration:underline}
 .btn-sair{background:#a33;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:.8rem;cursor:pointer;font-family:Arial,sans-serif;white-space:nowrap}
 .btn-sair:hover{background:#c44}
+.versao-aviso{position:fixed;z-index:10000;left:50%;bottom:18px;transform:translateX(-50%);width:min(680px,calc(100% - 28px));display:flex;align-items:center;justify-content:space-between;gap:14px;background:var(--azul-esc);color:#fff;border:1px solid var(--dourado);border-radius:10px;padding:12px 14px;box-shadow:0 8px 28px rgba(0,0,0,.3);font: .86rem Arial,sans-serif}
+.versao-aviso button{flex-shrink:0;border:0;border-radius:6px;padding:9px 14px;background:var(--dourado);color:#17243a;font-weight:700;cursor:pointer}
 .senha-overlay{position:fixed;inset:0;z-index:9999;background:rgba(10,24,43,.68);display:flex;align-items:center;justify-content:center;padding:20px;font-family:Arial,sans-serif}
 .senha-modal{width:min(480px,100%);background:#fff;border-radius:12px;padding:24px;box-shadow:0 16px 48px rgba(0,0,0,.28)}
 .senha-modal h3{color:var(--azul);margin-bottom:8px}
@@ -138,9 +140,24 @@ textarea.redacao{width:100%;min-height:340px;margin-top:14px;padding:16px;font-f
 </div>
 <script>
 // ================= Helpers =================
+const APP_VERSION='__APP_VERSION__';
 let store={};
 function sget(k,d){try{return localStorage.getItem(k)??d}catch(e){return store[k]??d}}
 function sset(k,v){try{localStorage.setItem(k,v)}catch(e){store[k]=v}}
+let avisoNovaVersaoExibido=false;
+function mostrarAvisoNovaVersao(){
+  if(avisoNovaVersaoExibido)return;avisoNovaVersaoExibido=true;
+  const aviso=document.createElement('div');aviso.className='versao-aviso';aviso.setAttribute('role','status');
+  const texto=document.createElement('span');texto.textContent='Há uma atualização do sistema disponível. Atualize para ver os recursos e valores mais recentes.';
+  const botao=document.createElement('button');botao.type='button';botao.textContent='Atualizar agora';botao.onclick=()=>location.reload();
+  aviso.append(texto,botao);document.body.appendChild(aviso);
+}
+async function verificarNovaVersao(){
+  try{const r=await fetch('/api/versao?agora='+Date.now(),{cache:'no-store',credentials:'same-origin'});if(!r.ok)return;const d=await r.json();if(d.versao&&d.versao!==APP_VERSION)mostrarAvisoNovaVersao()}catch(e){}
+}
+setTimeout(verificarNovaVersao,3000);
+setInterval(verificarNovaVersao,60000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)verificarNovaVersao()});
 const menu=document.getElementById('menu'),conteudo=document.getElementById('conteudo');
 let AUTH=null; try{AUTH=JSON.parse(sget('auth','null'))}catch(e){AUTH=null}
 let MODO_VISAO=sget('modo_visao','');
