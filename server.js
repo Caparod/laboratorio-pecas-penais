@@ -127,6 +127,23 @@ function migrarDb() {
       }
     }
   }
+  // O número interno da peça não representa a rodada pedagógica. Em bancos antigos,
+  // numera as peças publicadas sequencialmente dentro de cada turma.
+  const pecasPorTurma = {};
+  for (const p of Object.values(db.pecas || {}).filter(p => p.publicada)) {
+    const chave = p.turmaId ? ('turma:' + p.turmaId) : ('disc:' + (p.disc || ''));
+    (pecasPorTurma[chave] = pecasPorTurma[chave] || []).push(p);
+  }
+  for (const lista of Object.values(pecasPorTurma)) {
+    lista.sort((a, b) => Number(a.num || 0) - Number(b.num || 0));
+    const usadas = new Set(lista.map(p => Number(p.rodada)).filter(n => Number.isInteger(n) && n >= 1 && n <= 50));
+    let proxima = 1;
+    for (const p of lista) {
+      if (Number.isInteger(Number(p.rodada)) && Number(p.rodada) >= 1 && Number(p.rodada) <= 50) { p.rodada = Number(p.rodada); continue; }
+      while (usadas.has(proxima)) proxima++;
+      p.rodada = proxima; usadas.add(proxima);
+    }
+  }
 }
 // Preço estimado por milhão de tokens [entrada, saída], em US$
 const PRECOS_MTOK = { 'claude-sonnet-5': [2, 10], 'claude-haiku-4-5-20251001': [1, 5], 'claude-opus-4-8': [15, 75] };
@@ -1776,7 +1793,13 @@ async function pecaExtrairPdf(req, res) {
 }
 // Professor: salvar/publicar peça
 function fotografiaPeca(p, extras) {
-  return Object.assign({ versao: p.versao || 1, nomePeca: p.nomePeca, disc: p.disc, turmaId: p.turmaId || null, caso: p.caso, gab: p.gab, prazo: p.prazo || '', publicada: !!p.publicada }, extras || {});
+  return Object.assign({ versao: p.versao || 1, rodada: rodadaDaPeca(p), nomePeca: p.nomePeca, disc: p.disc, turmaId: p.turmaId || null, caso: p.caso, gab: p.gab, prazo: p.prazo || '', publicada: !!p.publicada }, extras || {});
+}
+function rodadaValida(v) { const n = Number(v); return Number.isInteger(n) && n >= 1 && n <= 50; }
+function rodadaDaPeca(p) { return rodadaValida(p && p.rodada) ? Number(p.rodada) : Number((p && p.num) || 1); }
+function proximaRodadaDaTurma(turmaId, disc, ignorarId) {
+  const usadas = new Set(Object.values(db.pecas || {}).filter(p => p.id !== ignorarId && p.publicada && rodadaValida(p.rodada) && (turmaId ? p.turmaId === turmaId : (!p.turmaId && p.disc === disc))).map(p => Number(p.rodada)));
+  return Math.min(50, Math.max(0, ...usadas) + 1);
 }
 async function pecaSalvar(req, res) {
   const sess = sessaoDe(req); if (!sess) return json(res, 401, { erro: 'SESSAO' }); if (sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
@@ -1804,6 +1827,7 @@ async function pecaSalvar(req, res) {
   const validacaoGab = gab ? validarGabarito(gab, nomePeca) : { ok: false, erros: ['Gabarito ausente.'] };
   if (vaiPublicar && !validacaoGab.ok) return json(res, 400, { erro: 'Gabarito inválido: ' + validacaoGab.erros.join(' ') });
   let id = d.id && db.pecas[d.id] ? d.id : null;
+  const rodada = id && rodadaValida(db.pecas[id].rodada) ? Number(db.pecas[id].rodada) : (vaiPublicar ? proximaRodadaDaTurma(turmaId, disc, id) : null);
   if (!id && !podeGerirProfessores(sess.usuario) && !turmaId) return json(res, 400, { erro: 'Informe a turma da peça.' });
   if (turmaId && !podeAcessarTurma(sess.usuario, turmaId)) return json(res, 403, { erro: 'Sem acesso a esta turma.' });
   if (id) {
@@ -1816,14 +1840,14 @@ async function pecaSalvar(req, res) {
       if (p.historico.length > 50) p.historico = p.historico.slice(-50);
       p.versao = (p.versao || 1) + 1;
     }
-    p.nomePeca = nomePeca; p.disc = disc; p.caso = caso; p.gab = gab; p.prazo = prazo; p.publicada = vaiPublicar; p.atualizadoEm = Date.now(); p.atualizadoPor = sess.usuario;
+    p.nomePeca = nomePeca; p.disc = disc; p.caso = caso; p.gab = gab; p.prazo = prazo; p.rodada = rodada; p.publicada = vaiPublicar; p.atualizadoEm = Date.now(); p.atualizadoPor = sess.usuario;
     if (validacaoGab.ok) delete p.revisaoObrigatoria; else p.revisaoObrigatoria = { detectadaEm: Date.now(), erros: validacaoGab.erros };
     if (classificacaoInformada) p.classificacao = classificacao;
     if (turmaId) p.turmaId = turmaId;
     if (typeof d.foraDoPrazoGeral === 'boolean') p.foraDoPrazoGeral = d.foraDoPrazoGeral;
   } else {
     const num = db.proximoNum++; id = 'p' + num;
-    db.pecas[id] = { id, num, nomePeca, disc, turmaId, caso, gab, prazo, classificacao, criadoEm: Date.now(), publicada: vaiPublicar, autor: sess.usuario, versao: 1, historico: [], revisaoObrigatoria: validacaoGab.ok ? null : { detectadaEm: Date.now(), erros: validacaoGab.erros } };
+    db.pecas[id] = { id, num, rodada, nomePeca, disc, turmaId, caso, gab, prazo, classificacao, criadoEm: Date.now(), publicada: vaiPublicar, autor: sess.usuario, versao: 1, historico: [], revisaoObrigatoria: validacaoGab.ok ? null : { detectadaEm: Date.now(), erros: validacaoGab.erros } };
     db.entregas[id] = db.entregas[id] || {};
   }
   try { await salvarDbCritico(); } catch (e) { return json(res, 503, { erro: 'A peça foi salva localmente, mas a persistência remota falhou. Tente novamente antes de prosseguir.' }); }
@@ -1839,12 +1863,12 @@ async function pecaSalvar(req, res) {
       try { await salvarDbCritico(); } catch (e) { return json(res, 503, { erro: 'A peça foi salva, mas não foi possível confirmar o registro das notificações. Tente novamente.' }); }
     }
     const html = '<p>Olá!</p><p>O(a) Professor(a) publicou uma nova peça no <b>Laboratório de Peças Penais</b>:</p>'
-      + '<p><b>Peça ' + pp.num + ' — ' + escHtml(pp.nomePeca) + '</b> (' + escHtml(pp.disc) + ')</p>'
+      + '<p><b>Peça ' + rodadaDaPeca(pp) + ' — ' + escHtml(pp.nomePeca) + '</b> (' + escHtml(pp.disc) + ')</p>'
       + '<p><b>Prazo de entrega:</b> ' + prazoTxt + '</p>'
       + '<p>Acesse o sistema para redigir e enviar sua peça: <a href="' + APP_URL + '">' + APP_URL + '</a></p>';
-    for (const [m, a] of alvo) enviarEmail(a.email, 'Nova peça publicada — Peça ' + pp.num + ' (' + pp.nomePeca + ')', html);
+    for (const [m, a] of alvo) enviarEmail(a.email, 'Nova peça publicada — Peça ' + rodadaDaPeca(pp) + ' (' + pp.nomePeca + ')', html);
   }
-  json(res, 200, { ok: true, id, num: db.pecas[id].num, versao: db.pecas[id].versao, avisados: !!pp.avisadoAlunos });
+  json(res, 200, { ok: true, id, num: db.pecas[id].num, rodada: rodadaValida(db.pecas[id].rodada) ? Number(db.pecas[id].rodada) : null, versao: db.pecas[id].versao, avisados: !!pp.avisadoAlunos });
 }
 function resumoPeca(p) {
   const ents = db.entregas[p.id] || {};
@@ -1857,7 +1881,7 @@ function resumoPeca(p) {
   }));
   const aCorrigir = registros.filter(e => !e.validado).sort((a, b) => Number(a.enviadoEm || 0) - Number(b.enviadoEm || 0));
   const corrigidas = registros.filter(e => e.validado).sort((a, b) => Number(b.enviadoEm || 0) - Number(a.enviadoEm || 0));
-  return { id: p.id, num: p.num, nomePeca: p.nomePeca, disc: p.disc, prazo: p.prazo, publicada: p.publicada, criadoEm: p.criadoEm, entregas: registros.length, validadas: corrigidas.length, aCorrigir, corrigidas, autor: p.autor || '', autorNome: ((professorDe(p.autor) || {}).nome) || p.autor || '—', versao: p.versao || 1, revisaoObrigatoria: p.revisaoObrigatoria || null };
+  return { id: p.id, num: p.num, rodada: rodadaValida(p.rodada) ? Number(p.rodada) : null, nomePeca: p.nomePeca, disc: p.disc, prazo: p.prazo, publicada: p.publicada, criadoEm: p.criadoEm, entregas: registros.length, validadas: corrigidas.length, aCorrigir, corrigidas, autor: p.autor || '', autorNome: ((professorDe(p.autor) || {}).nome) || p.autor || '—', versao: p.versao || 1, revisaoObrigatoria: p.revisaoObrigatoria || null };
 }
 async function pecasListar(req, res) {
   const sess = sessaoDe(req); if (!sess) return json(res, 401, { erro: 'SESSAO' }); if (sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
@@ -1897,7 +1921,8 @@ async function pecasAluno(req, res) {
     if (e) {
       entregues.push({
         id: p.id,
-        num: p.num,
+        num: rodadaDaPeca(p),
+        rodada: rodadaDaPeca(p),
         nomePeca: versaoAluno.nomePeca || p.nomePeca,
         disc: versaoAluno.disc || p.disc,
         prazo: p.prazo,
@@ -1923,7 +1948,7 @@ async function pecasAluno(req, res) {
       noPrazo = Number.isNaN(limite) || agora <= limite || !!(p.liberados && p.liberados[ctx.id]);
     }
     gabLiberado = gabLiberado && validarGabarito(versaoAluno.gab || '', versaoAluno.nomePeca || p.nomePeca).ok;
-    pecas.push({ id: p.id, num: p.num, nomePeca: versaoAluno.nomePeca || p.nomePeca, disc: versaoAluno.disc || p.disc, prazo: p.prazo, caso: versaoAluno.caso || p.caso, classificacao: p.classificacao || {}, versao: versaoAluno.versao || p.versao || 1, enviado: false, enviadoEm: null, validado: false, nota: null, temRelatorio: false, noPrazo: noPrazo, gabLiberado: false });
+    pecas.push({ id: p.id, num: rodadaDaPeca(p), rodada: rodadaDaPeca(p), nomePeca: versaoAluno.nomePeca || p.nomePeca, disc: versaoAluno.disc || p.disc, prazo: p.prazo, caso: versaoAluno.caso || p.caso, classificacao: p.classificacao || {}, versao: versaoAluno.versao || p.versao || 1, enviado: false, enviadoEm: null, validado: false, nota: null, temRelatorio: false, noPrazo: noPrazo, gabLiberado: false });
   }
   pecas.sort((a2, b2) => b2.num - a2.num);
   entregues.sort((a2, b2) => Number(b2.enviadoEm || 0) - Number(a2.enviadoEm || 0));
@@ -1973,8 +1998,8 @@ async function entregar(req, res) {
   if (autor && autor.emailAviso) destinos.push(autor.emailAviso);
   else destinos = Object.values(db.professores).map(pr => pr.emailAviso).filter(Boolean);
   if (!destinos.length && process.env.GMAIL_USER) destinos.push(process.env.GMAIL_USER);
-  for (const dest of destinos) enviarEmail(dest, 'Nova entrega — ' + (a.nome || ctx.id) + ' enviou a Peça ' + p.num,
-    '<p>O aluno <b>' + escHtml(a.nome || '') + '</b> (' + (ctx.virtual ? 'visão de aluno' : 'matrícula ' + ctx.id) + ') enviou a <b>Peça ' + p.num + ' — ' + escHtml(p.nomePeca) + '</b>.</p><p>Em ' + quando + '. Acesse o painel para corrigir.</p>');
+  for (const dest of destinos) enviarEmail(dest, 'Nova entrega — ' + (a.nome || ctx.id) + ' enviou a Peça ' + rodadaDaPeca(p),
+    '<p>O aluno <b>' + escHtml(a.nome || '') + '</b> (' + (ctx.virtual ? 'visão de aluno' : 'matrícula ' + ctx.id) + ') enviou a <b>Peça ' + rodadaDaPeca(p) + ' — ' + escHtml(p.nomePeca) + '</b>.</p><p>Em ' + quando + '. Acesse o painel para corrigir.</p>');
   json(res, 200, { ok: true, reenvio: jaTinha });
 }
 // Aluno: descadastro — sai do sistema e apaga o próprio nome da lista da turma
@@ -1994,7 +2019,7 @@ async function entregaGet(req, res, id, mat) {
   const e = (db.entregas[id] || {})[mat]; if (!e) return json(res, 404, { erro: 'Entrega não encontrada.' });
   if (!entregaPertenceTurma(mat, e, p)) return json(res, 403, { erro: 'Aluno fora da turma desta peça.' });
   const base = e.snapshotPeca || fotografiaPeca(p, { legado: true });
-  json(res, 200, { ok: true, peca: { num: p.num, nomePeca: base.nomePeca, caso: base.caso, gab: base.gab, versao: base.versao || 1 }, aluno: { matricula: mat, nome: nomeParticipanteEntrega(mat, e) }, texto: e.texto, arquivo: e.arquivo || null, relatorio: e.relatorio || '', nota: (e.nota != null ? e.nota : ''), validado: !!e.validado });
+  json(res, 200, { ok: true, peca: { num: rodadaDaPeca(p), rodada: rodadaDaPeca(p), nomePeca: base.nomePeca, caso: base.caso, gab: base.gab, versao: base.versao || 1 }, aluno: { matricula: mat, nome: nomeParticipanteEntrega(mat, e) }, texto: e.texto, arquivo: e.arquivo || null, relatorio: e.relatorio || '', nota: (e.nota != null ? e.nota : ''), validado: !!e.validado });
 }
 // Professor: pedir à IA um relatório com nota para uma entrega
 async function entregaCorrigirIA(req, res) {
@@ -2045,8 +2070,8 @@ async function entregaValidar(req, res) {
     try { await salvarDbCritico(); } catch (err) { return json(res, 503, { erro: 'A validação não pôde ser confirmada na persistência remota. Tente novamente.' }); }
     const a = db.alunos[String(d.matricula)];
     if (a && a.email && a.emailVerificado) {
-      const html = '<p>Olá, ' + escHtml(a.nome || '') + '!</p><p>Sua <b>Peça ' + p.num + ' — ' + escHtml(p.nomePeca) + '</b> foi corrigida.</p><p><b>Nota: ' + e.nota.toString().replace('.', ',') + '/10</b></p><hr><div style="white-space:pre-wrap;font-family:Georgia,serif">' + escHtml(e.relatorio) + '</div>';
-      enviarEmail(a.email, 'Correção da Peça ' + p.num + ' — Nota ' + e.nota.toString().replace('.', ','), html);
+      const html = '<p>Olá, ' + escHtml(a.nome || '') + '!</p><p>Sua <b>Peça ' + rodadaDaPeca(p) + ' — ' + escHtml(p.nomePeca) + '</b> foi corrigida.</p><p><b>Nota: ' + e.nota.toString().replace('.', ',') + '/10</b></p><hr><div style="white-space:pre-wrap;font-family:Georgia,serif">' + escHtml(e.relatorio) + '</div>';
+      enviarEmail(a.email, 'Correção da Peça ' + rodadaDaPeca(p) + ' — Nota ' + e.nota.toString().replace('.', ','), html);
     }
   } else {
     try { await salvarDbCritico(); } catch (err) { return json(res, 503, { erro: 'O rascunho não pôde ser confirmado na persistência remota. Tente novamente.' }); }
@@ -2125,7 +2150,7 @@ async function painelPedagogico(req, res) {
       ac.obtido += c.obtido; ac.possivel += c.possivel; ac.avaliacoes++;
     }
     return {
-      id: p.id, num: p.num, nomePeca: p.nomePeca, alunos: mats.length,
+      id: p.id, num: rodadaDaPeca(p), nomePeca: p.nomePeca, alunos: mats.length,
       entregas: lista.length, corrigidas: corrigidas.length, pendentes: lista.length - corrigidas.length,
       taxaEntrega: mats.length ? arred1(lista.length * 100 / mats.length) : 0,
       media: notas.length ? arred1(notas.reduce((a, b) => a + b, 0) / notas.length) : null,
@@ -2138,8 +2163,8 @@ async function painelPedagogico(req, res) {
     const notas = [], entregues = [];
     for (const p of pecas) {
       const e = (db.entregas[p.id] || {})[mat];
-      if (e) entregues.push(p.num);
-      if (e && e.validado && Number.isFinite(Number(e.nota))) notas.push({ num: p.num, nota: Number(e.nota) });
+      if (e) entregues.push(rodadaDaPeca(p));
+      if (e && e.validado && Number.isFinite(Number(e.nota))) notas.push({ num: rodadaDaPeca(p), nota: Number(e.nota) });
     }
     notas.sort((a, b) => a.num - b.num);
     return {
@@ -2174,7 +2199,7 @@ async function notasPlanilha(req, res) {
   }
   const pecas = Object.values(db.pecas).filter(p => p.turmaId === turmaId).sort((a, b) => a.num - b.num);
   const linhas = [];
-  const cab = ['Aluno', 'Matrícula'].concat(pecas.map(p => 'Peça ' + p.num + ' (' + csvCelula(p.nomePeca) + ')'));
+  const cab = ['Aluno', 'Matrícula'].concat(pecas.map(p => 'Peça ' + rodadaDaPeca(p) + ' (' + csvCelula(p.nomePeca) + ')'));
   linhas.push(cab.join(';'));
   const mats = Object.keys(db.alunos).filter(m => alunoNaTurma(db.alunos[m], turmaId)).sort((m1, m2) => (db.alunos[m1].nome || '').localeCompare(db.alunos[m2].nome || ''));
   for (const mat of mats) {

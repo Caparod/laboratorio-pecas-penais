@@ -106,6 +106,7 @@ textarea.redacao{width:100%;min-height:340px;margin-top:14px;padding:16px;font-f
 .senha-modal h3{color:var(--azul);margin-bottom:8px}
 .senha-modal p{color:var(--cinza);font-size:.88rem;margin-bottom:14px}
 .senha-modal input{width:100%;padding:12px;border:1px solid #cfc9b8;border-radius:7px;background:#faf8f2;color:var(--texto);font:600 1.05rem monospace;letter-spacing:.03em}
+.senha-modal select{width:100%;padding:12px;border:1px solid #cfc9b8;border-radius:7px;background:#faf8f2;color:var(--texto);font:600 .98rem Arial,sans-serif}
 .senha-modal .acoes{display:flex;gap:10px;justify-content:flex-end;margin-top:16px}
 .senha-modal button{padding:10px 16px;border:1px solid var(--azul);border-radius:6px;background:#fff;color:var(--azul);font-weight:600;cursor:pointer}
 .senha-modal button.primario{background:var(--azul);color:#fff}
@@ -448,7 +449,7 @@ async function profPecas(){
     let h='<table class="painel"><tr><th>#</th><th>Peça</th><th>Autor</th><th>Turma</th><th>Prazo</th><th>Status</th><th>Entregas</th><th></th></tr>';
     for(const p of d.pecas){
       const minha=(p.autor===AUTH.usuario)||souAdminAgora();
-      h+='<tr><td><b>'+p.num+'</b></td><td>'+esc(p.nomePeca)+'</td><td>'+esc(p.autorNome||'—')+(minha&&p.autor===AUTH.usuario?' <span style="color:var(--dourado);font-size:.75rem">(você)</span>':'')+'</td><td>'+esc(p.disc)+'</td><td>'+(p.prazo?dataBR(p.prazo):'—')+'</td>'
+      h+='<tr><td><b>'+(p.publicada?(p.rodada||p.num):'—')+'</b></td><td>'+esc(p.nomePeca)+'</td><td>'+esc(p.autorNome||'—')+(minha&&p.autor===AUTH.usuario?' <span style="color:var(--dourado);font-size:.75rem">(você)</span>':'')+'</td><td>'+esc(p.disc)+'</td><td>'+(p.prazo?dataBR(p.prazo):'—')+'</td>'
       +'<td>'+(p.revisaoObrigatoria?'⚠️ revisar gabarito':(p.publicada?'✅ publicada':'✏️ rascunho'))+'</td><td>'+p.entregas+' ('+p.validadas+' corrigidas)</td>'
       +'<td><a style="cursor:pointer;color:var(--azul)" onclick="abrirPeca(\''+p.id+'\')">abrir</a></td></tr>';
     }
@@ -456,23 +457,48 @@ async function profPecas(){
   }catch(e){}
 }
 async function profPropostas(){
-  conteudo.innerHTML='<h2 class="titulo-peca">Peças propostas</h2><p style="color:var(--cinza);font-family:Arial,sans-serif;font-size:.88rem;margin-bottom:12px">Entregas organizadas por rodada. Abra diretamente as peças que aguardam correção ou consulte as já corrigidas.</p><div id="lprop"><p><span class="spinner"></span>Carregando...</p></div>';
+  conteudo.innerHTML='<h2 class="titulo-peca">Peças propostas</h2><p style="color:var(--cinza);font-family:Arial,sans-serif;font-size:.88rem;margin-bottom:12px">A primeira peça publicada para cada turma é a Peça 1; as seguintes são numeradas pela ordem de publicação.</p><div class="botoes" style="margin-bottom:14px"><button onclick="escolherRodadaProposta()">Selecionar rodada</button></div><div id="lprop"><p><span class="spinner"></span>Carregando...</p></div>';
   try{const r=await apiGet('/api/pecas');const d=await r.json();
     if(!r.ok){document.getElementById('lprop').innerHTML='<p class="erro-ia">'+esc(d.erro||'Erro')+'</p>';return}
-    const propostas=(d.pecas||[]).filter(p=>p.publicada).sort((a,b)=>a.num-b.num);
+    const propostas=(d.pecas||[]).filter(p=>p.publicada).sort((a,b)=>(a.rodada||a.num)-(b.rodada||b.num));
     if(!propostas.length){document.getElementById('lprop').innerHTML='<div class="card"><p>Nenhuma peça foi proposta aos alunos ainda.</p></div>';return}
-    let h='';
-    for(const p of propostas){
-      const pendentes=p.aCorrigir||[],corrigidas=p.corrigidas||[];
-      const linha=function(e,corrigida){return '<div style="padding:10px 0;border-bottom:1px solid #e7e2d7"><b>'+esc(e.nome||e.matricula)+'</b><div style="font: .79rem Arial,sans-serif;color:var(--cinza);margin-top:3px">Matrícula '+esc(e.matricula)+' · entregue em '+esc(dataHora(e.enviadoEm))+(corrigida&&e.nota!=null?' · nota '+esc(String(e.nota).replace('.',','))+'/10':'')+'</div><div class="botoes" style="margin-top:7px"><button '+(corrigida?'':'class="primario" ')+'onclick="abrirEntrega(\''+p.id+'\',\''+e.matricula+'\')">'+(corrigida?'Rever correção':'Corrigir agora')+'</button></div></div>'};
-      h+='<div class="card"><div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap"><div><span class="badge">Rodada · Peça '+p.num+'</span><h3 style="margin:8px 0 3px">'+esc(p.nomePeca)+'</h3><p style="font: .82rem Arial,sans-serif;color:var(--cinza);margin:0">'+esc(p.disc||'—')+' · prazo '+(p.prazo?esc(dataHoraBR(p.prazo)):'não informado')+'</p></div><button onclick="abrirPeca(\''+p.id+'\')">Abrir rodada</button></div>'
-       +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:14px;margin-top:16px">'
-       +'<section style="background:#fff8e8;border:1px solid #ead7a4;border-radius:8px;padding:14px"><h3 style="color:#8a6415;margin:0 0 8px">⏳ A corrigir ('+pendentes.length+')</h3>'+(pendentes.length?pendentes.map(e=>linha(e,false)).join(''):'<p style="font: .84rem Arial,sans-serif;color:var(--cinza)">Nenhuma entrega aguardando correção.</p>')+'</section>'
-       +'<section style="background:#eef7ef;border:1px solid #c9dfcc;border-radius:8px;padding:14px"><h3 style="color:var(--verde);margin:0 0 8px">✅ Corrigidas ('+corrigidas.length+')</h3>'+(corrigidas.length?corrigidas.map(e=>linha(e,true)).join(''):'<p style="font: .84rem Arial,sans-serif;color:var(--cinza)">Nenhuma entrega corrigida nesta rodada.</p>')+'</section>'
-       +'</div></div>';
-    }
-    document.getElementById('lprop').innerHTML=h;
+    window.__propostasProfessor=propostas;
+    await escolherRodadaProposta(true);
   }catch(e){document.getElementById('lprop').innerHTML='<p class="erro-ia">Falha ao carregar as peças propostas.</p>';}
+}
+function popupSelecionarRodada(propostas,atualId){
+  return new Promise(resolve=>{
+    const anterior=document.getElementById('rodada_modal');if(anterior)anterior.remove();
+    const overlay=document.createElement('div');overlay.id='rodada_modal';overlay.className='senha-overlay';overlay.setAttribute('role','dialog');overlay.setAttribute('aria-modal','true');
+    const modal=document.createElement('div');modal.className='senha-modal';
+    const h=document.createElement('h3');h.textContent='Selecionar rodada';
+    const aviso=document.createElement('p');aviso.textContent='Escolha a rodada que deseja acompanhar. A numeração segue a ordem de publicação em cada turma.';
+    const seletor=document.createElement('select');seletor.setAttribute('aria-label','Rodada');
+    for(const p of propostas){const op=document.createElement('option');op.value=p.id;op.textContent='Peça '+(p.rodada||p.num)+' — '+(p.disc||'Turma')+' — '+p.nomePeca;if(p.id===atualId)op.selected=true;seletor.append(op)}
+    const acoes=document.createElement('div');acoes.className='acoes';
+    const abrir=document.createElement('button');abrir.type='button';abrir.className='primario';abrir.textContent='Abrir rodada';
+    const cancelar=document.createElement('button');cancelar.type='button';cancelar.textContent='Cancelar';
+    const encerrar=valor=>{document.removeEventListener('keydown',tecla);overlay.remove();resolve(valor)};
+    const tecla=e=>{if(e.key==='Escape')encerrar(null)};
+    abrir.onclick=()=>encerrar(seletor.value);cancelar.onclick=()=>encerrar(null);overlay.onclick=e=>{if(e.target===overlay)encerrar(null)};
+    acoes.append(abrir,cancelar);modal.append(h,aviso,seletor,acoes);overlay.append(modal);document.body.append(overlay);document.addEventListener('keydown',tecla);seletor.focus();
+  });
+}
+async function escolherRodadaProposta(inicial){
+  const propostas=window.__propostasProfessor||[];if(!propostas.length)return;
+  const id=await popupSelecionarRodada(propostas,window.__rodadaPropostaId||propostas[0].id);
+  if(!id){if(inicial&&!window.__rodadaPropostaId)document.getElementById('lprop').innerHTML='<div class="card"><p>Selecione uma rodada para visualizar as entregas.</p></div>';return}
+  window.__rodadaPropostaId=id;renderRodadaProposta(id);
+}
+function renderRodadaProposta(id){
+  const p=(window.__propostasProfessor||[]).find(x=>x.id===id);if(!p)return;
+  const pendentes=p.aCorrigir||[],corrigidas=p.corrigidas||[];
+  const linha=function(e,corrigida){return '<div style="padding:10px 0;border-bottom:1px solid #e7e2d7"><b>'+esc(e.nome||e.matricula)+'</b><div style="font: .79rem Arial,sans-serif;color:var(--cinza);margin-top:3px">Matrícula '+esc(e.matricula)+' · entregue em '+esc(dataHora(e.enviadoEm))+(corrigida&&e.nota!=null?' · nota '+esc(String(e.nota).replace('.',','))+'/10':'')+'</div><div class="botoes" style="margin-top:7px"><button '+(corrigida?'':'class="primario" ')+'onclick="abrirEntrega(\''+p.id+'\',\''+e.matricula+'\')">'+(corrigida?'Rever correção':'Corrigir agora')+'</button></div></div>'};
+  document.getElementById('lprop').innerHTML='<div class="card"><div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap"><div><span class="badge">Rodada · Peça '+(p.rodada||p.num)+'</span><h3 style="margin:8px 0 3px">'+esc(p.nomePeca)+'</h3><p style="font: .82rem Arial,sans-serif;color:var(--cinza);margin:0">'+esc(p.disc||'—')+' · prazo '+(p.prazo?esc(dataHoraBR(p.prazo)):'não informado')+'</p></div><button onclick="abrirPeca(\''+p.id+'\')">Abrir rodada</button></div>'
+   +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:14px;margin-top:16px">'
+   +'<section style="background:#fff8e8;border:1px solid #ead7a4;border-radius:8px;padding:14px"><h3 style="color:#8a6415;margin:0 0 8px">⏳ A corrigir ('+pendentes.length+')</h3>'+(pendentes.length?pendentes.map(e=>linha(e,false)).join(''):'<p style="font: .84rem Arial,sans-serif;color:var(--cinza)">Nenhuma entrega aguardando correção.</p>')+'</section>'
+   +'<section style="background:#eef7ef;border:1px solid #c9dfcc;border-radius:8px;padding:14px"><h3 style="color:var(--verde);margin:0 0 8px">✅ Corrigidas ('+corrigidas.length+')</h3>'+(corrigidas.length?corrigidas.map(e=>linha(e,true)).join(''):'<p style="font: .84rem Arial,sans-serif;color:var(--cinza)">Nenhuma entrega corrigida nesta rodada.</p>')+'</section>'
+   +'</div></div>';
 }
 function dataBR(iso){if(!iso)return '';const p=iso.split('T')[0].split('-');return p.length===3?(p[2]+'/'+p[1]+'/'+p[0]):iso;}
 function dataHoraBR(iso){if(!iso)return '';const t=iso.split('T');const dd=dataBR(t[0]);const hh=t[1]?(' às '+t[1].slice(0,5)):'';return dd+hh;}
@@ -492,7 +518,7 @@ async function abrirPeca(id){
   conteudo.innerHTML='<div class="botoes" style="margin-bottom:10px"><button onclick="irAba(\'pecas\')">← Voltar</button>'
    +(souAutor?'<button onclick="editarPeca(\''+id+'\')">✏️ Editar peça/gabarito</button>':'')
    +(souAutor?'<button style="border-color:var(--vermelho);color:var(--vermelho)" onclick="excluirPeca(\''+id+'\')">🗑 Excluir peça</button>':'')+'</div>'
-   +'<span class="badge">Peça '+p.num+' · '+esc(p.disc)+'</span><h2 class="titulo-peca">'+esc(p.nomePeca)+'</h2>'
+   +'<span class="badge">'+(p.publicada?('Peça '+(p.rodada||p.num)):'Rascunho')+' · '+esc(p.disc)+'</span><h2 class="titulo-peca">'+esc(p.nomePeca)+'</h2>'
    +'<p style="color:var(--cinza);font-family:Arial,sans-serif;font-size:.85rem">Autor: '+esc((p.autor===AUTH.usuario)?'você':(p.autor||'—'))+' · Prazo: '+(p.prazo?dataHoraBR(p.prazo):'sem prazo')+' · '+(p.publicada?'publicada':'rascunho')+'</p>'
    +(p.revisaoObrigatoria?'<p class="erro-ia">⚠️ Este gabarito é anterior às validações atuais ou está inconsistente. Revise e salve novamente antes de corrigir ou liberar aos alunos.</p>':'')
    +classificacaoHtml(p.classificacao)
@@ -548,7 +574,7 @@ async function vincularTurma(){
   try{const r=await apiPost('/api/peca/salvar',Object.assign({nomePeca:p.nomePeca,turmaId,caso:p.caso,gab:p.gab,prazo,publicar:true},classificacaoPayload(p)));
     const d=await r.json();
     if(!r.ok){fb.innerHTML='<p class="erro-ia">'+esc(d.erro||'Erro')+'</p>';return}
-    fb.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif">🚀 Publicada como Peça '+d.num+' para '+esc(tNome)+' — prazo '+dataHoraBR(prazo)+'.</p>';
+    fb.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif">🚀 Publicada como Peça '+d.rodada+' para '+esc(tNome)+' — prazo '+dataHoraBR(prazo)+'.</p>';
   }catch(e){fb.innerHTML='<p class="erro-ia">Falha: '+esc(e.message)+'</p>';}
 }
 async function renovarPrazo(id){const v=document.getElementById('pz_novo').value;if(!v){alert('Escolha o novo prazo.');return}const r=await apiPost('/api/peca/renovar-prazo',{id,prazo:v});const d=await r.json();document.getElementById('pz_fb').innerHTML=r.ok?'<p style="color:var(--verde);font-family:Arial,sans-serif;font-size:.85rem">Prazo renovado para '+esc(dataHoraBR(v))+'.</p>':'<p class="erro-ia">'+esc(d.erro||'Erro')+'</p>';}
@@ -688,7 +714,7 @@ async function salvarPeca(publicar){
   try{const r=await apiPost('/api/peca/salvar',Object.assign({id:RASCUNHO.id,nomePeca:nome,disc:turmaSelecionadaNome(),turmaId,caso,gab,prazo,publicar},classificacaoPayload({classificacao})));
   const d=await r.json();if(!r.ok){fb.innerHTML='<p class="erro-ia">'+esc(d.erro||'Erro')+'</p>';return}
   RASCUNHO={nomePeca:'',disc:'',caso:'',gab:'',classificacao:{}};
-  fb.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif">'+(publicar?'🚀 Peça '+d.num+' publicada para a turma!':'💾 Rascunho salvo (Peça '+d.num+').')+'</p>';
+  fb.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif">'+(publicar?'🚀 Peça '+d.rodada+' publicada para a turma!':'💾 Rascunho salvo.')+'</p>';
   setTimeout(()=>irAba('pecas'),900);
   }catch(e){}
 }

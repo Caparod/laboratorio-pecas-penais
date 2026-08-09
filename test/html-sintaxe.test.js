@@ -14,6 +14,8 @@ for (const arquivo of [path.join(__dirname, '..', 'index.html'), path.join(__dir
     assert.match(html, /function profPropostas\(/, 'área do professor deve organizar as peças propostas por rodada');
     assert.match(html, /Corrigir agora/, 'entrega pendente deve oferecer acesso direto à correção');
     assert.match(html, /Rever correção/, 'entrega corrigida deve permanecer acessível ao professor');
+    assert.match(html, /function popupSelecionarRodada\(/, 'professor deve selecionar a rodada em um popup');
+    assert.match(html, /A primeira peça publicada para cada turma é a Peça 1/, 'interface deve explicar a numeração sequencial das rodadas');
   }
   if (arquivo.endsWith(path.join('render-app', 'index.html'))) {
     assert.match(html, /function mostrarSenhaTemporaria\(/);
