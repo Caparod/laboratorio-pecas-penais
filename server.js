@@ -2044,11 +2044,14 @@ function dadosEspelhoCorrecao(p, e, matricula) {
 function nomeArquivoEspelho(p) { return 'espelho-correcao-peca-' + rodadaDaPeca(p) + '.pdf'; }
 async function gerarRelatorioCorrecao(sess, p, e) {
   if (!process.env.ANTHROPIC_API_KEY) return { ok: false, erro: 'Servidor sem chave configurada.' };
-  const base = e.snapshotPeca || fotografiaPeca(p, { legado: true });
+  // O enunciado permanece o que o aluno efetivamente recebeu, mas a referência
+  // avaliativa é sempre o gabarito atual, já corrigido pelo professor.
+  const original = e.snapshotPeca || fotografiaPeca(p, { legado: true });
+  const base = Object.assign({}, original, { nomePeca: p.nomePeca || original.nomePeca, disc: p.disc || original.disc, gab: p.gab, versaoGabarito: p.versao || 1 });
   const vg = validarGabarito(base.gab || '', base.nomePeca || p.nomePeca);
   if (!vg.ok) return { ok: false, erro: 'A correção foi bloqueada porque o gabarito desta entrega é inválido: ' + vg.erros.join(' ') };
   const robotizacao = analisarRobotizacao(e.texto);
-  const usuario = '<dados_controle>Peça esperada: ' + documentoIA(base.nomePeca || p.nomePeca, 120) + '; disciplina: ' + documentoIA(base.disc || p.disc, 120) + '; versão: ' + (base.versao || 1) + '</dados_controle>\n<caso>\n' + documentoIA(base.caso, 20000) + '\n</caso>\n<gabarito>\n' + documentoIA(base.gab, 30000) + '\n</gabarito>\n<resposta_aluno>\n' + documentoIA(e.texto, 60000) + '\n</resposta_aluno>\n<triagem_estilistica>\n' + documentoIA(JSON.stringify(robotizacao), 4000) + '\n</triagem_estilistica>\nCorrija exclusivamente segundo o gabarito, confira diretamente os sinais de robotização e devolva a estrutura obrigatória.';
+  const usuario = '<dados_controle>Peça esperada: ' + documentoIA(base.nomePeca || p.nomePeca, 120) + '; disciplina: ' + documentoIA(base.disc || p.disc, 120) + '; versão do enunciado entregue: ' + (original.versao || 1) + '; versão do gabarito atual: ' + (base.versaoGabarito || 1) + '</dados_controle>\n<caso>\n' + documentoIA(base.caso, 20000) + '\n</caso>\n<gabarito_atual_corrigido>\n' + documentoIA(base.gab, 30000) + '\n</gabarito_atual_corrigido>\n<resposta_aluno>\n' + documentoIA(e.texto, 60000) + '\n</resposta_aluno>\n<triagem_estilistica>\n' + documentoIA(JSON.stringify(robotizacao), 4000) + '\n</triagem_estilistica>\nCorrija exclusivamente segundo o gabarito ATUAL corrigido pelo professor, confira diretamente os sinais de robotização e devolva a estrutura obrigatória.';
   let r = await iaTexto(SISTEMA_CORRECAO, usuario, 12000, true, sess);
   if (!r.ok) return { ok: false, erroIA: r, erro: r.erro || 'Falha na correção por IA.' };
   let relatorio = garantirLinksFontes((r.texto || '').trim(), true);
@@ -2060,8 +2063,8 @@ async function gerarRelatorioCorrecao(sess, p, e) {
     vr = validarCorrecao(relatorio);
   }
   if (!vr.ok) return { ok: false, erro: 'A correção da IA foi bloqueada por inconsistência: ' + vr.erros.join(' ') };
-  e.relatorio = relatorio; e.robotizacao = robotizacao; e.notaSugerida = vr.detalhes.nota; e.corrigidoEm = Date.now(); e.corrigidoPor = sess.usuario; e.modeloCorrecao = MODELO_POTENTE; e.versaoPromptCorrecao = 4;
-  return { ok: true, relatorio, notaSugerida: e.notaSugerida, versaoPeca: base.versao || 1 };
+  e.relatorio = relatorio; e.robotizacao = robotizacao; e.notaSugerida = vr.detalhes.nota; e.corrigidoEm = Date.now(); e.corrigidoPor = sess.usuario; e.modeloCorrecao = MODELO_POTENTE; e.versaoPromptCorrecao = 5; e.versaoGabaritoCorrecao = base.versaoGabarito;
+  return { ok: true, relatorio, notaSugerida: e.notaSugerida, versaoPeca: original.versao || 1, versaoGabarito: base.versaoGabarito };
 }
 async function enviarEspelhoAluno(p, e, matricula) {
   const a = db.alunos[String(matricula)];
@@ -2231,9 +2234,10 @@ async function recursoAnalisarIA(req, res) {
   const p = db.pecas[String(d.id || '')]; const e = p && (db.entregas[p.id] || {})[String(d.matricula || '')];
   if (!e || !e.recurso || e.recurso.status !== 'pendente') return json(res, 404, { erro: 'Recurso pendente não encontrado.' });
   if (!podeAcessarPeca(sess.usuario, p)) return json(res, 403, { erro: 'Sem acesso a esta peça.' });
-  const base = e.snapshotPeca || fotografiaPeca(p, { legado: true });
+  const original = e.snapshotPeca || fotografiaPeca(p, { legado: true });
+  const base = Object.assign({}, original, { nomePeca: p.nomePeca || original.nomePeca, disc: p.disc || original.disc, gab: p.gab, versaoGabarito: p.versao || 1 });
   const sistema = 'Você auxilia um professor de prática penal na análise de recurso acadêmico contra correção de peça. Sua análise é estritamente consultiva e não substitui a decisão humana. Confronte cada razão do aluno com o texto efetivamente entregue, o gabarito e o espelho original. Não presuma fatos nem redija peça para o aluno. Entregue dados completos para que o professor apenas revise e valide, sem precisar redigir. Responda em português do Brasil EXATAMENTE nesta ordem: ## Síntese objetiva do recurso; ## Análise de cada ponto contestado; ## Conferência do espelho e da pontuação; RESULTADO RECOMENDADO: DEFERIDO, DEFERIDO PARCIALMENTE ou INDEFERIDO; ## Impacto sugerido na nota; ## Fundamentação sugerida ao professor (texto pronto, objetivo e individualizado da decisão acadêmica); ## Fontes oficiais consultadas; ## Espelho revisado proposto; depois deste último título, reproduza integralmente o relatório final no formato OAB/FGV exigido para as correções, com todas as seções, tabela item a item, soma e NOTA SUGERIDA coerentes. Se o recurso for indeferido, preserve o espelho e a nota original. Se recomendar mudança, altere exatamente os itens afetados e recalcule a nota. Verifique citações jurídicas em fontes oficiais quando necessário.';
-  const usuario = '<gabarito>\n' + documentoIA(base.gab, 30000) + '\n</gabarito>\n<peca_entregue>\n' + documentoIA(e.texto, 60000) + '\n</peca_entregue>\n<espelho_original>\n' + documentoIA(e.recurso.relatorioRecorrido || e.relatorio, 30000) + '\n</espelho_original>\n<nota_recorrida>' + documentoIA(String(e.recurso.notaRecorrida), 20) + '</nota_recorrida>\n<razoes_do_recurso>\n' + documentoIA(e.recurso.motivo, 5000) + '\n</razoes_do_recurso>\nAnalise apenas os pontos contestados e apresente recomendação consultiva detalhada.';
+  const usuario = '<gabarito_atual_corrigido versao="' + (base.versaoGabarito || 1) + '">\n' + documentoIA(base.gab, 30000) + '\n</gabarito_atual_corrigido>\n<peca_entregue>\n' + documentoIA(e.texto, 60000) + '\n</peca_entregue>\n<espelho_original>\n' + documentoIA(e.recurso.relatorioRecorrido || e.relatorio, 30000) + '\n</espelho_original>\n<nota_recorrida>' + documentoIA(String(e.recurso.notaRecorrida), 20) + '</nota_recorrida>\n<razoes_do_recurso>\n' + documentoIA(e.recurso.motivo, 5000) + '\n</razoes_do_recurso>\nAnalise apenas os pontos contestados usando obrigatoriamente o gabarito ATUAL corrigido pelo professor e apresente recomendação consultiva detalhada.';
   let r = await iaTexto(sistema, usuario, 12000, true, sess);
   if (!r.ok) return erroIA(res, r);
   let texto = garantirLinksFontes(String(r.texto || '').trim(), true);
