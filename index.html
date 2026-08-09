@@ -468,12 +468,13 @@ async function profPropostas(){
     const propostas=(d.pecas||[]).filter(p=>p.publicada).sort((a,b)=>(a.rodada||a.num)-(b.rodada||b.num));
     if(!propostas.length){document.getElementById('lprop').innerHTML='<div class="card"><p>Nenhuma peça foi proposta aos alunos ainda.</p></div>';return}
     window.__propostasProfessor=propostas;
-    await escolherRodadaProposta(true);
+    const atual=propostas.some(p=>p.id===window.__rodadaPropostaId)?window.__rodadaPropostaId:propostas[0].id;
+    window.__rodadaPropostaId=atual;renderRodadaProposta(atual);
   }catch(e){document.getElementById('lprop').innerHTML='<p class="erro-ia">Falha ao carregar as peças propostas.</p>';}
 }
 async function profRecursos(){
   conteudo.innerHTML='<h2 class="titulo-peca">Peças propostas</h2><div class="abas"><button onclick="profPropostas()">Rodadas</button><button class="ativa">Recursos pendentes</button></div><div id="lrec"><p><span class="spinner"></span>Carregando recursos...</p></div>';
-  try{const r=await apiGet('/api/recursos');const d=await r.json(),alvo=document.getElementById('lrec');if(!r.ok){alvo.innerHTML='<p class="erro-ia">'+esc(d.erro||'Erro')+'</p>';return}const itens=d.recursos||[];if(!itens.length){alvo.innerHTML='<div class="card" style="text-align:center;padding:36px"><h3>Nenhum recurso pendente</h3><p style="color:var(--cinza);font-family:Arial,sans-serif">Os recursos apresentados pelos alunos aparecerão aqui para recorreção.</p></div>';return}alvo.innerHTML=itens.map(x=>'<div class="card"><span class="badge">Recurso · Peça '+x.rodada+'</span><h3>'+esc(x.aluno)+' · '+esc(x.nomePeca)+'</h3><p style="font: .82rem Arial,sans-serif;color:var(--cinza)">'+esc(x.turma)+' · matrícula '+esc(x.matricula)+' · nota recorrida '+esc(String(x.nota).replace('.',','))+'/10 · '+esc(dataHora(x.criadoEm))+'</p><div class="caso" style="margin-top:12px"><b>Razões do aluno:</b>\n'+esc(x.motivo)+'</div><div class="botoes"><button class="primario" onclick="abrirEntrega(\''+x.id+'\',\''+x.matricula+'\')">Abrir e recorrigir</button></div></div>').join('')}
+  try{const r=await apiGet('/api/recursos');const d=await r.json(),alvo=document.getElementById('lrec');if(!r.ok){alvo.innerHTML='<p class="erro-ia">'+esc(d.erro||'Erro')+'</p>';return}const itens=d.recursos||[];if(!itens.length){alvo.innerHTML='<div class="card" style="text-align:center;padding:36px"><h3>Nenhum recurso pendente</h3><p style="color:var(--cinza);font-family:Arial,sans-serif">Os recursos apresentados pelos alunos aparecerão aqui para recorreção.</p></div>';return}alvo.innerHTML=itens.map(x=>'<div class="card"><span class="badge">Recurso · Peça '+x.rodada+'</span><h3>'+esc(x.aluno)+' · '+esc(x.nomePeca)+'</h3><p style="font: .82rem Arial,sans-serif;color:var(--cinza)">'+esc(x.turma)+' · matrícula '+esc(x.matricula)+' · nota recorrida '+esc(String(x.nota).replace('.',','))+'/5 · '+esc(dataHora(x.criadoEm))+'</p><div class="caso" style="margin-top:12px"><b>Razões do aluno:</b>\n'+esc(x.motivo)+'</div><div class="botoes"><button class="primario" onclick="abrirEntrega(\''+x.id+'\',\''+x.matricula+'\')">Abrir e recorrigir</button></div></div>').join('')}
   catch(e){document.getElementById('lrec').innerHTML='<p class="erro-ia">Falha ao carregar recursos.</p>'}
 }
 function popupSelecionarRodada(propostas,atualId){
@@ -503,7 +504,7 @@ async function escolherRodadaProposta(inicial){
 function renderRodadaProposta(id){
   const p=(window.__propostasProfessor||[]).find(x=>x.id===id);if(!p)return;
   const pendentes=p.aCorrigir||[],corrigidas=p.corrigidas||[];
-  const linha=function(e,corrigida){return '<div style="padding:10px 0;border-bottom:1px solid #e7e2d7"><b>'+esc(e.nome||e.matricula)+'</b><div style="font: .79rem Arial,sans-serif;color:var(--cinza);margin-top:3px">Matrícula '+esc(e.matricula)+' · entregue em '+esc(dataHora(e.enviadoEm))+(corrigida&&e.nota!=null?' · nota '+esc(String(e.nota).replace('.',','))+'/10':'')+'</div><div class="botoes" style="margin-top:7px"><button '+(corrigida?'':'class="primario" ')+'onclick="abrirEntrega(\''+p.id+'\',\''+e.matricula+'\')">'+(corrigida?'Rever correção':'Corrigir agora')+'</button></div></div>'};
+  const linha=function(e,corrigida){return '<div style="padding:10px 0;border-bottom:1px solid #e7e2d7"><b>'+esc(e.nome||e.matricula)+'</b><div style="font: .79rem Arial,sans-serif;color:var(--cinza);margin-top:3px">Matrícula '+esc(e.matricula)+' · entregue em '+esc(dataHora(e.enviadoEm))+(corrigida&&e.nota!=null?' · nota '+esc(String(e.nota).replace('.',','))+'/5':'')+'</div><div class="botoes" style="margin-top:7px"><button '+(corrigida?'':'class="primario" ')+'onclick="abrirEntrega(\''+p.id+'\',\''+e.matricula+'\')">'+(corrigida?'Rever correção':'Corrigir agora')+'</button></div></div>'};
   document.getElementById('lprop').innerHTML='<div class="card"><div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap"><div><span class="badge">Rodada · Peça '+(p.rodada||p.num)+'</span><h3 style="margin:8px 0 3px">'+esc(p.nomePeca)+'</h3><p style="font: .82rem Arial,sans-serif;color:var(--cinza);margin:0">'+esc(p.disc||'—')+' · prazo '+(p.prazo?esc(dataHoraBR(p.prazo)):'não informado')+'</p></div><div class="botoes" style="margin-top:0"><button class="primario" onclick="abrirPeca(\''+p.id+'\')">Abrir rodada</button>'+(pendentes.length?'<button class="primario" onclick="corrigirTodasRodada(\''+p.id+'\','+Number(p.rodada||p.num)+','+pendentes.length+')">🤖 Corrigir todas</button>':'')+'</div></div><div id="corrigir_todas_fb"></div>'
    +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:14px;margin-top:16px">'
    +'<section style="background:#fff8e8;border:1px solid #ead7a4;border-radius:8px;padding:14px"><h3 style="color:#8a6415;margin:0 0 8px">⏳ A corrigir ('+pendentes.length+')</h3>'+(pendentes.length?pendentes.map(e=>linha(e,false)).join(''):'<p style="font: .84rem Arial,sans-serif;color:var(--cinza)">Nenhuma entrega aguardando correção.</p>')+'</section>'
@@ -629,7 +630,7 @@ async function abrirEntrega(id,mat){
   const sugestaoRecurso=recursoPendente&&d.recurso.sugestaoIA?d.recurso.sugestaoIA:null;
   const relatorioInicial=sugestaoRecurso&&sugestaoRecurso.relatorio?sugestaoRecurso.relatorio:d.relatorio;
   const notaInicial=sugestaoRecurso&&sugestaoRecurso.nota!=null?sugestaoRecurso.nota:d.nota;
-  const recursoHtml=recursoPendente?'<div class="card" style="border-color:#d9bd64;background:#fffaf0"><span class="badge">Recurso pendente</span><h3>Razões apresentadas pelo aluno</h3><div class="caso">'+esc(d.recurso.motivo)+'</div><p style="font: .82rem Arial,sans-serif;color:var(--cinza);margin-top:10px">Nota recorrida: '+esc(String(d.recurso.notaRecorrida).replace('.',','))+'/10 · apresentado em '+esc(dataHora(d.recurso.criadoEm))+'</p><div class="botoes"><button class="primario" onclick="analisarRecursoIA()">🤖 Analisar recurso com IA</button></div><div id="recurso_ia_fb"></div></div>':'';
+  const recursoHtml=recursoPendente?'<div class="card" style="border-color:#d9bd64;background:#fffaf0"><span class="badge">Recurso pendente</span><h3>Razões apresentadas pelo aluno</h3><div class="caso">'+esc(d.recurso.motivo)+'</div><p style="font: .82rem Arial,sans-serif;color:var(--cinza);margin-top:10px">Nota recorrida: '+esc(String(d.recurso.notaRecorrida).replace('.',','))+'/5 · apresentado em '+esc(dataHora(d.recurso.criadoEm))+'</p><div class="botoes"><button class="primario" onclick="analisarRecursoIA()">🤖 Analisar recurso com IA</button></div><div id="recurso_ia_fb"></div></div>':'';
   conteudo.innerHTML='<div class="botoes" style="margin-bottom:10px"><button onclick="abrirPeca(\''+id+'\')">← Voltar</button></div>'
    +'<span class="badge">Peça '+d.peca.num+'</span><h2 class="titulo-peca">'+esc(d.aluno.nome)+' · '+d.aluno.matricula+'</h2>'
    +recursoHtml
@@ -640,7 +641,7 @@ async function abrirEntrega(id,mat){
    +'<div class="botoes"><button class="primario" onclick="corrigirEntregaIA()">🤖 Corrigir com IA</button></div>'
    +'<div id="corrfb"></div>'
    +'<textarea id="relatorio" class="redacao" style="min-height:280px" placeholder="Relatório de correção gerado pela IA — revise e altere apenas se desejar.">'+esc(relatorioInicial)+'</textarea>'
-   +'<div style="font-family:Arial,sans-serif;margin-top:10px">Nota (0 a 10): <input id="nota" style="width:90px;padding:8px;border:1px solid #cfc9b8;border-radius:6px" value="'+(notaInicial!==''?String(notaInicial).replace('.',','):'')+'"></div>'
+   +'<div style="font-family:Arial,sans-serif;margin-top:10px">Nota do Estágio (0 a 5): <input id="nota" type="number" min="0" max="5" step="0.01" style="width:90px;padding:8px;border:1px solid #cfc9b8;border-radius:6px" value="'+(notaInicial!==''?String(notaInicial).replace('.',','):'')+'"></div>'
    +(recursoPendente?'<div class="campo-grid" style="margin-top:14px"><label>Resultado do recurso<select id="resultado_recurso" style="display:block;width:100%;margin-top:4px;padding:9px;border:1px solid #cfc9b8;border-radius:6px"><option value="">Selecione</option><option '+(sugestaoRecurso&&sugestaoRecurso.resultado==='Deferido'?'selected':'')+'>Deferido</option><option '+(sugestaoRecurso&&sugestaoRecurso.resultado==='Deferido parcialmente'?'selected':'')+'>Deferido parcialmente</option><option '+(sugestaoRecurso&&sugestaoRecurso.resultado==='Indeferido'?'selected':'')+'>Indeferido</option></select></label><label style="grid-column:1/-1">Decisão fundamentada<textarea id="decisao_recurso" class="redacao" style="min-height:110px;margin-top:4px" placeholder="A IA preencherá este campo; revise e altere apenas se desejar.">'+esc(sugestaoRecurso?sugestaoRecurso.decisao:'')+'</textarea></label></div>':'')
    +'<div class="botoes" style="margin-top:12px"><button onclick="salvarEntrega(false)">💾 Salvar rascunho</button><button onclick="visualizarPreviaCorrecao()">👁 Visualizar prévia</button>'
    +'<button class="primario" onclick="salvarEntrega(true)">'+(recursoPendente?'✅ Concluir recorreção e enviar decisão':'✅ Validar e enviar ao aluno por e-mail')+'</button></div>'
@@ -652,10 +653,19 @@ async function corrigirEntregaIA(){
   const fb=document.getElementById('corrfb');const prog=progresso(fb,ETAPAS_CORR,110);
   try{
     const r=await apiPost('/api/entrega/corrigir',{id:window.__ent.id,matricula:window.__ent.mat});
-    const d=await r.json();prog.fim();
-    if(!r.ok){let m=(d&&d.erro)||'Erro';if(m==='LIMITE_CREDITOS')m='⛔ Limite mensal de uso da IA atingido. A IA volta quando o limite for renovado ou aumentado no painel do provedor.';fb.innerHTML='<p class="erro-ia">'+esc(m)+'</p>';return}
-    document.getElementById('relatorio').value=d.relatorio;
-    if(d.notaSugerida)document.getElementById('nota').value=String(d.notaSugerida).replace('.',',');
+    let d=await r.json();
+    if(!r.ok){prog.fim();let m=(d&&d.erro)||'Erro';if(m==='LIMITE_CREDITOS')m='⛔ Limite mensal de uso da IA atingido. A IA volta quando o limite for renovado ou aumentado no painel do provedor.';fb.innerHTML='<p class="erro-ia">'+esc(m)+'</p>';return}
+    const job=d.jobId;let pronto=null;
+    for(let i=0;i<240;i++){
+      await new Promise(ok=>setTimeout(ok,2500));
+      const sr=await apiGet('/api/entrega/corrigir-status?job='+encodeURIComponent(job));const sd=await sr.json();
+      if(!sr.ok){prog.fim();fb.innerHTML='<p class="erro-ia">'+esc(sd.erro||'Não foi possível acompanhar a correção.')+'</p>';return}
+      if(sd.status==='falhou'){prog.fim();fb.innerHTML='<p class="erro-ia">'+esc(sd.erro||'A correção não pôde ser concluída mesmo após a tentativa automática.')+'</p><div class="botoes"><button onclick="corrigirEntregaIA()">Tentar novamente</button></div>';return}
+      if(sd.status==='concluido'){pronto=sd.resultado;break}
+    }
+    prog.fim();if(!pronto){fb.innerHTML='<p class="erro-ia">A correção continua além do tempo esperado. Clique novamente em alguns instantes para verificar.</p>';return}
+    document.getElementById('relatorio').value=pronto.relatorio;
+    if(pronto.notaSugerida!=null)document.getElementById('nota').value=String(pronto.notaSugerida).replace('.',',');
     fb.innerHTML='<p style="font-family:Arial,sans-serif;font-size:.85rem;color:var(--verde)">Relatório gerado pela IA. Revise, ajuste a nota e valide.</p>';
   }catch(e){prog.fim();fb.innerHTML='<p class="erro-ia">Falha: '+esc(e.message)+'</p>';}
 }
@@ -924,7 +934,7 @@ async function carregarPainel(tid){
       +'<div class="metrica"><b>'+z.pecas+'</b><span>peças publicadas</span></div>'
       +'<div class="metrica"><b>'+z.entregas+'</b><span>entregas recebidas</span></div>'
       +'<div class="metrica"><b>'+z.pendentes+'</b><span>aguardando validação</span></div>'
-      +'<div class="metrica"><b>'+notaBR(z.media)+'</b><span>média geral / 10</span></div></div>';
+      +'<div class="metrica"><b>'+notaBR(z.media)+'</b><span>média geral / 5</span></div></div>';
     let pt='<table><tr><th>Peça</th><th>Entrega</th><th>Corrigidas</th><th>Pendentes</th><th>Média</th><th>Faixa</th></tr>';
     for(const p of d.pecas)pt+='<tr><td><b>'+p.num+'. '+esc(p.nomePeca)+'</b></td><td><div class="barra-ind"><span style="width:'+Math.min(100,p.taxaEntrega)+'%"></span></div><small>'+p.entregas+'/'+p.alunos+' ('+notaBR(p.taxaEntrega)+'%)</small></td><td>'+p.corrigidas+'</td><td>'+p.pendentes+'</td><td><b>'+notaBR(p.media)+'</b></td><td>'+notaBR(p.menor)+' a '+notaBR(p.maior)+'</td></tr>';
     pt+='</table>';
@@ -1112,7 +1122,7 @@ async function telaEntreguesAluno(){
       const corrigida=!!p.validado;
       cards+='<div class="card"><span class="badge">Peça '+p.num+'</span> <b>'+esc(p.nomePeca)+'</b>'
        +'<p style="font-family:Arial,sans-serif;font-size:.85rem;color:var(--cinza)">Entregue em '+esc(dataHora(p.enviadoEm))+'</p>'
-       +'<p style="font-family:Arial,sans-serif;font-weight:bold;color:'+(corrigida?'var(--verde)':'var(--dourado)')+'">'+(corrigida?'✅ Corrigida · Nota '+(p.nota!=null?esc(String(p.nota).replace('.',',')):'—')+'/10':'⏳ A corrigir')+'</p>'
+       +'<p style="font-family:Arial,sans-serif;font-weight:bold;color:'+(corrigida?'var(--verde)':'var(--dourado)')+'">'+(corrigida?'✅ Corrigida · Nota '+(p.nota!=null?esc(String(p.nota).replace('.',',')):'—')+'/5':'⏳ A corrigir')+'</p>'
        +(corrigida&&p.temRelatorio?'<div class="botoes"><button class="primario" onclick="verMinhaCorrecao(\''+p.id+'\')">Ver relatório e nota</button><button onclick="baixarMinhaCorrecao(\''+p.id+'\')">Baixar PDF</button>'+(!p.recurso?'<button onclick="abrirRecursoAluno(\''+p.id+'\')">Apresentar recurso</button>':'')+'</div>':'')
        +(p.recurso?'<p class="aviso" style="color:'+(p.recurso.status==='pendente'?'#8a6415':'var(--verde)')+'"><b>'+(p.recurso.status==='pendente'?'⏳ Recurso pendente de recorreção':'✅ Recurso decidido: '+esc(p.recurso.resultado))+'</b></p>':'')+'</div>';
     }
@@ -1183,6 +1193,7 @@ async function confirmarDescadastro(){
 }
 function abrirPecaAluno(id){
   const p=(window.__pecasAluno||[]).find(x=>x.id===id);if(!p)return;
+  const parecerUsado=!!p.parecerInicialUsado;
   const rasc=sget('peca_'+id,'');
   try{window.__arquivoAluno=JSON.parse(sget('arquivo_'+id,'null'))}catch(e){window.__arquivoAluno=null}
   const fechado=!p.enviado&&!p.noPrazo;
@@ -1200,12 +1211,12 @@ function abrirPecaAluno(id){
    +'</div><div id="al_import">'+(window.__arquivoAluno?'<p style="color:var(--verde);font: .82rem Arial,sans-serif">📎 Arquivo importado: <b>'+esc(window.__arquivoAluno.nome)+'</b></p>':'')+'</div><div id="al_ocr"></div>'
    +'<textarea id="al_texto" class="redacao" placeholder="EXCELENTÍSSIMO SENHOR...">'+esc(rasc)+'</textarea>'
    +'<div class="botoes"><button onclick="salvarRascunhoAluno(\''+id+'\')">💾 Salvar rascunho</button>'
-   +'<button class="primario" onclick="pedirParecerInicial(\''+id+'\')">🔎 Receber parecer inicial e decidir</button></div>'
-   +'<p class="aviso" style="margin-top:10px"><b>Antes do envio:</b> o parecer aponta referências duvidosas, sinais de IA/prompts e riscos graves. Depois, você escolhe entre enviar para correção ou refazer a peça. Nada é enviado sem a sua confirmação.</p>'
+   +(parecerUsado?'<button class="primario" onclick="enviarPeca(\''+id+'\',true)">📨 Enviar diretamente para correção</button>':'<button class="primario" onclick="pedirParecerInicial(\''+id+'\')">🔎 Receber pré-correção e decidir</button>')+'</div>'
+   +(parecerUsado?'<p class="aviso" style="margin-top:10px"><b>Pré-correção já utilizada.</b> Confira a versão revisada e envie diretamente para a correção do professor.</p>':'<p class="aviso" style="margin-top:10px"><b>Primeiro envio:</b> você receberá uma única pré-correção com alertas sobre referências, sinais de IA/prompts e riscos graves. Depois de revisar, a próxima versão será enviada diretamente para correção.</p>')
    +(p.enviado?'<p class="aviso">Você já enviou esta peça. Reenviar substitui a anterior e cancela a correção pendente.</p>':'')
    +'<div id="al_fb"></div><div id="al_parecer"></div></div>'));
   window.__textoParecerInicial=null;
-  const t=document.getElementById('al_texto');if(t)t.addEventListener('input',()=>{sset('peca_'+id,t.value);if(window.__textoParecerInicial!==null&&t.value.trim()!==window.__textoParecerInicial){window.__textoParecerInicial=null;const pr=document.getElementById('al_parecer');if(pr)pr.innerHTML='<div class="parecer-inicial"><p><b>Você alterou a peça.</b> A versão anterior não será enviada. Quando terminar, peça um novo parecer inicial.</p></div>'}});
+  const t=document.getElementById('al_texto');if(t)t.addEventListener('input',()=>{sset('peca_'+id,t.value);if(window.__textoParecerInicial!==null&&t.value.trim()!==window.__textoParecerInicial){window.__textoParecerInicial=null;p.parecerInicialUsado=true;const pr=document.getElementById('al_parecer');if(pr)pr.innerHTML='<div class="parecer-inicial"><p><b>Você alterou a peça após a pré-correção.</b> Quando terminar a revisão, envie esta nova versão diretamente para correção.</p><div class="botoes"><button class="primario" onclick="enviarPeca(\''+id+'\',true)">📨 Enviar diretamente para correção</button></div></div>'}});
 }
 function salvarRascunhoAluno(id){sset('peca_'+id,document.getElementById('al_texto').value);document.getElementById('al_fb').innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif;font-size:.85rem">Rascunho salvo.</p>';}
 function arquivoParaDataUrl(file){return new Promise((ok,err)=>{const fr=new FileReader();fr.onload=()=>ok(fr.result);fr.onerror=()=>err(new Error('Não foi possível ler o arquivo.'));fr.readAsDataURL(file)})}
@@ -1232,17 +1243,19 @@ async function pedirParecerInicial(id){
   const prog=progresso(fb,ETAPAS_PARECER,110);
   try{
     const r=await apiPost('/api/aluno/parecer-inicial',{id,texto});const d=await r.json();prog.fim();
-    if(!r.ok){let m=d.erro||'Não foi possível preparar o parecer agora.';if(m==='LIMITE_CREDITOS')m='O recurso de análise atingiu o limite temporário.';fb.innerHTML='<div class="parecer-inicial"><p class="erro-ia">'+esc(m)+'</p><p class="aviso">Sua peça continua salva. Para não perder o prazo, você pode tentar novamente ou enviá-la sem o parecer.</p><div class="botoes"><button onclick="pedirParecerInicial(\''+id+'\')">Tentar novamente</button><button class="primario" onclick="enviarPeca(\''+id+'\',true)">Enviar sem parecer</button></div></div>';return}
+    if(!r.ok){if(d.erro==='PARECER_JA_UTILIZADO'){const p=(window.__pecasAluno||[]).find(x=>x.id===id);if(p)p.parecerInicialUsado=true;fb.innerHTML='<div class="parecer-inicial"><p><b>A pré-correção desta peça já foi utilizada.</b> Revise o texto e envie esta versão diretamente para correção.</p><div class="botoes"><button class="primario" onclick="enviarPeca(\''+id+'\',true)">📨 Enviar diretamente para correção</button></div></div>';return}let m=d.erro||'Não foi possível preparar o parecer agora.';if(m==='LIMITE_CREDITOS')m='O recurso de análise atingiu o limite temporário.';fb.innerHTML='<div class="parecer-inicial"><p class="erro-ia">'+esc(m)+'</p><p class="aviso">Sua peça continua salva. Para não perder o prazo, você pode tentar novamente ou enviá-la sem o parecer.</p><div class="botoes"><button onclick="pedirParecerInicial(\''+id+'\')">Tentar novamente</button><button class="primario" onclick="enviarPeca(\''+id+'\',true)">Enviar sem parecer</button></div></div>';return}
     const sinais=(d.sinaisPrompt||[]).length?'<div class="erro-ia"><b>Alerta técnico:</b> o arquivo contém possível '+esc(d.sinaisPrompt.join(', '))+'. Revise e remova qualquer instrução que não faça parte da peça.</div>':'';
     const rob=d.robotizacao&&d.robotizacao.nivel!=='baixo'?'<div class="aviso" style="color:#8a5a00"><b>Indícios de robotização para revisar:</b> '+esc((d.robotizacao.sinais||[]).join('; '))+'. Padrões formais não provam autoria por IA; servem para você conferir se o texto realmente tem sua voz e sua supervisão.</div>':'';
     window.__textoParecerInicial=texto;
+    const p=(window.__pecasAluno||[]).find(x=>x.id===id);if(p)p.parecerInicialUsado=true;
     fb.innerHTML='<div class="parecer-inicial"><p style="font: .78rem Arial,sans-serif;color:var(--cinza);margin-bottom:10px">Triagem pedagógica automática · a decisão final é do professor</p>'+linkCitacoesHtml(md2html(d.parecer))+sinais+rob+'<div style="border-top:1px solid #cdd8e6;margin-top:16px;padding-top:14px"><h3>O que você quer fazer agora?</h3><p style="font: .84rem Arial,sans-serif;color:var(--cinza)">A peça só será enviada se você escolher a primeira opção.</p><div class="botoes"><button class="primario" onclick="enviarPeca(\''+id+'\')">📨 Enviar esta versão para correção</button><button onclick="refazerPecaAluno(\''+id+'\')">✏️ Refazer a peça — não enviar</button></div></div></div>';
   }catch(e){prog.fim();fb.innerHTML='<div class="parecer-inicial"><p class="erro-ia">Falha de conexão. Sua peça continua salva.</p><div class="botoes"><button onclick="pedirParecerInicial(\''+id+'\')">Tentar novamente</button><button class="primario" onclick="enviarPeca(\''+id+'\',true)">Enviar sem parecer</button></div></div>'}
 }
 function refazerPecaAluno(id){
   window.__textoParecerInicial=null;
   const fb=document.getElementById('al_parecer'),t=document.getElementById('al_texto');
-  fb.innerHTML='<div class="parecer-inicial"><p><b>Nada foi enviado.</b> Revise a peça no editor. Quando terminar, solicite um novo parecer para decidir novamente.</p></div>';
+  const p=(window.__pecasAluno||[]).find(x=>x.id===id);if(p)p.parecerInicialUsado=true;
+  fb.innerHTML='<div class="parecer-inicial"><p><b>Nada foi enviado.</b> Revise a peça no editor. A pré-correção já foi utilizada e, quando terminar, a nova versão será enviada diretamente para correção.</p><div class="botoes"><button class="primario" onclick="enviarPeca(\''+id+'\',true)">📨 Enviar diretamente para correção</button></div></div>';
   sset('peca_'+id,t.value);t.focus();t.scrollIntoView({behavior:'smooth',block:'center'});
 }
 // Reduz a foto no navegador (fotos de celular são grandes demais para enviar inteiras)
@@ -1282,10 +1295,10 @@ function verMinhaCorrecao(id){
   menu.innerHTML=menuAluno('entregues');
   conteudo.innerHTML='<div class="botoes" style="margin-bottom:10px"><button onclick="telaEntreguesAluno()">← Voltar às peças entregues</button></div>'
    +'<span class="badge">Peça '+p.num+'</span><h2 class="titulo-peca">'+esc(p.nomePeca)+'</h2>'
-   +'<div class="card"><h3>Resultado da correção</h3><div class="nota">Nota '+esc(String(p.nota).replace('.',','))+'/10</div>'
+   +'<div class="card"><h3>Resultado da correção</h3><div class="nota">Nota '+esc(String(p.nota).replace('.',','))+'/5</div>'
    +(p.validadoEm?'<p style="font: .82rem Arial,sans-serif;color:var(--cinza)">Correção liberada em '+esc(dataHora(p.validadoEm))+'.</p>':'')+'<div class="botoes"><button class="primario" onclick="baixarMinhaCorrecao(\''+p.id+'\')">⬇ Baixar espelho em PDF</button>'+(!p.recurso?'<button onclick="abrirRecursoAluno(\''+p.id+'\')">Apresentar recurso</button>':'')+'</div></div>'
-   +(p.recurso?'<div class="card" style="border-color:#d9bd64;background:#fffaf0"><h3>'+(p.recurso.status==='pendente'?'Recurso aguardando recorreção':'Resultado do recurso — '+esc(p.recurso.resultado))+'</h3><p style="white-space:pre-wrap">'+esc(p.recurso.status==='pendente'?p.recurso.motivo:p.recurso.decisao)+'</p>'+(p.recurso.status==='decidido'?'<p class="aviso">Nota após o recurso: '+esc(String(p.recurso.notaAposRecurso).replace('.',','))+'/10</p>':'')+'</div>':'')
-   +'<div class="card"><h3>Espelho de correção — padrão OAB/FGV</h3><div class="resultado espelho-oab">'+linkCitacoesHtml(md2html(p.relatorio))+'</div></div>';
+   +(p.recurso?'<div class="card" style="border-color:#d9bd64;background:#fffaf0"><h3>'+(p.recurso.status==='pendente'?'Recurso aguardando recorreção':'Resultado do recurso — '+esc(p.recurso.resultado))+'</h3><p style="white-space:pre-wrap">'+esc(p.recurso.status==='pendente'?p.recurso.motivo:p.recurso.decisao)+'</p>'+(p.recurso.status==='decidido'?'<p class="aviso">Nota após o recurso: '+esc(String(p.recurso.notaAposRecurso).replace('.',','))+'/5</p>':'')+'</div>':'')
+   +'<div class="card"><h3>Espelho no formato OAB/FGV · escala do Estágio (0 a 5)</h3><div class="resultado espelho-oab">'+linkCitacoesHtml(md2html(p.relatorio))+'</div></div>';
 }
 function abrirRecursoAluno(id){
   const p=(window.__pecasEntregues||[]).find(x=>x.id===id);if(!p||p.recurso)return;

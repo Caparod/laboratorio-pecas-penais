@@ -180,29 +180,29 @@ async function executar() {
 ## Pontuação item a item — espelho OAB/FGV
 | Item | Critério avaliado | Pontos obtidos/possíveis | Justificativa detalhada |
 |---|---|---:|---|
-| 1 | Cabimento e endereçamento | 2,00/2,00 | A via processual e o órgão destinatário correspondem ao padrão de resposta. |
-| 2 | Tempestividade e legitimidade | 1,00/1,00 | O prazo e a capacidade postulatória foram corretamente reconhecidos. |
-| 3 | Fatos e síntese | 1,00/1,00 | A narrativa preservou os elementos essenciais do caso sem inovação relevante. |
-| 4 | Fundamentação e teses | 2,00/3,00 | A tese principal foi desenvolvida, mas a subsidiária não recebeu fundamentação completa. |
-| 5 | Pedidos | 1,25/1,50 | O pedido central foi formulado; faltou explicitar uma consequência subsidiária. |
-| 6 | Técnica, linguagem e forma | 1,25/1,50 | A redação está clara, com pequena perda pela deficiência no fechamento formal. |
+| 1 | Cabimento e endereçamento | 1,00/1,00 | A via processual e o órgão destinatário correspondem ao padrão de resposta. |
+| 2 | Tempestividade e legitimidade | 0,50/0,50 | O prazo e a capacidade postulatória foram corretamente reconhecidos. |
+| 3 | Fatos e síntese | 0,50/0,50 | A narrativa preservou os elementos essenciais do caso sem inovação relevante. |
+| 4 | Fundamentação e teses | 1,00/1,50 | A tese principal foi desenvolvida, mas a subsidiária não recebeu fundamentação completa. |
+| 5 | Pedidos | 0,625/0,75 | O pedido central foi formulado; faltou explicitar uma consequência subsidiária. |
+| 6 | Técnica, linguagem e forma | 0,625/0,75 | A redação está clara, com pequena perda pela deficiência no fechamento formal. |
 ## Verificação de jurisprudência e citações
 - Os dispositivos legais relevantes foram conferidos na legislação oficial; não há citação jurisprudencial falsa identificada.
 ## Verificação de robotização e supervisão humana
 - Risco BAIXO. Não foram observados padrões formais suficientes para indicar produção automatizada sem revisão. Esta triagem não comprova autoria e a decisão permanece humana.
-NOTA SUGERIDA: 8,50/10
+NOTA SUGERIDA: 4,25/5
 ## Propostas de aprimoramento
 - Aprofundar a tese subsidiária, ligando cada requisito normativo aos fatos do caso e explicando a consequência jurídica pretendida. Organizar os pedidos em itens separados e conferir o fechamento antes do envio. Essa orientação indica o caminho de revisão sem fornecer redação pronta ao estudante.
 ## Fontes e links
 - [Código de Processo Penal](https://www.planalto.gov.br/ccivil_03/decreto-lei/del3689compilado.htm)`;
-  r = await requisitar('/api/entrega/validar', professor, { id: pecaId, matricula: '9100001', relatorio: relatorioValidado, nota: '8,5', validar: true });
+  r = await requisitar('/api/entrega/validar', professor, { id: pecaId, matricula: '9100001', relatorio: relatorioValidado, nota: '4,25', validar: true });
   assert.equal(r.status, 200, JSON.stringify(r.body));
   r = await requisitar('/api/pecas', professor);
   assert.equal(r.status, 200);
   propostaProfessor = r.body.pecas.find(p => p.id === pecaId);
   assert.equal(propostaProfessor.aCorrigir.length, 0);
   assert.equal(propostaProfessor.corrigidas.length, 1, 'entrega validada deve passar para a coluna Corrigidas');
-  assert.equal(propostaProfessor.corrigidas[0].nota, 8.5);
+  assert.equal(propostaProfessor.corrigidas[0].nota, 4.25);
   r = await requisitar('/api/recurso', alunoInicial.token, { id: pecaId, motivo: 'Discordo.' });
   assert.equal(r.status, 400, 'recurso sem fundamentação objetiva deve ser bloqueado');
   const motivoRecurso = 'No item de fundamentação, o relatório afirma que faltou relacionar o dispositivo aos fatos. Contudo, essa relação foi apresentada no tópico central da peça; por isso, peço a revisão específica desse desconto e a manutenção dos demais itens.';
@@ -212,7 +212,7 @@ NOTA SUGERIDA: 8,50/10
   assert.equal(r.status, 200);
   assert.equal(r.body.recursos.length, 1, 'professor deve ver recurso pendente');
   assert.equal(r.body.recursos[0].motivo, motivoRecurso);
-  r = await requisitar('/api/entrega/validar', professor, { id: pecaId, matricula: '9100001', relatorio: relatorioValidado, nota: '8,5', validar: true, resultadoRecurso: 'Indeferido', decisaoRecurso: 'O tópico indicado foi novamente examinado, mas não contém a correlação exigida pelo espelho de resposta.' });
+  r = await requisitar('/api/entrega/validar', professor, { id: pecaId, matricula: '9100001', relatorio: relatorioValidado, nota: '4,25', validar: true, resultadoRecurso: 'Indeferido', decisaoRecurso: 'O tópico indicado foi novamente examinado, mas não contém a correlação exigida pelo espelho de resposta.' });
   assert.equal(r.status, 200, JSON.stringify(r.body));
   r = await requisitar('/api/recursos', professor);
   assert.equal(r.body.recursos.length, 0, 'recurso decidido deve sair da aba de pendências');
@@ -228,7 +228,7 @@ NOTA SUGERIDA: 8,50/10
   assert.ok(!r.body.pecas.some(p => p.id === pecaId), 'peça já entregue e expirada não deve voltar às pendências');
   assert.equal(r.body.entregues.length, 1, 'histórico entregue deve permanecer visível após o prazo');
   assert.equal(r.body.entregues[0].status, 'Corrigida');
-  assert.equal(r.body.entregues[0].nota, 8.5);
+  assert.equal(r.body.entregues[0].nota, 4.25);
   assert.equal(r.body.entregues[0].relatorio, relatorioValidado);
   r = await requisitar('/api/entrega?id=' + encodeURIComponent(pecaId) + '&matricula=9100001', professor);
   assert.equal(r.status, 200, JSON.stringify(r.body));
