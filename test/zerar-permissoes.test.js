@@ -36,12 +36,12 @@ async function requisitar(url, token, body, headers) {
   return { status: r.status, body: d };
 }
 
-async function login(usuario, senha, novaSenha, email) {
+async function login(usuario, senha, novaSenha, email, whatsapp) {
   const r = await requisitar('/api/login', null, { usuario, senha });
   assert.equal(r.status, 200, `login de ${usuario}: ${JSON.stringify(r.body)}`);
   if (r.body.precisaTrocarSenha) {
     assert.ok(novaSenha, `teste deve trocar a senha inicial de ${usuario}`);
-    const troca = await requisitar('/api/trocar-senha', r.body.token, { novaSenha, email });
+    const troca = await requisitar('/api/trocar-senha', r.body.token, { novaSenha, email, whatsapp });
     assert.equal(troca.status, 200, `troca de senha de ${usuario}: ${JSON.stringify(troca.body)}`);
   }
   return r.body.token;
@@ -66,7 +66,7 @@ async function executar() {
   const senhaAlunoProprio = r.body.credenciaisIniciais[0].senha;
   r = await requisitar('/api/admin', coordenador, { turmaId: turmaAlheia, matriculas: [{ matricula: '9000002', nome: 'Aluno Alheio' }] });
   assert.equal(r.status, 200);
-  const alunoProprio = await login('9000001', senhaAlunoProprio, 'Aluno-Zerar-2026', 'aluno@example.test');
+  const alunoProprio = await login('9000001', senhaAlunoProprio, 'Aluno-Zerar-2026', 'aluno@example.test', '(61) 99999-0003');
 
   r = await requisitar('/api/peca/salvar', professor, { nomePeca: 'Peça da turma própria', caso: casoTeste(), gab: gabaritoTeste('Peça da turma própria'), turmaId: turmaPropria, prazo: '2099-12-31T23:59', publicar: true });
   assert.equal(r.status, 200, JSON.stringify(r.body));

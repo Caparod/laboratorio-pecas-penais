@@ -216,7 +216,7 @@ function validarCorrecao(texto) {
   const t = String(texto || '').trim();
   const n = normalizar(t);
   const erros = [];
-  const obrigatorias = ['acertos', 'erros formais', 'erros materiais', 'pontuacao item a item', 'verificacao de jurisprudencia e citacoes', 'propostas de aprimoramento', 'fontes e links'];
+  const obrigatorias = ['acertos', 'erros formais', 'erros materiais', 'pontuacao item a item', 'verificacao de jurisprudencia e citacoes', 'verificacao de robotizacao e supervisao humana', 'propostas de aprimoramento', 'fontes e links'];
   for (const titulo of obrigatorias) if (!new RegExp('^\\s*##\\s+.*' + titulo.replace(/ /g, '.*'), 'mi').test(n)) erros.push('Falta a seção “' + titulo + '”.');
   const notas = Array.from(t.matchAll(/NOTA\s+SUGERIDA\s*:\s*(\d+(?:[.,]\d+)?)\s*\/\s*10/gi));
   if (notas.length !== 1) erros.push('A correção precisa conter exatamente uma NOTA SUGERIDA: X/10.');

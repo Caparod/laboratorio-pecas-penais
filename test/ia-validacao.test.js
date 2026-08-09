@@ -84,6 +84,8 @@ const correcao = `## Acertos
 - Técnica: 1,00/1,50
 ## Verificação de jurisprudência e citações
 - Artigos conferidos no texto oficial.
+## Verificação de robotização e supervisão humana
+- Risco BAIXO. Não foram observados padrões formais suficientes para indicar produção automatizada sem revisão. Esta triagem não comprova autoria e a decisão permanece humana.
 NOTA SUGERIDA: 8,00/10
 ## Propostas de aprimoramento
 - Desenvolver a tese e indicar o dispositivo correspondente, sem copiar texto pronto. A análise deve permanecer orientativa e explicar os critérios ao estudante com clareza suficiente para a revisão humana pelo professor.
