@@ -1881,7 +1881,13 @@ async function pecasAluno(req, res) {
   const sess = sessaoDe(req); if (!sess) return json(res, 401, { erro: 'SESSAO' });
   const ctx = alunoDaSessao(sess); if (!ctx) return json(res, 400, { erro: 'TURMA_ATUACAO_INVALIDA', mensagem: 'Selecione uma turma válida para a visão de aluno.' });
   const a = ctx.aluno;
-  const lista = Object.values(db.pecas).filter(p => alunoPodeAcessarPeca(a, p)).sort((a2, b2) => b2.num - a2.num).map(p => {
+  const agora = Date.now();
+  const lista = Object.values(db.pecas).filter(p => {
+    if (!alunoPodeAcessarPeca(a, p)) return false;
+    if (!p.prazo) return true;
+    const limite = prazoMs(p.prazo);
+    return Number.isNaN(limite) || agora <= limite;
+  }).sort((a2, b2) => b2.num - a2.num).map(p => {
     const e = (db.entregas[p.id] || {})[ctx.id];
     let noPrazo = true;
     let gabLiberado = false;

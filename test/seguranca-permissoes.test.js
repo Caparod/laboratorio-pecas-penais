@@ -136,6 +136,8 @@ async function executar() {
   assert.equal(r.status, 200, JSON.stringify(r.body)); const pecaId = r.body.id;
   r = await requisitar('/api/peca/salvar', coordenador, { nomePeca: 'Peça da segunda turma', caso: casoTeste(), gab: gabaritoTeste('Peça da segunda turma'), turmaId: turmaB, prazo: '2099-12-31T23:59', publicar: true });
   assert.equal(r.status, 200, JSON.stringify(r.body)); const pecaBId = r.body.id;
+  r = await requisitar('/api/peca/salvar', professor, { nomePeca: 'Peça expirada', caso: casoTeste(), gab: gabaritoTeste('Peça expirada'), turmaId: turmaA, prazo: '2000-01-01T00:00', publicar: true });
+  assert.equal(r.status, 200, JSON.stringify(r.body)); const pecaExpiradaId = r.body.id;
   const alunoBInicial = await loginBruto('9100002', senhaInicialAlunoB);
   await trocarSenha(alunoBInicial.token, 'Aluno-Duas-Turmas-2026', 'aluno-b@example.test', '+55 61 99999-0002');
   banco = JSON.parse(fs.readFileSync(path.join(dataDir, 'db.json'), 'utf8'));
@@ -144,6 +146,7 @@ async function executar() {
   r = await requisitar('/api/pecas-aluno', alunoBInicial.token);
   assert.equal(r.status, 200);
   assert.deepEqual(new Set(r.body.pecas.map(p => p.id)), new Set([pecaId, pecaBId]), 'aluno deve acessar peças das duas turmas');
+  assert.ok(!r.body.pecas.some(p => p.id === pecaExpiradaId), 'peça com prazo expirado não deve aparecer para o aluno');
   r = await requisitar('/api/entregar', alunoInicial.token, { id: pecaId, texto: 'Texto de entrega suficientemente longo para validar a limpeza completa de dados da turma durante o teste automatizado.' });
   assert.equal(r.status, 200, JSON.stringify(r.body));
   const casoOriginal = casoTeste();
@@ -182,11 +185,12 @@ async function executar() {
   assert.equal(r.body.alunosApagados, 1);
   assert.equal(r.body.alunosMantidos, 1);
   assert.equal(r.body.vinculosRemovidos, 2);
-  assert.equal(r.body.pecasApagadas, 1);
+  assert.equal(r.body.pecasApagadas, 2);
   assert.equal(r.body.entregasApagadas, 1);
   banco = JSON.parse(fs.readFileSync(path.join(dataDir, 'db.json'), 'utf8'));
   assert.ok(!banco.alunos['9100001']);
   assert.ok(!banco.pecas[pecaId]);
+  assert.ok(!banco.pecas[pecaExpiradaId]);
   assert.ok(banco.pecas[pecaBId], 'peça da outra turma deve ser preservada');
   assert.ok(!banco.entregas[pecaId]);
   assert.ok(banco.alunos['9100002'], 'aluno compartilhado deve permanecer cadastrado');
