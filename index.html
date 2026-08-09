@@ -954,6 +954,7 @@ function bannerOAB(){
    +'</div>';
 }
 async function telaAluno(){
+  window.__abaAluno='pecas';
   if(professorEmVisaoAluno()){
     await carregarTurmasAtuacao();
     if(!TURMA_ATUACAO&&TURMAS_ATUACAO.length){TURMA_ATUACAO=TURMAS_ATUACAO[0].id;sset('turma_atuacao',TURMA_ATUACAO);}
@@ -966,17 +967,39 @@ async function telaAluno(){
     if(!d.pecas.length){document.getElementById('la').innerHTML='<div class="card" style="text-align:center;padding:40px"><h3 style="color:var(--azul)">⏳ Aguarde o envio do(a) Professor(a)</h3><p style="color:var(--cinza)">Nenhuma peça foi publicada ainda para a sua turma. Assim que o(a) professor(a) enviar uma peça, ela aparecerá aqui com o prazo de entrega.</p></div>'+bannerOAB();return}
     let cards='';
     for(const p of d.pecas){
-      const st=p.validado?('✅ Corrigida — nota '+(p.nota!=null?String(p.nota).replace('.',','):'—')):(p.enviado?'📤 Enviada — aguardando correção':(p.noPrazo?'⏳ A fazer':'🔴 Prazo encerrado'));
-      const fechado=!p.enviado&&!p.noPrazo;
+      const fechado=!p.noPrazo;
       cards+='<div class="card"><span class="badge">Peça '+p.num+'</span> <b>'+esc(p.nomePeca)+'</b>'
-       +'<p style="font-family:Arial,sans-serif;font-size:.85rem;color:'+(fechado?'var(--vermelho)':'var(--cinza)')+'">Prazo: '+(p.prazo?dataHoraBR(p.prazo):'sem prazo')+' · '+st+'</p>'
-       +'<div class="botoes"><button class="primario" onclick="abrirPecaAluno(\''+p.id+'\')">'+(p.enviado?(p.gabLiberado?'Ver peça e gabarito':'Ver / reenviar'):(fechado?'Ver enunciado':'Fazer esta peça'))+'</button>'
-       +(p.gabLiberado?'<button onclick="abrirPecaAluno(\''+p.id+'\')">📖 Gabarito</button>':'')
-       +(p.temRelatorio?'<button onclick="verMinhaCorrecao(\''+p.id+'\')">Ver correção</button>':'')+'</div></div>';
+       +'<p style="font-family:Arial,sans-serif;font-size:.85rem;color:'+(fechado?'var(--vermelho)':'var(--cinza)')+'">Prazo: '+(p.prazo?dataHoraBR(p.prazo):'sem prazo')+' · '+(fechado?'🔴 Prazo encerrado':'⏳ A fazer')+'</p>'
+       +'<div class="botoes"><button class="primario" onclick="abrirPecaAluno(\''+p.id+'\')">'+(fechado?'Ver enunciado':'Fazer esta peça')+'</button></div></div>';
     }
     document.getElementById('la').innerHTML=cards+bannerOAB();
     window.__pecasAluno=d.pecas;
   }catch(e){document.getElementById('la').innerHTML='<p class="erro-ia">Falha ao carregar.</p>';}
+}
+async function telaEntreguesAluno(){
+  window.__abaAluno='entregues';
+  if(professorEmVisaoAluno()){
+    await carregarTurmasAtuacao();
+    if(!TURMA_ATUACAO&&TURMAS_ATUACAO.length){TURMA_ATUACAO=TURMAS_ATUACAO[0].id;sset('turma_atuacao',TURMA_ATUACAO);}
+  }
+  menu.innerHTML=menuAluno('entregues');
+  conteudo.innerHTML='<h2 class="titulo-peca">Peças entregues'+(professorEmVisaoAluno()?' <span class="badge">visão aluno</span>':'')+'</h2><div id="le"><p><span class="spinner"></span>Carregando...</p></div>';
+  if(professorEmVisaoAluno()&&!TURMA_ATUACAO){document.getElementById('le').innerHTML='<p class="erro-ia">Selecione uma turma para ver o sistema como aluno(a).</p>';return}
+  try{const r=await apiGet('/api/pecas-aluno');const d=await r.json();
+    if(!r.ok){document.getElementById('le').innerHTML='<p class="erro-ia">'+esc(d.erro||'Erro')+'</p>';return}
+    const entregues=d.entregues||[];
+    window.__pecasEntregues=entregues;
+    if(!entregues.length){document.getElementById('le').innerHTML='<div class="card" style="text-align:center;padding:40px"><h3 style="color:var(--azul)">Nenhuma peça entregue</h3><p style="color:var(--cinza)">As peças que você enviar aparecerão aqui, com o andamento da correção.</p></div>';return}
+    let cards='';
+    for(const p of entregues){
+      const corrigida=!!p.validado;
+      cards+='<div class="card"><span class="badge">Peça '+p.num+'</span> <b>'+esc(p.nomePeca)+'</b>'
+       +'<p style="font-family:Arial,sans-serif;font-size:.85rem;color:var(--cinza)">Entregue em '+esc(dataHora(p.enviadoEm))+'</p>'
+       +'<p style="font-family:Arial,sans-serif;font-weight:bold;color:'+(corrigida?'var(--verde)':'var(--dourado)')+'">'+(corrigida?'✅ Corrigida · Nota '+(p.nota!=null?esc(String(p.nota).replace('.',',')):'—')+'/10':'⏳ A corrigir')+'</p>'
+       +(corrigida&&p.temRelatorio?'<div class="botoes"><button class="primario" onclick="verMinhaCorrecao(\''+p.id+'\')">Ver relatório e nota</button></div>':'')+'</div>';
+    }
+    document.getElementById('le').innerHTML=cards;
+  }catch(e){document.getElementById('le').innerHTML='<p class="erro-ia">Falha ao carregar.</p>';}
 }
 async function carregarTurmasAtuacao(){
   try{
@@ -996,12 +1019,13 @@ function seletorTurmaAtuacao(){
   return '<div class="grupo">Turma da visão aluno</div>'
    +'<div style="margin:2px 12px 14px"><select onchange="trocarTurmaAtuacao(this.value)" style="width:100%;padding:8px;border-radius:6px;border:1px solid #3a5478;background:#fff;color:#20304a;font-family:Arial,sans-serif">'+opts+'</select></div>';
 }
-function trocarTurmaAtuacao(id){if(!TURMAS_ATUACAO.some(t=>t.id===id))return;TURMA_ATUACAO=id;sset('turma_atuacao',id);telaAluno();}
+function trocarTurmaAtuacao(id){if(!TURMAS_ATUACAO.some(t=>t.id===id))return;TURMA_ATUACAO=id;sset('turma_atuacao',id);if(window.__abaAluno==='entregues')telaEntreguesAluno();else telaAluno();}
 // Menu do aluno. "Sair" = logout (volta ao login). "Descadastrar-me" = sai da turma e perde o acesso.
 function menuAluno(ativo){
   return (AUTH&&AUTH.tipo==='professor'?seletorVisao()+seletorTurmaAtuacao():'')
    +'<div class="grupo">Minhas peças</div>'
    +'<button class="item'+(ativo==='pecas'?' ativo':'')+'" onclick="telaAluno()">Peças para entregar</button>'
+   +'<button class="item'+(ativo==='entregues'?' ativo':'')+'" onclick="telaEntreguesAluno()">Peças entregues</button>'
    +'<div class="grupo" style="margin-top:18px">Minha conta</div>'
    +'<button class="item" onclick="sair()">Sair</button>'
    +(AUTH&&AUTH.tipo==='professor'?'':'<button class="item'+(ativo==='desc'?' ativo':'')+'" style="color:#e08a8a" onclick="telaDescadastro()">Descadastrar-me</button>')
@@ -1131,10 +1155,19 @@ async function enviarPeca(id,semParecer){
   if(!r.ok){let m=(d.erro||'Erro');if(m==='PRAZO')m='⏰ O prazo desta peça encerrou ('+dataHoraBR(d.prazo)+'). Fale com o(a) professor(a) para renovar ou liberar sua entrega.';fb.innerHTML='<p class="erro-ia">'+esc(m)+'</p>';return}
   sset('peca_'+id,'');sset('arquivo_'+id,'');
   const p=(window.__pecasAluno||[]).find(x=>x.id===id);if(p)p.enviado=true;
-  fb.innerHTML='<div style="background:#eef5ee;border:1px solid #cfe3cf;border-radius:8px;padding:12px 14px;margin-top:12px;color:var(--verde);font-family:Arial,sans-serif">📨 <b>Peça enviada com sucesso.</b> O professor foi avisado. Você receberá a revisão final por e-mail.<div class="botoes"><button onclick="telaAluno()">Voltar às minhas peças</button></div></div>';
+  fb.innerHTML='<div style="background:#eef5ee;border:1px solid #cfe3cf;border-radius:8px;padding:12px 14px;margin-top:12px;color:var(--verde);font-family:Arial,sans-serif">📨 <b>Peça enviada com sucesso.</b> O professor foi avisado. A revisão final ficará disponível em <b>Peças entregues</b> e também será enviada por e-mail.<div class="botoes"><button onclick="telaEntreguesAluno()">Ver peças entregues</button></div></div>';
   }catch(e){}
 }
-function verMinhaCorrecao(id){alert('A correção validada foi enviada ao seu e-mail cadastrado. Confira sua caixa de entrada (e o spam).');}
+function verMinhaCorrecao(id){
+  const p=(window.__pecasEntregues||[]).find(x=>x.id===id);
+  if(!p||!p.validado||!p.temRelatorio){alert('O relatório ainda não foi liberado pelo(a) professor(a).');return}
+  menu.innerHTML=menuAluno('entregues');
+  conteudo.innerHTML='<div class="botoes" style="margin-bottom:10px"><button onclick="telaEntreguesAluno()">← Voltar às peças entregues</button></div>'
+   +'<span class="badge">Peça '+p.num+'</span><h2 class="titulo-peca">'+esc(p.nomePeca)+'</h2>'
+   +'<div class="card"><h3>Resultado da correção</h3><div class="nota">Nota '+esc(String(p.nota).replace('.',','))+'/10</div>'
+   +(p.validadoEm?'<p style="font: .82rem Arial,sans-serif;color:var(--cinza)">Correção liberada em '+esc(dataHora(p.validadoEm))+'.</p>':'')+'</div>'
+   +'<div class="card"><h3>Relatório do(a) professor(a)</h3><div class="resultado">'+linkCitacoesHtml(md2html(p.relatorio))+'</div></div>';
+}
 
 async function restaurarSessao(){
   if(!AUTH){renderLogin();return}

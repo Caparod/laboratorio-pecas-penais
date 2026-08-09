@@ -1876,34 +1876,51 @@ async function pecaExcluir(req, res) {
   }
   json(res, 200, { ok: true });
 }
-// Aluno: lista peças publicadas da sua turma, com status de entrega
+// Aluno: separa peças disponíveis para entrega do histórico já entregue.
 async function pecasAluno(req, res) {
   const sess = sessaoDe(req); if (!sess) return json(res, 401, { erro: 'SESSAO' });
   const ctx = alunoDaSessao(sess); if (!ctx) return json(res, 400, { erro: 'TURMA_ATUACAO_INVALIDA', mensagem: 'Selecione uma turma válida para a visão de aluno.' });
   const a = ctx.aluno;
   const agora = Date.now();
-  const lista = Object.values(db.pecas).filter(p => {
-    if (!alunoPodeAcessarPeca(a, p)) return false;
-    if (!p.prazo) return true;
-    const limite = prazoMs(p.prazo);
-    return Number.isNaN(limite) || agora <= limite;
-  }).sort((a2, b2) => b2.num - a2.num).map(p => {
+  const pecas = [];
+  const entregues = [];
+  for (const p of Object.values(db.pecas).filter(p => alunoPodeAcessarPeca(a, p))) {
     const e = (db.entregas[p.id] || {})[ctx.id];
+    const versaoAluno = e && e.snapshotPeca ? e.snapshotPeca : p;
+    if (e) {
+      entregues.push({
+        id: p.id,
+        num: p.num,
+        nomePeca: versaoAluno.nomePeca || p.nomePeca,
+        disc: versaoAluno.disc || p.disc,
+        prazo: p.prazo,
+        versao: versaoAluno.versao || p.versao || 1,
+        enviadoEm: e.enviadoEm || null,
+        validado: !!e.validado,
+        status: e.validado ? 'Corrigida' : 'A corrigir',
+        nota: e.validado ? e.nota : null,
+        relatorio: e.validado ? (e.relatorio || '') : '',
+        validadoEm: e.validado ? (e.validadoEm || null) : null,
+        temRelatorio: !!(e.validado && e.relatorio)
+      });
+      continue;
+    }
+    if (p.prazo) {
+      const limite = prazoMs(p.prazo);
+      if (!Number.isNaN(limite) && agora > limite) continue;
+    }
     let noPrazo = true;
     let gabLiberado = false;
     if (p.prazo && !p.foraDoPrazoGeral) {
       const limite = prazoMs(p.prazo);
-      noPrazo = Number.isNaN(limite) || Date.now() <= limite || !!(p.liberados && p.liberados[ctx.id]);
-      // Gabarito só é liberado quando o prazo da peça venceu para TODOS (sem liberação geral de
-      // entregas atrasadas). Aluno com liberação individual que ainda não entregou também não vê.
-      const liberadoIndividualSemEntrega = !!(p.liberados && p.liberados[ctx.id]) && !e;
-      gabLiberado = !Number.isNaN(limite) && Date.now() > limite && !liberadoIndividualSemEntrega;
+      noPrazo = Number.isNaN(limite) || agora <= limite || !!(p.liberados && p.liberados[ctx.id]);
     }
-    const versaoAluno = e && e.snapshotPeca ? e.snapshotPeca : p;
     gabLiberado = gabLiberado && validarGabarito(versaoAluno.gab || '', versaoAluno.nomePeca || p.nomePeca).ok;
-    return { id: p.id, num: p.num, nomePeca: versaoAluno.nomePeca || p.nomePeca, disc: versaoAluno.disc || p.disc, prazo: p.prazo, caso: versaoAluno.caso || p.caso, classificacao: p.classificacao || {}, versao: versaoAluno.versao || p.versao || 1, enviado: !!e, enviadoEm: e ? e.enviadoEm : null, validado: e ? !!e.validado : false, nota: (e && e.validado) ? e.nota : null, temRelatorio: e ? !!(e.validado && e.relatorio) : false, noPrazo: noPrazo, gabLiberado: gabLiberado, gab: gabLiberado ? (versaoAluno.gab || p.gab || '') : undefined };
-  });
-  json(res, 200, { ok: true, pecas: lista });
+    pecas.push({ id: p.id, num: p.num, nomePeca: versaoAluno.nomePeca || p.nomePeca, disc: versaoAluno.disc || p.disc, prazo: p.prazo, caso: versaoAluno.caso || p.caso, classificacao: p.classificacao || {}, versao: versaoAluno.versao || p.versao || 1, enviado: false, enviadoEm: null, validado: false, nota: null, temRelatorio: false, noPrazo: noPrazo, gabLiberado: false });
+  }
+  pecas.sort((a2, b2) => b2.num - a2.num);
+  entregues.sort((a2, b2) => Number(b2.enviadoEm || 0) - Number(a2.enviadoEm || 0));
+  json(res, 200, { ok: true, pecas, entregues });
 }
 // Aluno: enviar peça ao professor
 async function entregar(req, res) {
