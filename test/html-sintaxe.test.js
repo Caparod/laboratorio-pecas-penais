@@ -16,6 +16,11 @@ for (const arquivo of [path.join(__dirname, '..', 'index.html'), path.join(__dir
     assert.match(html, /Rever correção/, 'entrega corrigida deve permanecer acessível ao professor');
     assert.match(html, /function popupSelecionarRodada\(/, 'professor deve selecionar a rodada em um popup');
     assert.match(html, /A primeira peça publicada para cada turma é a Peça 1/, 'interface deve explicar a numeração sequencial das rodadas');
+    assert.match(html, /Nota do Estágio \(0 a 5\)/, 'correção deve usar a escala do Estágio');
+    assert.doesNotMatch(html, /Nota \(0 a 10\)/, 'campo legado de nota não pode reaparecer');
+    assert.match(html, /id="btn_previa_correcao"/, 'prévia deve ter controle próprio de disponibilidade');
+    assert.match(html, /function atualizarDisponibilidadePrevia\(/, 'prévia deve ser liberada somente após relatório e nota');
+    assert.doesNotMatch(html, /notaInicial\)\.replace\('\.',','\)/, 'nota numérica não pode ser preenchida com vírgula no valor interno');
   }
   if (arquivo.endsWith(path.join('render-app', 'index.html'))) {
     assert.match(html, /function mostrarSenhaTemporaria\(/);
