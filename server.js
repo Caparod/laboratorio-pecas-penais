@@ -1542,7 +1542,12 @@ async function iaTexto(system, usuario, maxTokens, comBusca, sessGasto) {
   const mensagens = body.messages; let r = null, d = null; const ini = Date.now();
   for (let volta = 0; volta < 12; volta++) {
     if ((Date.now() - ini) > 115000) return { ok: false, status: 504, erro: 'A IA excedeu o tempo antes de concluir a resposta.' };
-    ({ r, d } = await chamarAnthropic(Object.assign({}, body, { messages: mensagens })));
+    try { ({ r, d } = await chamarAnthropic(Object.assign({}, body, { messages: mensagens }))); }
+    catch (e) {
+      const mensagem = String((e && e.message) || e || 'Falha de conexão com a IA.');
+      console.error('[IA conexão] ' + mensagem);
+      return { ok: false, status: /tempo limite|timeout|aborted/i.test(mensagem) ? 504 : 502, erro: mensagem };
+    }
     if (!r.ok) return { ok: false, status: r.status, erro: (d && d.error && d.error.message) || '' };
     registrarGasto(sessGasto, body.model, d && d.usage);
     const textoDaVolta = (d.content || []).filter(b => b.type === 'text' && b.text).map(b => b.text).join('\n').trim();
