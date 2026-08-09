@@ -2232,11 +2232,29 @@ async function recursoAnalisarIA(req, res) {
   if (!e || !e.recurso || e.recurso.status !== 'pendente') return json(res, 404, { erro: 'Recurso pendente não encontrado.' });
   if (!podeAcessarPeca(sess.usuario, p)) return json(res, 403, { erro: 'Sem acesso a esta peça.' });
   const base = e.snapshotPeca || fotografiaPeca(p, { legado: true });
-  const sistema = 'Você auxilia um professor de prática penal na análise de recurso acadêmico contra correção de peça. Sua análise é estritamente consultiva e não substitui a decisão humana. Confronte cada razão do aluno com o texto efetivamente entregue, o gabarito e o espelho original. Não presuma fatos nem redija peça para o aluno. Responda em português do Brasil com: ## Síntese objetiva do recurso; ## Análise de cada ponto contestado; ## Conferência do espelho e da pontuação; ## Resultado recomendado (DEFERIDO, DEFERIDO PARCIALMENTE ou INDEFERIDO); ## Impacto sugerido na nota; ## Fundamentação sugerida ao professor; ## Fontes oficiais consultadas. Se recomendar mudança, indique exatamente os itens e a aritmética. Verifique citações jurídicas em fontes oficiais quando necessário.';
+  const sistema = 'Você auxilia um professor de prática penal na análise de recurso acadêmico contra correção de peça. Sua análise é estritamente consultiva e não substitui a decisão humana. Confronte cada razão do aluno com o texto efetivamente entregue, o gabarito e o espelho original. Não presuma fatos nem redija peça para o aluno. Entregue dados completos para que o professor apenas revise e valide, sem precisar redigir. Responda em português do Brasil EXATAMENTE nesta ordem: ## Síntese objetiva do recurso; ## Análise de cada ponto contestado; ## Conferência do espelho e da pontuação; RESULTADO RECOMENDADO: DEFERIDO, DEFERIDO PARCIALMENTE ou INDEFERIDO; ## Impacto sugerido na nota; ## Fundamentação sugerida ao professor (texto pronto, objetivo e individualizado da decisão acadêmica); ## Fontes oficiais consultadas; ## Espelho revisado proposto; depois deste último título, reproduza integralmente o relatório final no formato OAB/FGV exigido para as correções, com todas as seções, tabela item a item, soma e NOTA SUGERIDA coerentes. Se o recurso for indeferido, preserve o espelho e a nota original. Se recomendar mudança, altere exatamente os itens afetados e recalcule a nota. Verifique citações jurídicas em fontes oficiais quando necessário.';
   const usuario = '<gabarito>\n' + documentoIA(base.gab, 30000) + '\n</gabarito>\n<peca_entregue>\n' + documentoIA(e.texto, 60000) + '\n</peca_entregue>\n<espelho_original>\n' + documentoIA(e.recurso.relatorioRecorrido || e.relatorio, 30000) + '\n</espelho_original>\n<nota_recorrida>' + documentoIA(String(e.recurso.notaRecorrida), 20) + '</nota_recorrida>\n<razoes_do_recurso>\n' + documentoIA(e.recurso.motivo, 5000) + '\n</razoes_do_recurso>\nAnalise apenas os pontos contestados e apresente recomendação consultiva detalhada.';
-  const r = await iaTexto(sistema, usuario, 8000, true, sess);
+  let r = await iaTexto(sistema, usuario, 12000, true, sess);
   if (!r.ok) return erroIA(res, r);
-  json(res, 200, { ok: true, analise: garantirLinksFontes(String(r.texto || '').trim(), true), aviso: 'Análise consultiva; a decisão final é do professor.' });
+  let texto = garantirLinksFontes(String(r.texto || '').trim(), true);
+  let partes = texto.split(/^##\s+Espelho revisado proposto\s*$/mi);
+  let relatorio = partes.slice(1).join('\n').trim();
+  let vr = validarCorrecao(relatorio);
+  if (partes.length < 2 || !vr.ok) {
+    r = await iaTexto(sistema, usuario + '\n\nA resposta anterior não respeitou o contrato. Refaça integralmente e garanta um espelho OAB/FGV válido. Problemas: ' + (partes.length < 2 ? 'faltou o marcador ## Espelho revisado proposto. ' : '') + vr.erros.join(' '), 12000, true, sess);
+    if (!r.ok) return erroIA(res, r);
+    texto = garantirLinksFontes(String(r.texto || '').trim(), true); partes = texto.split(/^##\s+Espelho revisado proposto\s*$/mi); relatorio = partes.slice(1).join('\n').trim(); vr = validarCorrecao(relatorio);
+  }
+  if (partes.length < 2 || !vr.ok) return json(res, 502, { erro: 'A análise foi bloqueada porque o espelho revisado ficou inconsistente. Tente novamente.' });
+  const analise = partes[0].trim();
+  const achouResultado = analise.match(/RESULTADO\s+RECOMENDADO\s*:\s*(DEFERIDO\s+PARCIALMENTE|DEFERIDO|INDEFERIDO)/i);
+  const mapaResultado = { 'DEFERIDO': 'Deferido', 'DEFERIDO PARCIALMENTE': 'Deferido parcialmente', 'INDEFERIDO': 'Indeferido' };
+  const resultadoSugerido = mapaResultado[String(achouResultado && achouResultado[1] || '').toUpperCase()] || 'Indeferido';
+  const trechoDecisao = (analise.match(/^##\s+Fundamentação sugerida ao professor[^\n]*\n([\s\S]*?)(?=^##\s+|\s*$)/mi) || [null, ''])[1].trim();
+  const decisaoSugerida = trechoDecisao.replace(/^[-*]\s*/gm, '').trim() || 'As razões do recurso foram confrontadas com a peça entregue, o gabarito e o espelho de correção, conforme a análise consultiva acima.';
+  e.recurso.sugestaoIA = { resultado: resultadoSugerido, decisao: decisaoSugerida, nota: vr.detalhes.nota, relatorio, analise, geradaEm: Date.now(), modelo: MODELO_POTENTE };
+  try { await salvarDbCritico(); } catch (err) { return json(res, 503, { erro: 'A análise foi gerada, mas não pôde ser salva. Tente novamente.' }); }
+  json(res, 200, { ok: true, analise, resultadoSugerido, decisaoSugerida, notaSugerida: vr.detalhes.nota, relatorio, aviso: 'Análise consultiva; a decisão final é do professor.' });
 }
 // Professor: renovar prazo de uma peça
 async function pecaRenovarPrazo(req, res) {
