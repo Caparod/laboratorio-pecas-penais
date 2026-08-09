@@ -629,7 +629,7 @@ async function abrirEntrega(id,mat){
   const recursoPendente=d.recurso&&d.recurso.status==='pendente';
   const sugestaoRecurso=recursoPendente&&d.recurso.sugestaoIA?d.recurso.sugestaoIA:null;
   const relatorioInicial=sugestaoRecurso&&sugestaoRecurso.relatorio?sugestaoRecurso.relatorio:d.relatorio;
-  const notaInicial=sugestaoRecurso&&sugestaoRecurso.nota!=null?sugestaoRecurso.nota:d.nota;
+  const notaInicial=sugestaoRecurso&&sugestaoRecurso.nota!=null?sugestaoRecurso.nota:(d.nota!==''&&d.nota!=null?d.nota:(d.notaSugerida!=null?d.notaSugerida:''));
   const recursoHtml=recursoPendente?'<div class="card" style="border-color:#d9bd64;background:#fffaf0"><span class="badge">Recurso pendente</span><h3>Razões apresentadas pelo aluno</h3><div class="caso">'+esc(d.recurso.motivo)+'</div><p style="font: .82rem Arial,sans-serif;color:var(--cinza);margin-top:10px">Nota recorrida: '+esc(String(d.recurso.notaRecorrida).replace('.',','))+'/5 · apresentado em '+esc(dataHora(d.recurso.criadoEm))+'</p><div class="botoes"><button class="primario" onclick="analisarRecursoIA()">🤖 Analisar recurso com IA</button></div><div id="recurso_ia_fb"></div></div>':'';
   conteudo.innerHTML='<div class="botoes" style="margin-bottom:10px"><button onclick="abrirPeca(\''+id+'\')">← Voltar</button></div>'
    +'<span class="badge">Peça '+d.peca.num+'</span><h2 class="titulo-peca">'+esc(d.aluno.nome)+' · '+d.aluno.matricula+'</h2>'

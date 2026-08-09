@@ -2048,7 +2048,9 @@ async function entregaGet(req, res, id, mat) {
   const e = (db.entregas[id] || {})[mat]; if (!e) return json(res, 404, { erro: 'Entrega não encontrada.' });
   if (!entregaPertenceTurma(mat, e, p)) return json(res, 403, { erro: 'Aluno fora da turma desta peça.' });
   const base = e.snapshotPeca || fotografiaPeca(p, { legado: true });
-  json(res, 200, { ok: true, peca: { num: rodadaDaPeca(p), rodada: rodadaDaPeca(p), nomePeca: base.nomePeca, caso: base.caso, gab: base.gab, versao: base.versao || 1 }, aluno: { matricula: mat, nome: nomeParticipanteEntrega(mat, e) }, texto: e.texto, arquivo: e.arquivo || null, relatorio: e.relatorio || '', nota: (e.nota != null ? e.nota : ''), validado: !!e.validado, recurso: e.recurso || null });
+  const validacaoRelatorio = e.relatorio ? validarCorrecao(e.relatorio) : null;
+  const notaSugerida = e.notaSugerida != null ? e.notaSugerida : (validacaoRelatorio && validacaoRelatorio.detalhes ? validacaoRelatorio.detalhes.nota : null);
+  json(res, 200, { ok: true, peca: { num: rodadaDaPeca(p), rodada: rodadaDaPeca(p), nomePeca: base.nomePeca, caso: base.caso, gab: base.gab, versao: base.versao || 1 }, aluno: { matricula: mat, nome: nomeParticipanteEntrega(mat, e) }, texto: e.texto, arquivo: e.arquivo || null, relatorio: e.relatorio || '', nota: (e.nota != null ? e.nota : ''), notaSugerida, validado: !!e.validado, recurso: e.recurso || null });
 }
 function dadosEspelhoCorrecao(p, e, matricula) {
   const a = db.alunos[String(matricula)] || {};
