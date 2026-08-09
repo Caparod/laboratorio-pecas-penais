@@ -530,6 +530,8 @@ function senhaTemporaria() { return crypto.randomBytes(12).toString('base64url')
 function escHtml(t) { return String(t || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 const PUBLIC = __dirname; // index.html na raiz do repositório
+const INDEX_PATH = path.join(PUBLIC, 'index.html');
+const APP_VERSION = process.env.RENDER_GIT_COMMIT || crypto.createHash('sha256').update(fs.readFileSync(INDEX_PATH)).digest('hex').slice(0, 16);
 const MIME = { '.html': 'text/html; charset=utf-8', '.txt': 'text/plain; charset=utf-8', '.png': 'image/png', '.ico': 'image/x-icon' };
 
 // Rate limit: fluxos autenticados usam a identidade da sessão; rotas públicas
@@ -2247,6 +2249,7 @@ const server = http.createServer((req, res) => {
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store, must-revalidate' }); res.end(buf);
     });
   }
+  if (req.method === 'GET' && rota === '/api/versao') return json(res, 200, { ok: true, versao: APP_VERSION });
   if (rota.startsWith('/api/') && !['/api/login', '/api/sessao', '/api/trocar-senha', '/api/verificar-email', '/api/reenviar-codigo', '/api/logout'].includes(rota)) {
     const sess = sessaoDe(req);
     if (sess && senhaInicialPendente(sess)) return json(res, 403, { erro: 'TROCAR_SENHA', mensagem: 'Troque a senha inicial antes de continuar.' });
@@ -2300,10 +2303,10 @@ const server = http.createServer((req, res) => {
   if (rota.startsWith('/api/')) return json(res, 404, { erro: 'Rota de API não encontrada.' });
   // página única: qualquer GET serve o index.html
   if (req.method !== 'GET') { res.writeHead(405); return res.end(); }
-  fs.readFile(path.join(PUBLIC, 'index.html'), (err, buf) => {
+  fs.readFile(INDEX_PATH, (err, buf) => {
     if (err) { res.writeHead(404, { 'content-type': 'text/plain' }); return res.end('Não encontrado'); }
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store, must-revalidate' });
-    res.end(buf);
+    res.end(buf.toString('utf8').replace(/__APP_VERSION__/g, APP_VERSION));
   });
 });
 const PORT = process.env.PORT || 3000;
