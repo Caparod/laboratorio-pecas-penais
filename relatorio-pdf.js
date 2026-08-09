@@ -84,8 +84,8 @@ function gerarPdfEspelho(dados) {
   }
   function cabecalho() {
     retangulo(0, 0, LARGURA, 58, corAzul);
-    cmd(`BT /F2 15 Tf 1 1 1 rg ${MARGEM} ${ALTURA - 27} Td (${escPdf('ESPELHO DE CORREÇÃO - PADRÃO OAB/FGV')}) Tj ET`);
-    cmd(`BT /F1 8.5 Tf 1 1 1 rg ${MARGEM} ${ALTURA - 43} Td (${escPdf('Laboratório de Peças Penais - Prática Jurídica')}) Tj ET`);
+    cmd(`BT /F2 14 Tf 1 1 1 rg ${MARGEM} ${ALTURA - 27} Td (${escPdf('ESPELHO DE CORREÇÃO DO ESTÁGIO')}) Tj ET`);
+    cmd(`BT /F1 8.5 Tf 1 1 1 rg ${MARGEM} ${ALTURA - 43} Td (${escPdf('Formato OAB/FGV adaptado - escala da disciplina: 0 a 5')}) Tj ET`);
     retangulo(MARGEM, 63, LARGURA - 2 * MARGEM, 2, corDourada);
   }
   function novaPagina() { pagina++; paginas.push([]); y = 82; cabecalho(); }
@@ -121,11 +121,11 @@ function gerarPdfEspelho(dados) {
   }
   espaco(58); retangulo(MARGEM, y, LARGURA - 2 * MARGEM, 48, corAzul);
   cmd(`BT /F1 9 Tf 1 1 1 rg ${MARGEM + 14} ${ALTURA - y - 18} Td (${escPdf('NOTA FINAL')}) Tj ET`);
-  cmd(`BT /F2 22 Tf 1 1 1 rg ${MARGEM + 14} ${ALTURA - y - 40} Td (${escPdf(numeroPt(dados.nota) + ' / 10')}) Tj ET`); y += 58;
+  cmd(`BT /F2 22 Tf 1 1 1 rg ${MARGEM + 14} ${ALTURA - y - 40} Td (${escPdf(numeroPt(dados.nota) + ' / 5')}) Tj ET`); y += 58;
 
   if (dados.recurso) {
     tituloSecao('Resultado do recurso - ' + (dados.recurso.resultado || 'Decidido'));
-    if (dados.recurso.notaAnterior != null) linhaTexto('Nota recorrida: ' + numeroPt(dados.recurso.notaAnterior) + '/10. Nota após o recurso: ' + numeroPt(dados.nota) + '/10.', { negrito: true });
+    if (dados.recurso.notaAnterior != null) linhaTexto('Nota recorrida: ' + numeroPt(dados.recurso.notaAnterior) + '/5. Nota após o recurso: ' + numeroPt(dados.nota) + '/5.', { negrito: true });
     linhaTexto(dados.recurso.decisao || 'Decisão registrada pelo professor.', { tamanho: 9.1, lh: 13, depois: 4 });
   }
 
@@ -211,7 +211,7 @@ function relatorioParaHtml(dados) {
     corpo += '</section>';
   }
   const recurso = dados.recurso ? '<div style="border:1px solid #c89a38;background:#fff9e8;padding:14px 16px;margin:14px 0"><b>Resultado do recurso: ' + escHtml(dados.recurso.resultado || '') + '</b><p>' + escHtml(dados.recurso.decisao || '') + '</p></div>' : '';
-  return '<div style="font-family:Arial,sans-serif;color:#242a32;line-height:1.5"><div style="background:#133056;color:#fff;padding:18px 22px;border-bottom:5px solid #c89a38"><h1 style="font-size:20px;margin:0">Espelho de correção - padrão OAB/FGV</h1><p style="margin:5px 0 0">Peça ' + escHtml(dados.rodada) + ' - ' + escHtml(dados.nomePeca) + '</p></div><div style="padding:18px 22px"><p><b>Aluno(a):</b> ' + escHtml(dados.aluno) + ' &nbsp; <b>Matrícula:</b> ' + escHtml(dados.matricula) + '<br><b>Turma:</b> ' + escHtml(dados.turma) + '</p><div style="display:inline-block;background:#133056;color:#fff;padding:10px 18px;border-radius:5px;font-size:18px"><b>Nota final: ' + escHtml(numeroPt(dados.nota)) + '/10</b></div>' + recurso + corpo + '</div></div>';
+  return '<div style="font-family:Arial,sans-serif;color:#242a32;line-height:1.5"><div style="background:#133056;color:#fff;padding:18px 22px;border-bottom:5px solid #c89a38"><h1 style="font-size:20px;margin:0">Espelho de correção do Estágio</h1><p style="margin:5px 0 0">Formato OAB/FGV adaptado · escala da disciplina: 0 a 5 · Peça ' + escHtml(dados.rodada) + ' - ' + escHtml(dados.nomePeca) + '</p></div><div style="padding:18px 22px"><p><b>Aluno(a):</b> ' + escHtml(dados.aluno) + ' &nbsp; <b>Matrícula:</b> ' + escHtml(dados.matricula) + '<br><b>Turma:</b> ' + escHtml(dados.turma) + '</p><div style="display:inline-block;background:#133056;color:#fff;padding:10px 18px;border-radius:5px;font-size:18px"><b>Nota final: ' + escHtml(numeroPt(dados.nota)) + '/5</b></div>' + recurso + corpo + '</div></div>';
 }
 
 module.exports = { gerarPdfEspelho, relatorioParaHtml, linhasEspelho, secoesRelatorio };

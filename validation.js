@@ -218,10 +218,10 @@ function validarCorrecao(texto) {
   const erros = [];
   const obrigatorias = ['acertos', 'erros formais', 'erros materiais', 'pontuacao item a item', 'verificacao de jurisprudencia e citacoes', 'verificacao de robotizacao e supervisao humana', 'propostas de aprimoramento', 'fontes e links'];
   for (const titulo of obrigatorias) if (!new RegExp('^\\s*##\\s+.*' + titulo.replace(/ /g, '.*'), 'mi').test(n)) erros.push('Falta a seção “' + titulo + '”.');
-  const notas = Array.from(t.matchAll(/NOTA\s+SUGERIDA\s*:\s*(\d+(?:[.,]\d+)?)\s*\/\s*10/gi));
-  if (notas.length !== 1) erros.push('A correção precisa conter exatamente uma NOTA SUGERIDA: X/10.');
+  const notas = Array.from(t.matchAll(/NOTA\s+SUGERIDA\s*:\s*(\d+(?:[.,]\d+)?)\s*\/\s*5/gi));
+  if (notas.length !== 1) erros.push('A correção precisa conter exatamente uma NOTA SUGERIDA: X/5.');
   const nota = notas.length === 1 ? numeroBR(notas[0][1]) : null;
-  if (nota != null && (nota < 0 || nota > 10)) erros.push('A nota sugerida está fora da escala de 0 a 10.');
+  if (nota != null && (nota < 0 || nota > 5)) erros.push('A nota sugerida está fora da escala de 0 a 5.');
   const pontos = secao(t, 'pontuacao item a item');
   const pares = Array.from(pontos.matchAll(/(\d+(?:[.,]\d+)?)\s*\/\s*(\d+(?:[.,]\d+)?)/g)).map(m => [numeroBR(m[1]), numeroBR(m[2])]);
   const tabelaOab = /\|\s*(?:item|crit[eé]rio avaliado)\s*\|/i.test(pontos)
@@ -232,7 +232,7 @@ function validarCorrecao(texto) {
   if (nota != null && pares.length >= 2) {
     const obtido = pares.reduce((s, p) => s + p[0], 0);
     const possivel = pares.reduce((s, p) => s + p[1], 0);
-    if (possivel >= 9.9 && possivel <= 10.1 && Math.abs(obtido - nota) > 0.11) erros.push('A nota sugerida não coincide com a soma dos itens.');
+    if (possivel >= 4.9 && possivel <= 5.1 && Math.abs(obtido - nota) > 0.06) erros.push('A nota sugerida não coincide com a soma dos itens.');
   }
   if (nota != null && nota > 0 && /(?:—|:)\s*INEXISTENTE(?:\/FALSA)?|CITA[CÇ][AÃ]O FALSA DETECTADA/i.test(t)) erros.push('Foi detectada citação falsa, mas a nota não foi zerada.');
   if (t.length < 900) erros.push('O relatório está curto demais para um espelho OAB/FGV detalhado.');
