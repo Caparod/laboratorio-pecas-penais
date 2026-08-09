@@ -74,6 +74,12 @@ textarea.redacao{width:100%;min-height:340px;margin-top:14px;padding:16px;font-f
 .iabox .resultado li{margin-bottom:4px}
 .iabox .resultado a{color:var(--azul);word-break:break-all}
 .iabox .resultado .nota{display:inline-block;background:var(--azul);color:#fff;border-radius:8px;padding:6px 16px;font-family:Arial,sans-serif;font-weight:bold;margin:6px 0}
+.envio-opcoes{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;margin:14px 0 8px;font-family:Arial,sans-serif}
+.envio-opcao{display:flex;align-items:center;gap:10px;min-height:64px;padding:11px 13px;border:1px solid #d8d2c0;border-radius:8px;background:#faf8f2;color:var(--azul);cursor:pointer;font-size:.84rem}
+.envio-opcao:hover{border-color:var(--dourado);background:#fffdf7}.envio-opcao b{display:block}.envio-opcao small{display:block;color:var(--cinza);font-size:.73rem;margin-top:2px}
+.parecer-inicial{background:#f4f7fb;border:1px solid #cdd8e6;border-left:4px solid var(--azul);border-radius:8px;padding:18px 20px;margin-top:14px}
+.parecer-inicial h2,.parecer-inicial h3,.parecer-inicial h4{color:var(--azul);margin:12px 0 5px}.parecer-inicial h2:first-child,.parecer-inicial h3:first-child{margin-top:0}
+.parecer-inicial ul{margin:5px 0 10px 20px}.parecer-inicial a{color:var(--azul);word-break:break-all}
 .pbar{margin-top:12px;font-family:Arial,sans-serif}
 .pbar .trilho{height:12px;background:#e8e4d8;border-radius:7px;overflow:hidden;box-shadow:inset 0 1px 2px rgba(0,0,0,.08)}
 .pbar .fill{height:100%;width:2%;background:linear-gradient(90deg,var(--azul),#4a7ab5);border-radius:7px;transition:width .6s ease}
@@ -93,6 +99,15 @@ textarea.redacao{width:100%;min-height:340px;margin-top:14px;padding:16px;font-f
 .userbar a{color:#fff;cursor:pointer;text-decoration:underline}
 .btn-sair{background:#a33;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:.8rem;cursor:pointer;font-family:Arial,sans-serif;white-space:nowrap}
 .btn-sair:hover{background:#c44}
+.senha-overlay{position:fixed;inset:0;z-index:9999;background:rgba(10,24,43,.68);display:flex;align-items:center;justify-content:center;padding:20px;font-family:Arial,sans-serif}
+.senha-modal{width:min(480px,100%);background:#fff;border-radius:12px;padding:24px;box-shadow:0 16px 48px rgba(0,0,0,.28)}
+.senha-modal h3{color:var(--azul);margin-bottom:8px}
+.senha-modal p{color:var(--cinza);font-size:.88rem;margin-bottom:14px}
+.senha-modal input{width:100%;padding:12px;border:1px solid #cfc9b8;border-radius:7px;background:#faf8f2;color:var(--texto);font:600 1.05rem monospace;letter-spacing:.03em}
+.senha-modal .acoes{display:flex;gap:10px;justify-content:flex-end;margin-top:16px}
+.senha-modal button{padding:10px 16px;border:1px solid var(--azul);border-radius:6px;background:#fff;color:var(--azul);font-weight:600;cursor:pointer}
+.senha-modal button.primario{background:var(--azul);color:#fff}
+.senha-modal .status{min-height:20px;margin:8px 0 0;color:var(--verde);font-size:.82rem}
 .painel table{width:100%;border-collapse:collapse;font-size:.88rem;font-family:Arial,sans-serif;margin-top:10px}
 .painel th,.painel td{border-bottom:1px solid #eee;padding:7px 8px;text-align:left}
 .md-tab{width:100%;border-collapse:collapse;font-size:.86rem;font-family:Arial,sans-serif;margin:10px 0;background:#fff}
@@ -146,6 +161,8 @@ async function apiPost(u,b){
     if(d&&d.erro==='SESSAO'){sair('Sua sessão expirou. Entre novamente.');throw new Error('sessao')}}
   if(r.status===403){let d=null;try{d=await r.clone().json()}catch(e){}
     if(d&&d.erro==='TROCAR_SENHA'&&AUTH){AUTH.precisaTrocarSenha=true;sset('auth',JSON.stringify(AUTH));renderTroca();throw new Error('trocar_senha')}
+    if(d&&d.erro==='COMPLETAR_CADASTRO'&&AUTH){AUTH.precisaCompletarCadastro=true;sset('auth',JSON.stringify(AUTH));renderTroca();throw new Error('completar_cadastro')}
+    if(d&&d.erro==='VERIFICAR_EMAIL'&&AUTH){AUTH.emailVerificado=false;sset('auth',JSON.stringify(AUTH));renderVerificarEmail();throw new Error('verificar_email')}
     if(d&&d.erro==='ACEITAR_PRIVACIDADE'&&AUTH){AUTH.precisaAceitarPrivacidade=true;sset('auth',JSON.stringify(AUTH));renderPrivacidade();throw new Error('privacidade')}}
   return r;
 }
@@ -157,11 +174,36 @@ async function apiGet(u){
     if(d&&d.erro==='SESSAO'){sair('Sua sessão expirou. Entre novamente.');throw new Error('sessao')}}
   if(r.status===403){let d=null;try{d=await r.clone().json()}catch(e){}
     if(d&&d.erro==='TROCAR_SENHA'&&AUTH){AUTH.precisaTrocarSenha=true;sset('auth',JSON.stringify(AUTH));renderTroca();throw new Error('trocar_senha')}
+    if(d&&d.erro==='COMPLETAR_CADASTRO'&&AUTH){AUTH.precisaCompletarCadastro=true;sset('auth',JSON.stringify(AUTH));renderTroca();throw new Error('completar_cadastro')}
+    if(d&&d.erro==='VERIFICAR_EMAIL'&&AUTH){AUTH.emailVerificado=false;sset('auth',JSON.stringify(AUTH));renderVerificarEmail();throw new Error('verificar_email')}
     if(d&&d.erro==='ACEITAR_PRIVACIDADE'&&AUTH){AUTH.precisaAceitarPrivacidade=true;sset('auth',JSON.stringify(AUTH));renderPrivacidade();throw new Error('privacidade')}}
   return r;
 }
 function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 function escAttr(t){return esc(t).replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
+function mostrarSenhaTemporaria(titulo,senha){
+  const anterior=document.getElementById('senha_modal');if(anterior)anterior.remove();
+  const overlay=document.createElement('div');overlay.id='senha_modal';overlay.className='senha-overlay';overlay.setAttribute('role','dialog');overlay.setAttribute('aria-modal','true');overlay.setAttribute('aria-labelledby','senha_modal_titulo');
+  const modal=document.createElement('div');modal.className='senha-modal';
+  const h=document.createElement('h3');h.id='senha_modal_titulo';h.textContent=titulo;
+  const aviso=document.createElement('p');aviso.textContent='Copie agora: esta senha não será exibida novamente depois que a janela for fechada.';
+  const campo=document.createElement('input');campo.type='text';campo.readOnly=true;campo.value=String(senha||'');campo.setAttribute('aria-label','Senha temporária');campo.autocomplete='off';campo.spellcheck=false;
+  const status=document.createElement('div');status.className='status';status.setAttribute('aria-live','polite');
+  const acoes=document.createElement('div');acoes.className='acoes';
+  const copiar=document.createElement('button');copiar.type='button';copiar.className='primario';copiar.textContent='📋 Copiar senha';
+  const fechar=document.createElement('button');fechar.type='button';fechar.textContent='Fechar';
+  const encerrar=()=>{document.removeEventListener('keydown',tecla);overlay.remove()};
+  const tecla=e=>{if(e.key==='Escape')encerrar()};
+  copiar.onclick=async()=>{
+    let copiou=false;
+    try{if(navigator.clipboard&&window.isSecureContext){await navigator.clipboard.writeText(campo.value);copiou=true}}catch(e){}
+    if(!copiou){try{campo.focus();campo.select();copiou=document.execCommand('copy')}catch(e){}}
+    if(copiou){copiar.textContent='✓ Senha copiada';status.textContent='Senha copiada para a área de transferência.'}
+    else{campo.focus();campo.select();status.textContent='Não foi possível copiar automaticamente. A senha foi selecionada; use Ctrl+C.'}
+  };
+  fechar.onclick=encerrar;overlay.onclick=e=>{if(e.target===overlay)encerrar()};campo.onclick=()=>campo.select();
+  acoes.append(copiar,fechar);modal.append(h,aviso,campo,status,acoes);overlay.append(modal);document.body.append(overlay);document.addEventListener('keydown',tecla);campo.focus();campo.select();
+}
 function md2html(t){
   t=esc(t);
   t=t.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');
@@ -248,36 +290,38 @@ async function fazerLogin(){
     const r=await fetch('/api/login',{method:'POST',headers:{'content-type':'application/json'},credentials:'same-origin',body:JSON.stringify({usuario:u,senha:p})});
     const d=await r.json();
     if(!r.ok){e.innerHTML='<p class="erro-ia">'+esc(d.erro||'Falha no login.')+'</p>';return}
-    AUTH={tipo:d.tipo,usuario:d.usuario||u,nome:d.nome||'',papel:d.papel||'',admin:!!d.admin,gereProf:!!d.gereProf,gereCoord:!!d.gereCoord,turmaAtiva:d.turmaAtiva,precisaTrocarSenha:d.precisaTrocarSenha,precisaAceitarPrivacidade:d.precisaAceitarPrivacidade,emailVerificado:d.emailVerificado,email:d.email||''};
+    AUTH={tipo:d.tipo,usuario:d.usuario||u,nome:d.nome||'',papel:d.papel||'',admin:!!d.admin,gereProf:!!d.gereProf,gereCoord:!!d.gereCoord,turmaAtiva:d.turmaAtiva,precisaTrocarSenha:d.precisaTrocarSenha,precisaCompletarCadastro:d.precisaCompletarCadastro,precisaAceitarPrivacidade:d.precisaAceitarPrivacidade,emailVerificado:d.emailVerificado,email:d.email||'',whatsapp:d.whatsapp||''};
     if(AUTH.tipo==='professor')MODO_VISAO=modoPadraoProfessor(); else MODO_VISAO='';
     sset('modo_visao',MODO_VISAO);
     sset('auth',JSON.stringify(AUTH));iniciar();
   }catch(err){e.innerHTML='<p class="erro-ia">Erro de conexão: '+esc(err.message)+'</p>'}
 }
-// Troca de senha (professor: só senha; aluno no 1º acesso: senha + e-mail)
+// Primeiro acesso do aluno: senha + cadastro obrigatório de e-mail e WhatsApp.
 function renderTroca(){
   menu.innerHTML='';barra();
   const ehAluno=AUTH.tipo==='aluno';
-  conteudo.innerHTML='<div class="loginwrap"><h2>Primeiro acesso</h2>'
-  +'<p>Crie uma nova senha (mín. 8 caracteres'+(ehAluno?', diferente da matrícula':'')+').'+(ehAluno?' E cadastre seu e-mail para receber as correções.':' Cadastre seu e-mail para receber avisos de novas entregas.')+'</p>'
-  +'<input id="ts_1" type="password" placeholder="Nova senha">'
-  +'<input id="ts_2" type="password" placeholder="Repita a nova senha">'
-  +'<input id="ts_email" type="email" placeholder="'+(ehAluno?'Seu e-mail (para receber correções)':'Seu e-mail (para receber avisos de entregas)')+'">'
+  const pedirSenha=!ehAluno||!!AUTH.precisaTrocarSenha;
+  conteudo.innerHTML='<div class="loginwrap"><h2>'+(ehAluno?(AUTH.precisaTrocarSenha?'Complete seu primeiro acesso':'Complete seu cadastro'):'Alterar senha')+'</h2>'
+  +'<p>'+(pedirSenha?'Crie uma nova senha (mín. 8 caracteres'+(ehAluno?', diferente da matrícula':'')+'). ':'')+(ehAluno?'Cadastre e-mail e WhatsApp para receber correções e comunicações acadêmicas. Todos os campos são obrigatórios.':'Cadastre seu e-mail para receber avisos de novas entregas.')+'</p>'
+  +(pedirSenha?'<input id="ts_1" type="password" placeholder="Nova senha" autocomplete="new-password"><input id="ts_2" type="password" placeholder="Repita a nova senha" autocomplete="new-password">':'')
+  +'<input id="ts_email" type="email" value="'+escAttr(AUTH.email||'')+'" placeholder="'+(ehAluno?'Seu e-mail (para receber correções)':'Seu e-mail (para receber avisos de entregas)')+'" autocomplete="email">'
+  +(ehAluno?'<input id="ts_whatsapp" type="tel" value="'+escAttr(AUTH.whatsapp||'')+'" placeholder="WhatsApp com DDD (ex.: 61 99999-9999)" autocomplete="tel"><p style="font-size:.78rem;color:var(--cinza);text-align:left">O contato será usado pela equipe da disciplina para devolutivas e avisos acadêmicos.</p>':'')
   +'<button onclick="salvarTroca()">Salvar</button><div id="ts_erro"></div></div>';
 }
 async function salvarTroca(){
-  const a=document.getElementById('ts_1').value,b=document.getElementById('ts_2').value,e=document.getElementById('ts_erro');
-  if(a!==b){e.innerHTML='<p class="erro-ia">As senhas não conferem.</p>';return}
-  const body={novaSenha:a};
+  const s1=document.getElementById('ts_1'),s2=document.getElementById('ts_2'),e=document.getElementById('ts_erro');
+  const a=s1?s1.value:'',b=s2?s2.value:'';
+  if(s1&&a!==b){e.innerHTML='<p class="erro-ia">As senhas não conferem.</p>';return}
+  const body={};if(s1)body.novaSenha=a;
   const em=(document.getElementById('ts_email').value||'').trim();
-  if(AUTH.tipo==='aluno'){if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)){e.innerHTML='<p class="erro-ia">Informe um e-mail válido.</p>';return}body.email=em;}
+  if(AUTH.tipo==='aluno'){if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)){e.innerHTML='<p class="erro-ia">Informe um e-mail válido.</p>';return}const wa=(document.getElementById('ts_whatsapp').value||'').trim(),dig=wa.replace(/\D/g,'');if(dig.length<8||dig.length>15||/^(\d)\1+$/.test(dig)){e.innerHTML='<p class="erro-ia">Informe um WhatsApp válido, com DDD.</p>';return}body.email=em;body.whatsapp=wa;}
   else if(em){if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)){e.innerHTML='<p class="erro-ia">E-mail inválido (ou deixe em branco).</p>';return}body.email=em;}
   e.innerHTML='<p style="font-family:Arial,sans-serif;font-size:.85rem"><span class="spinner"></span>Salvando...</p>';
   try{
     const r=await apiPost('/api/trocar-senha',body);const d=await r.json();
     if(!r.ok){e.innerHTML='<p class="erro-ia">'+esc(d.erro||'Falha.')+'</p>';return}
     AUTH.precisaTrocarSenha=false;
-    if(AUTH.tipo==='aluno'){AUTH.email=body.email;AUTH.emailVerificado=false;sset('auth',JSON.stringify(AUTH));renderVerificarEmail(d.emailEnviado);}
+    if(AUTH.tipo==='aluno'){AUTH.email=d.email||body.email;AUTH.whatsapp=d.whatsapp||body.whatsapp;AUTH.precisaCompletarCadastro=false;AUTH.emailVerificado=!d.precisaVerificarEmail;sset('auth',JSON.stringify(AUTH));if(d.precisaVerificarEmail)renderVerificarEmail(d.emailEnviado);else iniciar();}
     else{sset('auth',JSON.stringify(AUTH));iniciar();}
   }catch(err){}
 }
@@ -299,7 +343,7 @@ async function reenviarCodigo(){try{await apiPost('/api/reenviar-codigo',{});ale
 function trocarMinhaSenha(){AUTH.precisaTrocarSenha=true;renderTroca();}
 function renderPrivacidade(){
   menu.innerHTML='';barra();
-  conteudo.innerHTML='<div class="loginwrap"><h2>Aviso de privacidade</h2><p>Alguns recursos enviam enunciados, textos, imagens e listas acadêmicas ao provedor de inteligência artificial para processamento. Envie somente o necessário para a atividade.</p><p><a href="/privacidade" target="_blank" rel="noopener" style="color:var(--azul)">Ler o aviso completo</a></p><label style="display:flex;gap:8px;align-items:flex-start;text-align:left;font-family:Arial,sans-serif;font-size:.85rem"><input id="priv_ok" type="checkbox" style="width:auto;margin-top:2px">Li o aviso e estou ciente do processamento necessário para usar os recursos de IA.</label><button onclick="confirmarPrivacidade()">Continuar</button><div id="priv_fb"></div></div>';
+  conteudo.innerHTML='<div class="loginwrap"><h2>Aviso de privacidade</h2><p>O e-mail e o WhatsApp do aluno são usados para devolutivas e comunicações acadêmicas. Alguns recursos também enviam enunciados, textos, imagens e listas acadêmicas ao provedor de inteligência artificial para processamento. Envie somente o necessário para a atividade.</p><p><a href="/privacidade" target="_blank" rel="noopener" style="color:var(--azul)">Ler o aviso completo</a></p><label style="display:flex;gap:8px;align-items:flex-start;text-align:left;font-family:Arial,sans-serif;font-size:.85rem"><input id="priv_ok" type="checkbox" style="width:auto;margin-top:2px">Li o aviso e estou ciente do tratamento descrito.</label><button onclick="confirmarPrivacidade()">Continuar</button><div id="priv_fb"></div></div>';
 }
 async function confirmarPrivacidade(){
   const fb=document.getElementById('priv_fb');if(!document.getElementById('priv_ok').checked){fb.innerHTML='<p class="erro-ia">Marque a confirmação para continuar.</p>';return}
@@ -308,7 +352,7 @@ async function confirmarPrivacidade(){
 function iniciar(){
   if(!AUTH){renderLogin();return}
   if(AUTH.tipo==='professor'&&(!MODO_VISAO||!modoPermitido(MODO_VISAO))){MODO_VISAO=modoPadraoProfessor();sset('modo_visao',MODO_VISAO);}
-  if(AUTH.precisaTrocarSenha){renderTroca();return}
+  if(AUTH.precisaTrocarSenha||(AUTH.tipo==='aluno'&&AUTH.precisaCompletarCadastro)){renderTroca();return}
   if(AUTH.tipo==='aluno'&&!AUTH.emailVerificado){renderVerificarEmail();return}
   if(AUTH.precisaAceitarPrivacidade){renderPrivacidade();return}
   barra();
@@ -479,7 +523,9 @@ async function abrirEntrega(id,mat){
   window.__ent={id,mat};
   conteudo.innerHTML='<div class="botoes" style="margin-bottom:10px"><button onclick="abrirPeca(\''+id+'\')">← Voltar</button></div>'
    +'<span class="badge">Peça '+d.peca.num+'</span><h2 class="titulo-peca">'+esc(d.aluno.nome)+' · '+d.aluno.matricula+'</h2>'
-   +'<div class="card"><h3>Peça enviada pelo aluno</h3><div class="caso" style="max-height:340px;overflow:auto">'+esc(d.texto)+'</div></div>'
+   +'<div class="card"><h3>Peça enviada pelo aluno</h3>'
+   +(d.arquivo?'<p style="font: .8rem Arial,sans-serif;color:var(--cinza);margin-bottom:10px">📎 Texto importado de <b>'+esc(d.arquivo.nome)+'</b> · '+esc(d.arquivo.tipo.toUpperCase())+' · '+Math.max(1,Math.round(d.arquivo.tamanho/1024))+' KB</p>':'')
+   +'<div class="caso" style="max-height:340px;overflow:auto">'+esc(d.texto)+'</div></div>'
    +'<div class="card"><h3>Relatório de correção</h3>'
    +'<div class="botoes"><button class="primario" onclick="corrigirEntregaIA()">🤖 Corrigir com IA</button>'+botaoBNP()+'</div>'
    +'<div id="corrfb"></div>'
@@ -626,7 +672,7 @@ async function profAlunos(dadosPrev){
   const optsTurma=turmas.map(t=>'<option value="'+t.id+'">'+esc(t.nome)+'</option>').join('');
   const turmasAluno=(a)=>{const ids=a.turmaIds||[a.turmaId].filter(Boolean);const info=(a.turmas||ids.map(id=>{const t=turmas.find(x=>x.id===id);return{id,nome:t?t.nome:id}}));const tags=info.map(t=>'<span style="display:inline-block;background:#eef3f8;border-radius:10px;padding:3px 7px;margin:2px">'+esc(t.nome)+(idsTurmas.has(t.id)?' <a style="cursor:pointer;color:var(--vermelho)" title="Remover desta turma" onclick="alterarTurmaAluno(\''+a.matricula+'\',\''+t.id+'\',\'remover\')">×</a>':'')+'</span>').join('');const disp=turmas.filter(t=>!ids.includes(t.id));const add=disp.length?'<select onchange="if(this.value)alterarTurmaAluno(\''+a.matricula+'\',this.value,\'adicionar\')" style="padding:4px 6px;border:1px solid #cfc9b8;border-radius:5px;font-size:.8rem"><option value="">＋ adicionar turma</option>'+disp.map(t=>'<option value="'+t.id+'">'+esc(t.nome)+'</option>').join('')+'</select>':'';return tags+add;};
   let linhas='';
-  for(const a of listaAlunos)linhas+='<tr><td>'+a.matricula+'</td><td>'+esc(a.nome||'—')+'</td><td>'+turmasAluno(a)+'</td><td>'+(a.trocouSenha?'✓':'inicial')+'</td><td><a style="cursor:pointer;color:var(--azul)" onclick="resetSenha(\''+a.matricula+'\')">reset senha</a> · <a style="cursor:pointer;color:var(--vermelho)" onclick="excluirAl(\''+a.matricula+'\')">excluir</a></td></tr>';
+  for(const a of listaAlunos){const wa=a.whatsapp?'<a href="https://wa.me/'+a.whatsapp.replace(/\D/g,'')+'" target="_blank" rel="noopener">'+esc(a.whatsapp)+'</a>':'WhatsApp não cadastrado';const contato=(a.email?esc(a.email)+(a.emailVerificado?' ✓':' (pendente)'):'e-mail não cadastrado')+'<br>'+wa;linhas+='<tr><td>'+a.matricula+'</td><td>'+esc(a.nome||'—')+'</td><td>'+turmasAluno(a)+'</td><td style="font-size:.82rem">'+contato+'</td><td>'+(a.cadastroCompleto?'✓ completo':(a.trocouSenha?'contato pendente':'primeiro acesso'))+'</td><td><a style="cursor:pointer;color:var(--azul)" onclick="resetSenha(\''+a.matricula+'\')">reset senha</a> · <a style="cursor:pointer;color:var(--vermelho)" onclick="excluirAl(\''+a.matricula+'\')">excluir</a></td></tr>';}
   let turmasHtml='';
   for(const t of turmas)turmasHtml+='<tr><td><b>'+esc(t.nome)+'</b></td><td>'+t.professores.map(p=>esc(p.nome)).join(', ')+'</td><td>'+t.totalAlunos+'</td><td>'+(podeGerirAgora()?'<a style="cursor:pointer;color:var(--azul)" onclick="renomearTurma(\''+t.id+'\')">editar</a> · <a style="cursor:pointer;color:var(--vermelho)" onclick="excluirTurma(\''+t.id+'\')">excluir</a>':'')+'</td></tr>';
   conteudo.innerHTML='<h2 class="titulo-peca">Alunos e turmas</h2>'
@@ -640,7 +686,7 @@ async function profAlunos(dadosPrev){
    +'<div class="botoes" style="margin-bottom:8px"><label class="primario" style="padding:9px 18px;border-radius:6px;background:var(--azul);color:#fff;cursor:pointer;font-size:.85rem;font-family:Arial,sans-serif">📄 Importar PDF<input type="file" accept="application/pdf" style="display:none" onchange="importarPdfAlunos(this)"></label></div>'
    +'<textarea id="adm_mats" placeholder="500123 - Fulano"></textarea>'
    +'<div class="botoes" style="align-items:center"><span style="font-family:Arial,sans-serif;font-size:.85rem">Turma de destino: <select id="adm_turma" style="padding:6px;border:1px solid #cfc9b8;border-radius:6px">'+(optsTurma||'<option value="">— sem turma</option>')+'</select></span><button class="primario" onclick="salvarAlunos(false)">Adicionar</button><button onclick="if(confirm(\'Substituir TODA a lista?\'))salvarAlunos(true)">Substituir lista</button>'+botaoSenhaTurma+botaoExcluirTodos+'</div><div id="adm_msg"></div>'
-   +'<table><tr><th>Matrícula</th><th>Nome</th><th>Turma</th><th>Senha</th><th></th></tr>'+(linhas||'<tr><td colspan="5">Nenhum aluno.</td></tr>')+'</table></div>';
+   +'<table><tr><th>Matrícula</th><th>Nome</th><th>Turma</th><th>Contato</th><th>Cadastro</th><th></th></tr>'+(linhas||'<tr><td colspan="6">Nenhum aluno.</td></tr>')+'</table></div>';
   if(podeGerirAgora())carregarProfsSelect();
 }
 async function carregarProfsSelect(){try{const r=await apiGet('/api/professores');const d=await r.json();const s=document.getElementById('tur_prof');if(!s||!r.ok)return;s.innerHTML=(d.professores||[]).map(p=>'<option value="'+escAttr(p.login)+'"'+(p.login===AUTH.usuario?' selected':'')+'>'+esc(p.nome||p.login)+'</option>').join('');}catch(e){}}
@@ -670,7 +716,7 @@ async function resetSenha(m){
   if(!confirm('Gerar uma nova senha temporária para '+m+'?'))return;
   const r=await apiPost('/api/admin',{resetarSenha:m});const d=await r.json();
   if(!r.ok){alert(d.erro||'Erro');return}
-  const cred=(d.credenciaisIniciais||[])[0];if(cred)alert('Senha temporária de '+m+': '+cred.senha+'\n\nCopie agora: ela não será exibida novamente.');
+  const cred=(d.credenciaisIniciais||[])[0];if(cred)mostrarSenhaTemporaria('Senha temporária de '+m,cred.senha);
   profAlunos(d);
 }
 async function redefinirSenhasTurma(){
@@ -693,7 +739,7 @@ function mesBR(x){const p=x.split('-');const n=['jan','fev','mar','abr','mai','j
 function usdBR(v){return 'US$ '+v.toFixed(2).replace('.',',')}
 async function profGastos(mes){
   conteudo.innerHTML='<h2 class="titulo-peca">Gastos com IA</h2>'
-   +'<p style="color:var(--cinza);font-family:Arial,sans-serif;font-size:.88rem;margin-bottom:12px">Registro <b>permanente</b> do uso da IA, mês a mês — não é apagado nem quando alunos ou turmas são excluídos, nem ao zerar o sistema. Cada mês mostra apenas quem realmente usou o sistema. Ao total do mês soma-se a assinatura do Claude.</p>'
+   +'<p style="color:var(--cinza);font-family:Arial,sans-serif;font-size:.88rem;margin-bottom:12px">Registro <b>permanente</b> do uso da IA, mês a mês — não é apagado nem quando alunos ou turmas são excluídos. O crédito de <b>US$ 100 é renovado integralmente no início de cada mês</b> e o saldo anterior não acumula.</p>'
    +'<div id="gx"><p><span class="spinner"></span>Carregando...</p></div>';
   try{const r=await apiGet('/api/gastos');const d=await r.json();
     const gx=document.getElementById('gx');
@@ -702,6 +748,10 @@ async function profGastos(mes){
     const m=(mes&&d.meses.includes(mes))?mes:d.meses[0];
     const abas='<div class="botoes" style="flex-wrap:wrap;margin-bottom:10px">'+d.meses.map(x=>'<button class="'+(x===m?'primario':'')+'" onclick="profGastos(\''+x+'\')">'+mesBR(x)+'</button>').join('')+'</div>';
     const regs=Object.values(d.gastos[m]||{}).sort((a,b)=>b.valor-a.valor);
+    const rz=(d.resumos||{})[m]||{credito:100,consumido:0,saldo:100,excedido:0};
+    const pct=Math.min(100,Math.round((rz.consumido/Math.max(1,rz.credito))*100));
+    const renovacao=m===d.mesAtual?('Renova em '+new Date(d.renovacaoEm+'T12:00:00').toLocaleDateString('pt-BR')):'Crédito encerrado ao fim deste mês';
+    const credito='<div class="metricas"><div class="metrica"><b>'+usdBR(rz.credito)+'</b><span>crédito do mês</span></div><div class="metrica"><b>'+usdBR(rz.consumido)+'</b><span>consumido</span></div><div class="metrica"><b style="color:'+(rz.excedido?'var(--vermelho)':'var(--verde)')+'">'+(rz.excedido?('-'+usdBR(rz.excedido)):usdBR(rz.saldo))+'</b><span>'+(rz.excedido?'acima do crédito':'saldo disponível')+'</span></div></div><div class="barra-ind" style="height:12px"><span style="width:'+pct+'%;background:'+(rz.excedido?'var(--vermelho)':'var(--verde)')+'"></span></div><p class="aviso" style="margin-top:6px">'+renovacao+' · o saldo não é transferido para o mês seguinte.</p>';
     let totVal=0,totCham=0;
     let h='<table><tr><th>Usuário</th><th>Perfil</th><th>Turma</th><th>Chamadas de IA</th><th>Tokens</th><th>Custo estimado da API</th></tr>';
     for(const g of regs){totVal+=g.valor;totCham+=g.chamadas;
@@ -709,7 +759,7 @@ async function profGastos(mes){
     h+='<tr><td colspan="5" style="text-align:right">Subtotal de uso:</td><td><b>'+usdBR(totVal)+'</b></td></tr>';
     if(d.assinatura)h+='<tr><td colspan="5" style="text-align:right">Custo fixo configurado:</td><td><b>'+usdBR(d.assinatura)+'</b></td></tr>';
     h+='<tr style="background:#f2eee0"><td colspan="5" style="text-align:right"><b>TOTAL do mês:</b></td><td><b>'+usdBR(totVal+d.assinatura)+'</b></td></tr></table>';
-    gx.innerHTML=abas+'<div class="card painel">'+h+'<p class="aviso" style="margin-top:8px">'+totCham+' chamadas de IA neste mês. Fator configurado: '+Number(d.fator||1).toLocaleString('pt-BR')+'. Valores são estimativas; confira a fatura do provedor.</p></div>';
+    gx.innerHTML=abas+'<div class="card">'+credito+'</div><div class="card painel">'+h+'<p class="aviso" style="margin-top:8px">'+totCham+' chamadas de IA neste mês. Fator configurado: '+Number(d.fator||1).toLocaleString('pt-BR')+'. Valores são estimativas; confira a fatura do provedor.</p></div>';
   }catch(e){document.getElementById('gx').innerHTML='<p class="erro-ia">Falha ao carregar.</p>';}
 }
 
@@ -840,7 +890,7 @@ async function resetProfessor(login){
   if(!confirm('Resetar a senha de '+login+' para o próprio login? A pessoa troca no próximo acesso.'))return;
   const r=await apiPost('/api/professores/reset',{login});const d=await r.json();
   if(!r.ok){alert(d.erro||'Erro');return}
-  alert('Senha resetada. Senha temporária: '+d.senhaTemporaria+'\n\nCopie agora: ela não será exibida novamente.');
+  mostrarSenhaTemporaria('Senha temporária de '+login,d.senhaTemporaria);
   profProfessores();
 }
 
@@ -949,6 +999,7 @@ async function confirmarDescadastro(){
 function abrirPecaAluno(id){
   const p=(window.__pecasAluno||[]).find(x=>x.id===id);if(!p)return;
   const rasc=sget('peca_'+id,'');
+  try{window.__arquivoAluno=JSON.parse(sget('arquivo_'+id,'null'))}catch(e){window.__arquivoAluno=null}
   const fechado=!p.enviado&&!p.noPrazo;
   conteudo.innerHTML='<div class="botoes" style="margin-bottom:10px"><button onclick="telaAluno()">← Voltar</button></div>'
    +'<span class="badge">Peça '+p.num+' · '+esc(p.disc)+'</span><h2 class="titulo-peca">'+esc(p.nomePeca)+'</h2>'
@@ -957,18 +1008,58 @@ function abrirPecaAluno(id){
    +'<div class="card"><h3>Enunciado</h3><div class="caso">'+esc(p.caso)+'</div></div>'
    +((p.gabLiberado&&p.gab)?'<div class="card"><h3>📖 Gabarito oficial</h3><p style="font-size:.82rem;color:var(--cinza);font-family:Arial,sans-serif">Liberado após o encerramento do prazo. Compare com a sua peça e confira as fontes pelos links.</p><div class="botoes" style="margin-bottom:12px">'+botaoBNP()+'</div><div class="bloco" style="background:#eef5ee;border:1px solid #cfe3cf;border-radius:8px;padding:14px">'+linkCitacoesHtml(md2html(p.gab))+'</div></div>':'')
    +(fechado?'<div class="card"><p class="erro-ia">O prazo desta peça já encerrou. Não é possível enviar. Se precisar, fale com o(a) professor(a) para renovar o prazo ou liberar sua entrega.</p></div>'
-     :('<div class="card"><h3>Sua peça</h3><p style="font-size:.85rem;color:var(--cinza)">Redija a peça completa. Se citar jurisprudência, inclua no FINAL um anexo com as fontes e seus links. O texto fica salvo neste navegador até você enviar.</p>'
-   +'<div class="botoes" style="margin-bottom:8px"><label style="padding:9px 18px;border-radius:6px;background:var(--azul);color:#fff;cursor:pointer;font-size:.85rem;font-family:Arial,sans-serif">📷 Transcrever fotos do caderno<input type="file" accept="image/*" multiple style="display:none" onchange="transcreverFotos(this,\''+id+'\')"></label></div>'
-   +'<p style="font-size:.78rem;color:var(--cinza);font-family:Arial,sans-serif;margin-top:-4px">Escreveu à mão? Tire fotos nítidas das páginas (na ordem) e a IA transforma em texto aqui embaixo, para você conferir e editar antes de enviar.</p>'
-   +'<div id="al_ocr"></div>'
+     :('<div class="card"><h3>Sua peça</h3><p style="font-size:.85rem;color:var(--cinza)">Você pode escrever aqui ou enviar um arquivo pronto. Em qualquer opção, confira o texto antes de entregar. Se citar jurisprudência, inclua no final as fontes e os links.</p>'
+   +'<div class="envio-opcoes">'
+   +'<label class="envio-opcao"><span style="font-size:1.5rem">📄</span><span><b>Enviar PDF ou Word</b><small>PDF, DOCX ou DOC · até 6 MB</small></span><input type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="display:none" onchange="subirArquivoAluno(this,\''+id+'\')"></label>'
+   +'<label class="envio-opcao"><span style="font-size:1.5rem">📷</span><span><b>Transcrever fotos</b><small>Até 6 páginas manuscritas, na ordem</small></span><input type="file" accept="image/*" multiple style="display:none" onchange="transcreverFotos(this,\''+id+'\')"></label>'
+   +'</div><div id="al_import">'+(window.__arquivoAluno?'<p style="color:var(--verde);font: .82rem Arial,sans-serif">📎 Arquivo importado: <b>'+esc(window.__arquivoAluno.nome)+'</b></p>':'')+'</div><div id="al_ocr"></div>'
    +'<textarea id="al_texto" class="redacao" placeholder="EXCELENTÍSSIMO SENHOR...">'+esc(rasc)+'</textarea>'
    +'<div class="botoes"><button onclick="salvarRascunhoAluno(\''+id+'\')">💾 Salvar rascunho</button>'
-   +'<button class="primario" onclick="enviarPeca(\''+id+'\')">📨 Enviar ao professor</button></div>'
+   +'<button class="primario" onclick="pedirParecerInicial(\''+id+'\')">🔎 Receber parecer inicial e decidir</button></div>'
+   +'<p class="aviso" style="margin-top:10px"><b>Antes do envio:</b> o parecer aponta referências duvidosas, sinais de IA/prompts e riscos graves. Depois, você escolhe entre enviar para correção ou refazer a peça. Nada é enviado sem a sua confirmação.</p>'
    +(p.enviado?'<p class="aviso">Você já enviou esta peça. Reenviar substitui a anterior e cancela a correção pendente.</p>':'')
-   +'<div id="al_fb"></div></div>'));
-  const t=document.getElementById('al_texto');if(t)t.addEventListener('input',()=>sset('peca_'+id,t.value));
+   +'<div id="al_fb"></div><div id="al_parecer"></div></div>'));
+  window.__textoParecerInicial=null;
+  const t=document.getElementById('al_texto');if(t)t.addEventListener('input',()=>{sset('peca_'+id,t.value);if(window.__textoParecerInicial!==null&&t.value.trim()!==window.__textoParecerInicial){window.__textoParecerInicial=null;const pr=document.getElementById('al_parecer');if(pr)pr.innerHTML='<div class="parecer-inicial"><p><b>Você alterou a peça.</b> A versão anterior não será enviada. Quando terminar, peça um novo parecer inicial.</p></div>'}});
 }
 function salvarRascunhoAluno(id){sset('peca_'+id,document.getElementById('al_texto').value);document.getElementById('al_fb').innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif;font-size:.85rem">Rascunho salvo.</p>';}
+function arquivoParaDataUrl(file){return new Promise((ok,err)=>{const fr=new FileReader();fr.onload=()=>ok(fr.result);fr.onerror=()=>err(new Error('Não foi possível ler o arquivo.'));fr.readAsDataURL(file)})}
+async function subirArquivoAluno(inp,id){
+  const f=(inp.files||[])[0];inp.value='';if(!f)return;
+  const fb=document.getElementById('al_import'),t=document.getElementById('al_texto');
+  if(f.size>6*1024*1024){fb.innerHTML='<p class="erro-ia">O arquivo ultrapassa 6 MB. Salve uma versão menor e tente novamente.</p>';return}
+  if(t.value.trim()&&!confirm('Importar este arquivo substituirá o texto que está no editor. Continuar?'))return;
+  fb.innerHTML='<p style="font: .85rem Arial,sans-serif"><span class="spinner"></span>Lendo '+esc(f.name)+' com segurança...</p>';
+  try{
+    const arquivo=await arquivoParaDataUrl(f);
+    const r=await apiPost('/api/aluno/extrair-arquivo',{nome:f.name,arquivo});const d=await r.json();
+    if(!r.ok){fb.innerHTML='<p class="erro-ia">'+esc(d.erro||'Não foi possível ler o arquivo.')+'</p>';return}
+    t.value=d.texto;sset('peca_'+id,t.value);window.__arquivoAluno=d.arquivo;sset('arquivo_'+id,JSON.stringify(d.arquivo));
+    const avisos=(d.avisos||[]).map(a=>'<li>'+esc(a)+'</li>').join('');
+    fb.innerHTML='<p style="color:var(--verde);font: .85rem Arial,sans-serif">✅ <b>'+esc(d.arquivo.nome)+'</b> importado. Confira especialmente nomes, números e o final do documento antes de enviar.</p>'+(avisos?'<ul class="erro-ia" style="margin-left:20px">'+avisos+'</ul>':'');
+    t.scrollIntoView({behavior:'smooth',block:'center'});t.focus();
+  }catch(e){fb.innerHTML='<p class="erro-ia">Falha ao importar: '+esc(e.message)+'</p>'}
+}
+const ETAPAS_PARECER=[[0,'📖 Lendo sua peça com cuidado...'],[18,'🔎 Conferindo citações em fontes oficiais...'],[55,'🧭 Procurando riscos jurídicos e processuais...'],[78,'🛡️ Verificando sinais de prompt ou conteúdo de IA...']];
+async function pedirParecerInicial(id){
+  const texto=document.getElementById('al_texto').value.trim();const fb=document.getElementById('al_parecer');
+  if(texto.length<80){fb.innerHTML='<p class="erro-ia">Escreva ou importe a peça antes de pedir o parecer.</p>';return}
+  const prog=progresso(fb,ETAPAS_PARECER,110);
+  try{
+    const r=await apiPost('/api/aluno/parecer-inicial',{id,texto});const d=await r.json();prog.fim();
+    if(!r.ok){let m=d.erro||'Não foi possível preparar o parecer agora.';if(m==='LIMITE_CREDITOS')m='O recurso de análise atingiu o limite temporário.';fb.innerHTML='<div class="parecer-inicial"><p class="erro-ia">'+esc(m)+'</p><p class="aviso">Sua peça continua salva. Para não perder o prazo, você pode tentar novamente ou enviá-la sem o parecer.</p><div class="botoes"><button onclick="pedirParecerInicial(\''+id+'\')">Tentar novamente</button><button class="primario" onclick="enviarPeca(\''+id+'\',true)">Enviar sem parecer</button></div></div>';return}
+    const sinais=(d.sinaisPrompt||[]).length?'<div class="erro-ia"><b>Alerta técnico:</b> o arquivo contém possível '+esc(d.sinaisPrompt.join(', '))+'. Revise e remova qualquer instrução que não faça parte da peça.</div>':'';
+    const rob=d.robotizacao&&d.robotizacao.nivel!=='baixo'?'<div class="aviso" style="color:#8a5a00"><b>Indícios de robotização para revisar:</b> '+esc((d.robotizacao.sinais||[]).join('; '))+'. Padrões formais não provam autoria por IA; servem para você conferir se o texto realmente tem sua voz e sua supervisão.</div>':'';
+    window.__textoParecerInicial=texto;
+    fb.innerHTML='<div class="parecer-inicial"><p style="font: .78rem Arial,sans-serif;color:var(--cinza);margin-bottom:10px">Triagem pedagógica automática · a decisão final é do professor</p>'+linkCitacoesHtml(md2html(d.parecer))+sinais+rob+'<div style="border-top:1px solid #cdd8e6;margin-top:16px;padding-top:14px"><h3>O que você quer fazer agora?</h3><p style="font: .84rem Arial,sans-serif;color:var(--cinza)">A peça só será enviada se você escolher a primeira opção.</p><div class="botoes"><button class="primario" onclick="enviarPeca(\''+id+'\')">📨 Enviar esta versão para correção</button><button onclick="refazerPecaAluno(\''+id+'\')">✏️ Refazer a peça — não enviar</button></div></div></div>';
+  }catch(e){prog.fim();fb.innerHTML='<div class="parecer-inicial"><p class="erro-ia">Falha de conexão. Sua peça continua salva.</p><div class="botoes"><button onclick="pedirParecerInicial(\''+id+'\')">Tentar novamente</button><button class="primario" onclick="enviarPeca(\''+id+'\',true)">Enviar sem parecer</button></div></div>'}
+}
+function refazerPecaAluno(id){
+  window.__textoParecerInicial=null;
+  const fb=document.getElementById('al_parecer'),t=document.getElementById('al_texto');
+  fb.innerHTML='<div class="parecer-inicial"><p><b>Nada foi enviado.</b> Revise a peça no editor. Quando terminar, solicite um novo parecer para decidir novamente.</p></div>';
+  sset('peca_'+id,t.value);t.focus();t.scrollIntoView({behavior:'smooth',block:'center'});
+}
 // Reduz a foto no navegador (fotos de celular são grandes demais para enviar inteiras)
 function redimensionarFoto(file){return new Promise((ok,err)=>{const img=new Image();const url=URL.createObjectURL(file);
   img.onload=()=>{try{const esc2=Math.min(1,1800/Math.max(img.width,img.height));const c=document.createElement('canvas');c.width=Math.round(img.width*esc2);c.height=Math.round(img.height*esc2);c.getContext('2d').drawImage(img,0,0,c.width,c.height);URL.revokeObjectURL(url);ok(c.toDataURL('image/jpeg',0.85));}catch(e){err(e)}};
@@ -988,15 +1079,16 @@ async function transcreverFotos(inp,id){
     t.scrollIntoView({behavior:'smooth',block:'center'});
   }catch(e){fb.innerHTML='<p class="erro-ia">Falha ao processar as fotos: '+esc(e.message)+'</p>';}
 }
-async function enviarPeca(id){
+async function enviarPeca(id,semParecer){
   const texto=document.getElementById('al_texto').value.trim();const fb=document.getElementById('al_fb');
   if(texto.length<80){fb.innerHTML='<p class="erro-ia">Escreva sua peça antes de enviar.</p>';return}
+  if(!semParecer&&window.__textoParecerInicial!==texto){fb.innerHTML='<p class="erro-ia">A peça foi alterada depois do parecer. Solicite um novo parecer inicial antes de decidir o envio.</p>';return}
   if(!confirm('Enviar sua peça ao professor? Após o prazo pode não ser possível reenviar.'))return;
-  try{const r=await apiPost('/api/entregar',{id,texto});const d=await r.json();
+  try{const r=await apiPost('/api/entregar',{id,texto,arquivo:window.__arquivoAluno||null});const d=await r.json();
   if(!r.ok){let m=(d.erro||'Erro');if(m==='PRAZO')m='⏰ O prazo desta peça encerrou ('+dataHoraBR(d.prazo)+'). Fale com o(a) professor(a) para renovar ou liberar sua entrega.';fb.innerHTML='<p class="erro-ia">'+esc(m)+'</p>';return}
-  sset('peca_'+id,'');
-  fb.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif">📨 Peça enviada! O professor foi avisado. Você receberá a correção por e-mail.</p>';
-  setTimeout(telaAluno,1200);
+  sset('peca_'+id,'');sset('arquivo_'+id,'');
+  const p=(window.__pecasAluno||[]).find(x=>x.id===id);if(p)p.enviado=true;
+  fb.innerHTML='<div style="background:#eef5ee;border:1px solid #cfe3cf;border-radius:8px;padding:12px 14px;margin-top:12px;color:var(--verde);font-family:Arial,sans-serif">📨 <b>Peça enviada com sucesso.</b> O professor foi avisado. Você receberá a revisão final por e-mail.<div class="botoes"><button onclick="telaAluno()">Voltar às minhas peças</button></div></div>';
   }catch(e){}
 }
 function verMinhaCorrecao(id){alert('A correção validada foi enviada ao seu e-mail cadastrado. Confira sua caixa de entrada (e o spam).');}
@@ -1009,7 +1101,7 @@ async function restaurarSessao(){
     const r=await fetch('/api/sessao',{headers:h,credentials:'same-origin'});
     if(!r.ok){sset('auth','');AUTH=null;renderLogin();return}
     const d=await r.json();
-    AUTH={tipo:d.tipo,usuario:d.usuario,nome:d.nome||'',papel:d.papel||'',admin:!!d.admin,gereProf:!!d.gereProf,gereCoord:!!d.gereCoord,turmaAtiva:d.turmaAtiva,precisaTrocarSenha:d.precisaTrocarSenha,precisaAceitarPrivacidade:d.precisaAceitarPrivacidade,emailVerificado:d.emailVerificado,email:d.email||''};
+    AUTH={tipo:d.tipo,usuario:d.usuario,nome:d.nome||'',papel:d.papel||'',admin:!!d.admin,gereProf:!!d.gereProf,gereCoord:!!d.gereCoord,turmaAtiva:d.turmaAtiva,precisaTrocarSenha:d.precisaTrocarSenha,precisaCompletarCadastro:d.precisaCompletarCadastro,precisaAceitarPrivacidade:d.precisaAceitarPrivacidade,emailVerificado:d.emailVerificado,email:d.email||'',whatsapp:d.whatsapp||''};
     sset('auth',JSON.stringify(AUTH));iniciar();
   }catch(e){renderLogin('Não foi possível validar a sessão. Tente novamente.');}
 }

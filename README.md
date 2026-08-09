@@ -12,8 +12,10 @@ A chave de IA fica apenas no servidor, pela variável `ANTHROPIC_API_KEY`. O nav
 3. Configure as variáveis de ambiente:
    - `ANTHROPIC_API_KEY`: chave da Anthropic.
    - `APP_URL`: URL pública do sistema no Render.
-   - `MODELO`: opcional, padrão definido no servidor.
-   - Para o fluxo validado, mantenha `MODELO=claude-sonnet-5`; o servidor desativa o raciocínio adaptativo nessa versão para reservar a saída ao documento final.
+   - `MODELO_POTENTE`: modelo usado obrigatoriamente na geração de enunciados, gabaritos, pareceres pedagógicos e correções. Padrão: `claude-opus-4-8`.
+   - `MODELO_OCR`: opcional, usado somente para transcrever fotos; padrão `claude-sonnet-5`.
+   - `MODELO_CASO`: opcional, usado apenas em extrações mecânicas auxiliares de documentos administrativos; não participa da geração jurídica avaliativa.
+   - `CREDITO_MENSAL_USD`: crédito de API renovado a cada mês, sem acúmulo. Padrão: `100`.
    - `PROF_LOGIN`: login do administrador principal.
    - `PROF_SENHA`: senha inicial forte do administrador principal. É obrigatória ao criar uma base nova.
    - `GMAIL_USER` e `GMAIL_APP_PASSWORD`: opcionais, para avisos por e-mail.
@@ -68,7 +70,7 @@ Como a leitura e a escrita são feitas pelo servidor com `SUPABASE_SERVICE_ROLE_
 - Professor(a) pode zerar somente as turmas em que leciona; coordenação pode zerar qualquer turma e apenas a administração pode zerar o sistema inteiro.
 - Ao zerar uma turma, vínculos, peças, entregas e notas dela são apagados; contas sem outra turma também são removidas, mas o cadastro da turma e seus professores são preservados.
 - Aluno(a) só visualiza e entrega peças das turmas das quais participa.
-- A senha inicial precisa ser trocada antes de acessar as demais APIs; troca/reset de senha invalida sessões antigas.
+- No primeiro acesso, o aluno precisa trocar a senha, cadastrar WhatsApp e cadastrar e confirmar o e-mail antes de acessar as demais APIs; troca/reset de senha invalida sessões antigas.
 - Logout encerra a sessão também no servidor. O navegador usa cookie `HttpOnly`, e somente o hash dos tokens é persistido.
 - Login possui limitação de tentativas e mensagens que não revelam se uma conta existe.
 - Exclusões removem entregas, liberações e sessões relacionadas, evitando dados órfãos.
@@ -77,6 +79,9 @@ Como a leitura e a escrita são feitas pelo servidor com `SUPABASE_SERVICE_ROLE_
 - Falhas temporárias de escrita no Supabase são repetidas com espera progressiva.
 - Integrações HTTP e SMTP possuem tempo limite.
 - A leitura de PDF usa PDF.js 6.2.108 com avaliação dinâmica e scripting desativados (`isEvalSupported: false`, `enableScripting: false`), e o envio de e-mail usa Nodemailer 9.0.3.
+- Alunos podem importar peças em PDF, DOCX ou DOC (até 6 MB). O texto é extraído para conferência e edição; o sistema registra nome, tipo, tamanho e hash do arquivo sem inflar o banco com uma cópia binária.
+- O parecer inicial do aluno usa apenas o enunciado e a própria resposta, nunca recebe o gabarito, não atribui nota e não substitui a validação do professor. Ele procura citações não confirmadas, indícios de alucinação, prompts residuais, robotização sem supervisão humana e riscos jurídicos graves. Depois do parecer, o aluno decide expressamente entre enviar a versão ou refazê-la sem envio.
+- O parecer e a correção final verificam simetria artificial, enumerações excessivas, uniformidade entre parágrafos/tópicos e linguagem formulaica. Esses sinais são tratados como indícios, nunca como prova automática de autoria por IA ou fundamento isolado para penalização.
 - O uso de IA exige ciência do aviso de privacidade; consulte `privacidade.html` e `PRIVACIDADE.md`.
 - CSV de notas tratado para reduzir risco de fórmula maliciosa no Excel.
 - Prazos calculados em horário de Brasília.

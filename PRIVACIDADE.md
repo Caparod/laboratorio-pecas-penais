@@ -1,6 +1,6 @@
 # Governança de dados e privacidade
 
-Versão do aviso: `2026-07`.
+Versão do aviso: `2026-08`.
 
 ## Controles implementados
 
@@ -10,6 +10,7 @@ Versão do aviso: `2026-07`.
 - dados de API sem cache no navegador;
 - exclusão de entregas e sessões relacionada à exclusão da conta;
 - aviso para não enviar dados pessoais desnecessários.
+- coleta obrigatória de e-mail e WhatsApp do aluno, limitada às devolutivas e comunicações acadêmicas e visível apenas à equipe autorizada da turma.
 
 ## Operação recomendada
 

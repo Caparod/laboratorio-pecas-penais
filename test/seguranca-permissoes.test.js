@@ -43,8 +43,8 @@ async function loginBruto(usuario, senha) {
   return r.body;
 }
 
-async function trocarSenha(token, novaSenha, email) {
-  const r = await requisitar('/api/trocar-senha', token, { novaSenha, email });
+async function trocarSenha(token, novaSenha, email, whatsapp) {
+  const r = await requisitar('/api/trocar-senha', token, { novaSenha, email, whatsapp });
   assert.equal(r.status, 200, `troca de senha: ${JSON.stringify(r.body)}`);
   return r;
 }
@@ -112,9 +112,17 @@ async function executar() {
   assert.equal(r.status, 200);
   const senhaInicialAlunoA = r.body.credenciaisIniciais[0].senha;
   const alunoInicial = await loginBruto('9100001', senhaInicialAlunoA);
-  await trocarSenha(alunoInicial.token, 'Aluno-Seguro-2026', 'aluno-a@example.test');
+  assert.equal(alunoInicial.precisaTrocarSenha, true);
+  assert.equal(alunoInicial.precisaCompletarCadastro, true);
+  r = await requisitar('/api/trocar-senha', alunoInicial.token, { novaSenha: 'Aluno-Seguro-2026', email: 'aluno-a@example.test' });
+  assert.equal(r.status, 400, 'primeiro acesso do aluno deve exigir WhatsApp');
+  await trocarSenha(alunoInicial.token, 'Aluno-Seguro-2026', 'aluno-a@example.test', '(61) 99999-0001');
   banco = JSON.parse(fs.readFileSync(path.join(dataDir, 'db.json'), 'utf8'));
+  assert.equal(banco.alunos['9100001'].whatsapp, '+5561999990001');
   const codigo = banco.alunos['9100001'].codigoVerif;
+  r = await requisitar('/api/pecas-aluno', alunoInicial.token);
+  assert.equal(r.status, 403, 'aluno não pode acessar o sistema antes de confirmar o e-mail');
+  assert.equal(r.body.erro, 'VERIFICAR_EMAIL');
   r = await requisitar('/api/verificar-email', alunoInicial.token, { codigo });
   assert.equal(r.status, 200);
 
@@ -127,7 +135,10 @@ async function executar() {
   r = await requisitar('/api/peca/salvar', coordenador, { nomePeca: 'Peça da segunda turma', caso: casoTeste(), gab: gabaritoTeste('Peça da segunda turma'), turmaId: turmaB, prazo: '2099-12-31T23:59', publicar: true });
   assert.equal(r.status, 200, JSON.stringify(r.body)); const pecaBId = r.body.id;
   const alunoBInicial = await loginBruto('9100002', senhaInicialAlunoB);
-  await trocarSenha(alunoBInicial.token, 'Aluno-Duas-Turmas-2026', 'aluno-b@example.test');
+  await trocarSenha(alunoBInicial.token, 'Aluno-Duas-Turmas-2026', 'aluno-b@example.test', '+55 61 99999-0002');
+  banco = JSON.parse(fs.readFileSync(path.join(dataDir, 'db.json'), 'utf8'));
+  r = await requisitar('/api/verificar-email', alunoBInicial.token, { codigo: banco.alunos['9100002'].codigoVerif });
+  assert.equal(r.status, 200);
   r = await requisitar('/api/pecas-aluno', alunoBInicial.token);
   assert.equal(r.status, 200);
   assert.deepEqual(new Set(r.body.pecas.map(p => p.id)), new Set([pecaId, pecaBId]), 'aluno deve acessar peças das duas turmas');
