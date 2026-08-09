@@ -1102,21 +1102,18 @@ async function gastosListar(req, res) {
   const numeroMesAtual = Number(partesHoje.find(p => p.type === 'month').value);
   const mesAtual = anoAtual + '-' + String(numeroMesAtual).padStart(2, '0');
   const meses = Array.from(new Set([mesAtual].concat(Object.keys(db.gastos || {})))).sort().reverse();
-  const fator = parseFloat(process.env.FATOR_MANUTENCAO || '1');
-  const assinatura = parseFloat(process.env.ASSINATURA_MENSAL_USD || '0');
-  const creditoConfigurado = parseFloat(process.env.CREDITO_MENSAL_USD || '100');
-  const creditoMensal = Number.isFinite(creditoConfigurado) && creditoConfigurado > 0 ? creditoConfigurado : 100;
+  const manutencaoMensal = 100;
+  const multiplicadorInternoIA = 2;
   const out = {};
   const resumos = {};
   for (const mes of meses) {
     const regs = (db.gastos || {})[mes] || {};
     out[mes] = {};
-    for (const [k, g] of Object.entries(regs)) out[mes][k] = { nome: g.nome, tipo: g.tipo, turma: g.turma || '', chamadas: g.chamadas, tokens: (g.entrada || 0) + (g.saida || 0), custoApi: Math.round(g.usd * 100) / 100, valor: Math.round(g.usd * fator * 100) / 100 };
-    const consumido = Math.round(Object.values(out[mes]).reduce((s, g) => s + g.valor, 0) * 100) / 100;
-    resumos[mes] = { credito: creditoMensal, consumido, saldo: Math.round(Math.max(0, creditoMensal - consumido) * 100) / 100, excedido: Math.round(Math.max(0, consumido - creditoMensal) * 100) / 100 };
+    for (const [k, g] of Object.entries(regs)) out[mes][k] = { nome: g.nome, tipo: g.tipo, turma: g.turma || '', chamadas: g.chamadas, tokens: (g.entrada || 0) + (g.saida || 0), valor: Math.round(g.usd * multiplicadorInternoIA * 100) / 100 };
+    const usoIA = Math.round(Object.values(out[mes]).reduce((s, g) => s + g.valor, 0) * 100) / 100;
+    resumos[mes] = { manutencao: manutencaoMensal, usoIA, total: Math.round((manutencaoMensal + usoIA) * 100) / 100 };
   }
-  const proximoMes = numeroMesAtual === 12 ? { ano: anoAtual + 1, mes: 1 } : { ano: anoAtual, mes: numeroMesAtual + 1 };
-  json(res, 200, { ok: true, meses, mesAtual, gastos: out, resumos, creditoMensal, renovacaoEm: proximoMes.ano + '-' + String(proximoMes.mes).padStart(2, '0') + '-01', assinatura, fator, moeda: 'USD', observacao: 'O crédito de US$ 100 é renovado integralmente a cada mês, sem acúmulo de saldo. Valores são estimativas; confira a fatura do provedor.' });
+  json(res, 200, { ok: true, meses, mesAtual, gastos: out, resumos, manutencaoMensal, moeda: 'USD', observacao: 'A manutenção mensal do sistema e os gastos consolidados de IA compõem o total de cada mês.' });
 }
 // ===== Turmas =====
 async function turmasListar(req, res) {
