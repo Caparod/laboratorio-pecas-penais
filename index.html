@@ -249,7 +249,6 @@ function md2html(t){
 }
 function urlSTF(q){return 'https://jurisprudencia.stf.jus.br/pages/search?queryString='+encodeURIComponent(q)}
 function urlSTJ(q){return 'https://scon.stj.jus.br/SCON/pesquisar.jsp?b=ACOR&livre='+encodeURIComponent(q)}
-function botaoBNP(){return '<a class="btn-link" href="https://bnp.pdpj.jus.br/" target="_blank" rel="noopener">🔎 Pesquisar no Banco Nacional de Precedentes</a>'}
 function classificacaoHtml(c){
   c=c||{};const itens=[['Classe processual',c.classe],['Assunto',c.assunto],['Documento processual',c.documento],['Fase processual',c.fase],['Órgão de referência',c.orgao]].filter(x=>x[1]);
   if(!itens.length)return '';
@@ -488,7 +487,7 @@ async function abrirPeca(id){
       +'<p style="font-size:.85rem;color:var(--cinza);font-family:Arial,sans-serif">Esta peça ainda é um rascunho — os alunos não a veem. Escolha a turma e o prazo de entrega para publicá-la.</p>'
       +'<div style="font-family:Arial,sans-serif;font-size:.9rem;display:flex;gap:8px;flex-wrap:wrap;align-items:center">Turma: <select id="vt_turma" style="padding:7px;border:1px solid #cfc9b8;border-radius:6px"></select> Prazo (dia e hora): <input type="datetime-local" id="vt_prazo" style="padding:7px;border:1px solid #cfc9b8;border-radius:6px"> <button class="primario" onclick="publicarRascunho(\''+id+'\')">🚀 Publicar para a turma</button></div><div id="vt_fb"></div></div>'))
    +'<div class="card"><h3>Enunciado</h3><div class="caso">'+esc(p.caso)+'</div></div>'
-   +'<div class="card"><h3>Gabarito</h3><div class="botoes" style="margin-bottom:12px">'+botaoBNP()+'</div><div class="bloco" style="background:#eef5ee;border:1px solid #cfe3cf;border-radius:8px;padding:14px">'+linkCitacoesHtml(md2html(p.gab||'(sem gabarito)'))+'</div></div>'
+   +'<div class="card"><h3>Gabarito</h3><div class="bloco" style="background:#eef5ee;border:1px solid #cfe3cf;border-radius:8px;padding:14px">'+linkCitacoesHtml(md2html(p.gab||'(sem gabarito)'))+'</div></div>'
    +(p.publicada
      ?('<div class="card painel"><h3>Entregas dos alunos</h3>'+ent+'</div>'
       +'<div class="card"><h3>Liberar entrega fora do prazo para um aluno</h3>'
@@ -549,7 +548,7 @@ async function abrirEntrega(id,mat){
    +(d.arquivo?'<p style="font: .8rem Arial,sans-serif;color:var(--cinza);margin-bottom:10px">📎 Texto importado de <b>'+esc(d.arquivo.nome)+'</b> · '+esc(d.arquivo.tipo.toUpperCase())+' · '+Math.max(1,Math.round(d.arquivo.tamanho/1024))+' KB</p>':'')
    +'<div class="caso" style="max-height:340px;overflow:auto">'+esc(d.texto)+'</div></div>'
    +'<div class="card"><h3>Relatório de correção</h3>'
-   +'<div class="botoes"><button class="primario" onclick="corrigirEntregaIA()">🤖 Corrigir com IA</button>'+botaoBNP()+'</div>'
+   +'<div class="botoes"><button class="primario" onclick="corrigirEntregaIA()">🤖 Corrigir com IA</button></div>'
    +'<div id="corrfb"></div>'
    +'<textarea id="relatorio" class="redacao" style="min-height:280px" placeholder="Relatório de correção (você pode escrever/editar livremente)...">'+esc(d.relatorio)+'</textarea>'
    +'<div style="font-family:Arial,sans-serif;margin-top:10px">Nota (0 a 10): <input id="nota" style="width:90px;padding:8px;border:1px solid #cfc9b8;border-radius:6px" value="'+(d.nota!==''?String(d.nota).replace('.',','):'')+'"></div>'
@@ -1050,7 +1049,7 @@ function abrirPecaAluno(id){
    +'<p style="font-family:Arial,sans-serif;font-size:.85rem;color:'+(fechado?'var(--vermelho)':'var(--cinza)')+'">Prazo: '+(p.prazo?dataHoraBR(p.prazo):'sem prazo')+(fechado?' — PRAZO ENCERRADO':'')+'</p>'
    +classificacaoHtml(p.classificacao)
    +'<div class="card"><h3>Enunciado</h3><div class="caso">'+esc(p.caso)+'</div></div>'
-   +((p.gabLiberado&&p.gab)?'<div class="card"><h3>📖 Gabarito oficial</h3><p style="font-size:.82rem;color:var(--cinza);font-family:Arial,sans-serif">Liberado após o encerramento do prazo. Compare com a sua peça e confira as fontes pelos links.</p><div class="botoes" style="margin-bottom:12px">'+botaoBNP()+'</div><div class="bloco" style="background:#eef5ee;border:1px solid #cfe3cf;border-radius:8px;padding:14px">'+linkCitacoesHtml(md2html(p.gab))+'</div></div>':'')
+   +((p.gabLiberado&&p.gab)?'<div class="card"><h3>📖 Gabarito oficial</h3><p style="font-size:.82rem;color:var(--cinza);font-family:Arial,sans-serif">Liberado após o encerramento do prazo. Compare com a sua peça e confira as fontes pelos links.</p><div class="bloco" style="background:#eef5ee;border:1px solid #cfe3cf;border-radius:8px;padding:14px">'+linkCitacoesHtml(md2html(p.gab))+'</div></div>':'')
    +(fechado?'<div class="card"><p class="erro-ia">O prazo desta peça já encerrou. Não é possível enviar. Se precisar, fale com o(a) professor(a) para renovar o prazo ou liberar sua entrega.</p></div>'
      :('<div class="card"><h3>Sua peça</h3><p style="font-size:.85rem;color:var(--cinza)">Você pode escrever aqui ou enviar um arquivo pronto. Em qualquer opção, confira o texto antes de entregar. Se citar jurisprudência, inclua no final as fontes e os links.</p>'
    +'<div class="envio-opcoes">'

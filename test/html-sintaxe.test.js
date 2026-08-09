@@ -7,6 +7,7 @@ for (const arquivo of [path.join(__dirname, '..', 'index.html'), path.join(__dir
   const html = fs.readFileSync(arquivo, 'utf8');
   const blocos = Array.from(html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi), m => m[1]);
   for (const codigo of blocos) new Function(codigo);
+  if (path.basename(arquivo) === 'index.html') assert.doesNotMatch(html, /Banco Nacional de Precedentes/, 'atalho genérico sem relação com a peça não deve aparecer');
   if (arquivo.endsWith(path.join('render-app', 'index.html'))) {
     assert.match(html, /function mostrarSenhaTemporaria\(/);
     assert.match(html, /Copiar senha/);
