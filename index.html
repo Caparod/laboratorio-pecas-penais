@@ -431,6 +431,7 @@ function telaProfessor(){
    +botaoMenu('nova','➕ Nova peça')
    +botaoMenu('alunos','👥 Alunos')
    +botaoMenu('notas','📊 Painel / notas')
+   +botaoMenu('pesquisa','📝 Pesquisa pedagógica')
    +(podeGerirAgora()?botaoMenu('professores','🧑‍🏫 Professores'):'')
    +(podeGerirAgora()?botaoMenu('gastos','💰 Gastos'):'')
    +botaoMenu('config','⚙️ Sistema');
@@ -439,6 +440,7 @@ function telaProfessor(){
   else if(ABA_PROF==='nova')profNova();
   else if(ABA_PROF==='alunos')profAlunos();
   else if(ABA_PROF==='notas')profNotas();
+  else if(ABA_PROF==='pesquisa')profPesquisa();
   else if(ABA_PROF==='professores')profProfessores();
   else if(ABA_PROF==='gastos')profGastos();
   else if(ABA_PROF==='config')profConfig();
@@ -969,6 +971,49 @@ async function baixarPlanilha(){
   }catch(e){alert('Falha ao baixar.')}
 }
 
+// ---- Pesquisa pedagógica ----
+async function profPesquisa(){
+  conteudo.innerHTML='<h2 class="titulo-peca">Pesquisa pedagógica</h2>'
+   +'<p style="color:var(--cinza);font-family:Arial,sans-serif;font-size:.88rem;margin-bottom:12px">A percepção dos estudantes é apresentada somente de forma agregada. Comentários não exibem identidade e só são liberados com pelo menos três respostas.</p>'
+   +'<div class="card"><div class="botoes" style="align-items:center"><span style="font-family:Arial,sans-serif;font-size:.9rem">Turma: <select id="ps_turma" onchange="carregarPesquisaProfessor(this.value)" style="padding:7px;border:1px solid #cfc9b8;border-radius:6px"><option value="">Carregando...</option></select></span>'
+   +'<button onclick="carregarPesquisaProfessor((document.getElementById(\'ps_turma\')||{}).value)">Atualizar resultados</button>'
+   +'<button class="primario" onclick="baixarPesquisaPedagogica()">Baixar resultados anônimos (.csv)</button></div><div id="ps_fb"></div></div>'
+   +'<div id="pesquisa_ped"><p><span class="spinner"></span>Carregando...</p></div>';
+  await carregarTurmasSelect('ps_turma');
+  const s=document.getElementById('ps_turma');if(s&&s.value)carregarPesquisaProfessor(s.value);else document.getElementById('pesquisa_ped').innerHTML='<div class="card"><p>Crie ou selecione uma turma.</p></div>';
+}
+async function carregarPesquisaProfessor(tid){
+  const el=document.getElementById('pesquisa_ped');if(!el)return;
+  if(!tid){el.innerHTML='<div class="card"><p>Escolha uma turma.</p></div>';return}
+  el.innerHTML='<p><span class="spinner"></span>Calculando resultados...</p>';
+  try{const r=await apiGet('/api/pesquisa?turma='+encodeURIComponent(tid));const d=await r.json();
+    if(!r.ok){el.innerHTML='<p class="erro-ia">'+esc(d.erro||'Erro')+'</p>';return}
+    const z=d.resumo;
+    let html='<div class="metricas">'
+      +'<div class="metrica"><b>'+z.elegiveis+'</b><span>estudantes com devolutiva</span></div>'
+      +'<div class="metrica"><b>'+z.respostas+'</b><span>respostas recebidas</span></div>'
+      +'<div class="metrica"><b>'+notaBR(z.participacao)+'%</b><span>participação</span></div>'
+      +'<div class="metrica"><b>'+notaBR(z.mediaGeral)+'</b><span>média geral / 5</span></div></div>';
+    if(!z.dadosDisponiveis){
+      html+='<div class="card"><h3>Resultados protegidos</h3><p>São necessárias pelo menos <b>'+z.minimoAnonimato+' respostas</b> para exibir médias e comentários sem facilitar a identificação individual.</p><p style="color:var(--cinza);font-family:Arial,sans-serif;font-size:.86rem">A pesquisa aparece para cada estudante depois da primeira devolutiva validada.</p></div>';
+    }else{
+      let tab='<table class="painel"><tr><th>Afirmação</th><th>Média</th><th>Distribuição (1 a 5)</th></tr>';
+      for(const p of d.perguntas){const dist=(p.distribuicao||[]).map((n,i)=>(i+1)+': '+n).join(' · ');tab+='<tr><td>'+esc(p.texto)+'</td><td><div class="barra-ind"><span style="width:'+Math.min(100,(p.media||0)*20)+'%"></span></div><b>'+notaBR(p.media)+'/5</b></td><td><small>'+esc(dist)+'</small></td></tr>';}
+      tab+='</table>';html+='<div class="card painel"><h3>Percepção dos estudantes</h3>'+tab+'</div>';
+      html+='<div class="card"><h3>Comentários anônimos</h3>'+(d.comentarios.length?'<ul style="font-family:Arial,sans-serif;line-height:1.55">'+d.comentarios.map(c=>'<li style="margin-bottom:10px">'+esc(c)+'</li>').join('')+'</ul>':'<p style="color:var(--cinza)">Nenhum comentário opcional foi enviado.</p>')+'</div>';
+    }
+    el.innerHTML=html;
+  }catch(e){el.innerHTML='<p class="erro-ia">Falha ao carregar os resultados.</p>'}
+}
+async function baixarPesquisaPedagogica(){
+  const tid=(document.getElementById('ps_turma')||{}).value,fb=document.getElementById('ps_fb');
+  if(!tid){fb.innerHTML='<p class="erro-ia">Escolha a turma.</p>';return}
+  try{const r=await apiGet('/api/pesquisa.csv?turma='+encodeURIComponent(tid));
+    if(!r.ok){fb.innerHTML='<p class="erro-ia">'+esc(await r.text())+'</p>';return}
+    const blob=await r.blob(),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='pesquisa-pedagogica.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);fb.innerHTML='';
+  }catch(e){fb.innerHTML='<p class="erro-ia">Falha ao baixar os resultados.</p>'}
+}
+
 // ---- Sistema (zerar) ----
 function profConfig(){
   const global=AUTH&&AUTH.admin?'<div class="card"><h3>Zerar todo o sistema</h3>'
@@ -1079,9 +1124,10 @@ async function telaAluno(){
     let cards='';
     for(const p of d.pecas){
       const fechado=!p.noPrazo;
+      const pesquisaPendente=!!p.pesquisaPendente;
       cards+='<div class="card"><span class="badge">Peça '+p.num+'</span> <b>'+esc(p.nomePeca)+'</b>'
-       +'<p style="font-family:Arial,sans-serif;font-size:.85rem;color:'+(fechado?'var(--vermelho)':'var(--cinza)')+'">Prazo: '+(p.prazo?dataHoraBR(p.prazo):'sem prazo')+' · '+(fechado?'🔴 Prazo encerrado':'⏳ A fazer')+'</p>'
-       +'<div class="botoes"><button class="primario" onclick="abrirPecaAluno(\''+p.id+'\')">'+(fechado?'Ver enunciado':'Fazer esta peça')+'</button></div></div>';
+       +'<p style="font-family:Arial,sans-serif;font-size:.85rem;color:'+(fechado?'var(--vermelho)':(pesquisaPendente?'#8a6415':'var(--cinza)'))+'">Prazo: '+(p.prazo?dataHoraBR(p.prazo):'sem prazo')+' · '+(fechado?'🔴 Prazo encerrado':(pesquisaPendente?'🔒 Pesquisa obrigatória pendente':'⏳ A fazer'))+'</p>'
+       +'<div class="botoes"><button class="'+(pesquisaPendente?'':'primario')+'" onclick="'+(pesquisaPendente?'telaPesquisaAluno()':'abrirPecaAluno(\''+p.id+'\')')+'">'+(pesquisaPendente?'Responder pesquisa para liberar a Peça 2':(fechado?'Ver enunciado':'Fazer esta peça'))+'</button></div></div>';
     }
     document.getElementById('la').innerHTML=cards+bannerOAB();
     window.__pecasAluno=d.pecas;
@@ -1156,13 +1202,54 @@ function seletorTurmaAtuacao(){
   return '<div class="grupo">Turma da visão aluno</div>'
    +'<div style="margin:2px 12px 14px"><select onchange="trocarTurmaAtuacao(this.value)" style="width:100%;padding:8px;border-radius:6px;border:1px solid #3a5478;background:#fff;color:#20304a;font-family:Arial,sans-serif">'+opts+'</select></div>';
 }
-function trocarTurmaAtuacao(id){if(!TURMAS_ATUACAO.some(t=>t.id===id))return;TURMA_ATUACAO=id;sset('turma_atuacao',id);if(window.__abaAluno==='entregues')telaEntreguesAluno();else telaAluno();}
+function trocarTurmaAtuacao(id){if(!TURMAS_ATUACAO.some(t=>t.id===id))return;TURMA_ATUACAO=id;sset('turma_atuacao',id);if(window.__abaAluno==='entregues')telaEntreguesAluno();else if(window.__abaAluno==='pesquisa')telaPesquisaAluno();else telaAluno();}
+
+async function telaPesquisaAluno(){
+  window.__abaAluno='pesquisa';
+  if(professorEmVisaoAluno()){
+    await carregarTurmasAtuacao();
+    if(!TURMA_ATUACAO&&TURMAS_ATUACAO.length){TURMA_ATUACAO=TURMAS_ATUACAO[0].id;sset('turma_atuacao',TURMA_ATUACAO);}
+  }
+  menu.innerHTML=menuAluno('pesquisa');
+  conteudo.innerHTML='<h2 class="titulo-peca">Pesquisa pedagógica'+(professorEmVisaoAluno()?' <span class="badge">visão aluno</span>':'')+'</h2><div id="pesq_aluno"><p><span class="spinner"></span>Carregando...</p></div>';
+  try{const r=await apiGet('/api/pesquisa-aluno');const d=await r.json();
+    if(!r.ok){document.getElementById('pesq_aluno').innerHTML='<p class="erro-ia">'+esc(d.erro||'Erro')+'</p>';return}
+    window.__pesquisaAluno=d;
+    if(!d.turmas.length){document.getElementById('pesq_aluno').innerHTML='<div class="card"><p>Nenhuma turma disponível para esta pesquisa.</p></div>';return}
+    const inicial=(d.turmas.find(t=>t.id===TURMA_ATUACAO)||d.turmas[0]).id;
+    renderPesquisaAluno(inicial);
+  }catch(e){document.getElementById('pesq_aluno').innerHTML='<p class="erro-ia">Falha ao carregar a pesquisa.</p>'}
+}
+function renderPesquisaAluno(tid){
+  const d=window.__pesquisaAluno||{},turmas=d.turmas||[],t=turmas.find(x=>x.id===tid)||turmas[0],el=document.getElementById('pesq_aluno');if(!t||!el)return;
+  const seletor=turmas.length>1?'<div class="card"><label>Turma</label><select onchange="renderPesquisaAluno(this.value)" style="padding:8px;border:1px solid #cfc9b8;border-radius:6px">'+turmas.map(x=>'<option value="'+escAttr(x.id)+'" '+(x.id===t.id?'selected':'')+'>'+esc(x.nome)+'</option>').join('')+'</select></div>':'';
+  if(d.modoDemonstracao){el.innerHTML=seletor+'<div class="card"><h3>Prévia da pesquisa</h3><p>Na conta real do estudante, o formulário será liberado depois da primeira devolutiva validada. O modo de visualização do professor não pode enviar respostas.</p></div>'+formularioPesquisaHtml(t,d.perguntas,true);return}
+  if(!t.elegivel){el.innerHTML=seletor+'<div class="card" style="text-align:center;padding:36px"><h3 style="color:var(--azul)">Disponível após a primeira devolutiva</h3><p style="color:var(--cinza)">Depois que o(a) professor(a) validar a correção de uma peça, você poderá avaliar a experiência de aprendizagem.</p></div>';return}
+  el.innerHTML=seletor+formularioPesquisaHtml(t,d.perguntas,false);
+}
+function formularioPesquisaHtml(t,perguntas,somenteLeitura){
+  const anterior=t.resposta||{},valores=anterior.valores||[];
+  const opcoes=[['','Selecione'],[1,'1 — Discordo totalmente'],[2,'2 — Discordo'],[3,'3 — Nem concordo nem discordo'],[4,'4 — Concordo'],[5,'5 — Concordo totalmente']];
+  let campos='';
+  for(let i=0;i<perguntas.length;i++)campos+='<div style="border-top:1px solid #e3ded2;padding:14px 0"><label for="pq_'+i+'" style="display:block;margin-bottom:8px"><b>'+(i+1)+'.</b> '+esc(perguntas[i])+' <span style="color:var(--vermelho);font:700 .75rem Arial,sans-serif">OBRIGATÓRIA</span></label><select id="pq_'+i+'" required '+(somenteLeitura?'disabled':'')+' style="width:min(100%,390px);padding:9px;border:1px solid #cfc9b8;border-radius:6px">'+opcoes.map(o=>'<option value="'+o[0]+'" '+(Number(valores[i])===o[0]?'selected':'')+'>'+o[1]+'</option>').join('')+'</select></div>';
+  return '<div class="card"><span class="badge">'+esc(t.nome)+'</span><h3>Conte como foi aprender com o sistema</h3>'
+   +'<p style="font-family:Arial,sans-serif;font-size:.88rem;color:var(--cinza)">Use a escala de 1 a 5. Sua identidade não aparece para o professor: os resultados e comentários são mostrados somente de forma agregada, após pelo menos três respostas.</p>'
+   +campos+'<div style="border-top:1px solid #e3ded2;padding-top:14px"><label for="pq_comentario"><b>Comentário opcional</b></label><textarea id="pq_comentario" maxlength="1000" '+(somenteLeitura?'disabled':'')+' placeholder="O que mais ajudou? O que pode melhorar?" style="min-height:110px">'+esc(anterior.comentario||'')+'</textarea></div>'
+   +(somenteLeitura?'':'<div class="botoes"><button class="primario" onclick="salvarPesquisaAluno(\''+escAttr(t.id)+'\')">'+(t.respondida?'Atualizar minha resposta':'Enviar resposta')+'</button></div><div id="pq_fb"></div>')+'</div>';
+}
+async function salvarPesquisaAluno(turmaId){
+  const d=window.__pesquisaAluno||{},valores=[];
+  for(let i=0;i<(d.perguntas||[]).length;i++){const v=Number((document.getElementById('pq_'+i)||{}).value);if(!Number.isInteger(v)||v<1||v>5){document.getElementById('pq_fb').innerHTML='<p class="erro-ia">Responda todas as afirmações.</p>';return}valores.push(v)}
+  const comentario=((document.getElementById('pq_comentario')||{}).value||'').trim(),fb=document.getElementById('pq_fb');fb.innerHTML='<p><span class="spinner"></span>Salvando resposta...</p>';
+  try{const r=await apiPost('/api/pesquisa/responder',{turmaId,valores,comentario}),x=await r.json();if(!r.ok){fb.innerHTML='<p class="erro-ia">'+esc(x.mensagem||x.erro||'Não foi possível salvar.')+'</p>';return}fb.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif"><b>Resposta salva e Peça 2 liberada.</b> Obrigado por contribuir com a melhoria da experiência pedagógica.</p><div class="botoes"><button class="primario" onclick="telaAluno()">Ir para as peças</button></div>';const t=(d.turmas||[]).find(t=>t.id===turmaId);if(t){t.respondida=true;t.resposta={valores,comentario,atualizadoEm:x.atualizadoEm}}}catch(e){fb.innerHTML='<p class="erro-ia">Falha de conexão. Tente novamente.</p>'}
+}
 // Menu do aluno. "Sair" = logout (volta ao login). "Descadastrar-me" = sai da turma e perde o acesso.
 function menuAluno(ativo){
   return (AUTH&&AUTH.tipo==='professor'?seletorVisao()+seletorTurmaAtuacao():'')
    +'<div class="grupo">Minhas peças</div>'
    +'<button class="item'+(ativo==='pecas'?' ativo':'')+'" onclick="telaAluno()">Peças para entregar</button>'
    +'<button class="item'+(ativo==='entregues'?' ativo':'')+'" onclick="telaEntreguesAluno()">Peças entregues</button>'
+   +'<button class="item'+(ativo==='pesquisa'?' ativo':'')+'" onclick="telaPesquisaAluno()">Pesquisa pedagógica</button>'
    +'<div class="grupo" style="margin-top:18px">Minha conta</div>'
    +'<button class="item" onclick="sair()">Sair</button>'
    +(AUTH&&AUTH.tipo==='professor'?'':'<button class="item'+(ativo==='desc'?' ativo':'')+'" style="color:#e08a8a" onclick="telaDescadastro()">Descadastrar-me</button>')
@@ -1202,6 +1289,7 @@ async function confirmarDescadastro(){
 }
 function abrirPecaAluno(id){
   const p=(window.__pecasAluno||[]).find(x=>x.id===id);if(!p)return;
+  if(p.pesquisaPendente){telaPesquisaAluno();return}
   const parecerUsado=!!p.parecerInicialUsado;
   const rasc=sget('peca_'+id,'');
   try{window.__arquivoAluno=JSON.parse(sget('arquivo_'+id,'null'))}catch(e){window.__arquivoAluno=null}
@@ -1252,7 +1340,7 @@ async function pedirParecerInicial(id){
   const prog=progresso(fb,ETAPAS_PARECER,110);
   try{
     const r=await apiPost('/api/aluno/parecer-inicial',{id,texto});const d=await r.json();prog.fim();
-    if(!r.ok){if(d.erro==='PARECER_JA_UTILIZADO'){const p=(window.__pecasAluno||[]).find(x=>x.id===id);if(p)p.parecerInicialUsado=true;fb.innerHTML='<div class="parecer-inicial"><p><b>A pré-correção desta peça já foi utilizada.</b> Revise o texto e envie esta versão diretamente para correção.</p><div class="botoes"><button class="primario" onclick="enviarPeca(\''+id+'\',true)">📨 Enviar diretamente para correção</button></div></div>';return}let m=d.erro||'Não foi possível preparar o parecer agora.';if(m==='LIMITE_CREDITOS')m='O recurso de análise atingiu o limite temporário.';fb.innerHTML='<div class="parecer-inicial"><p class="erro-ia">'+esc(m)+'</p><p class="aviso">Sua peça continua salva. Para não perder o prazo, você pode tentar novamente ou enviá-la sem o parecer.</p><div class="botoes"><button onclick="pedirParecerInicial(\''+id+'\')">Tentar novamente</button><button class="primario" onclick="enviarPeca(\''+id+'\',true)">Enviar sem parecer</button></div></div>';return}
+    if(!r.ok){if(d.erro==='PARECER_JA_UTILIZADO'){const p=(window.__pecasAluno||[]).find(x=>x.id===id);if(p)p.parecerInicialUsado=true;fb.innerHTML='<div class="parecer-inicial"><p><b>A pré-correção desta peça já foi utilizada.</b> Revise o texto e envie esta versão diretamente para correção.</p><div class="botoes"><button class="primario" onclick="enviarPeca(\''+id+'\',true)">📨 Enviar diretamente para correção</button></div></div>';return}let m=d.mensagem||d.erro||'Não foi possível preparar o parecer agora.';if(m==='LIMITE_CREDITOS')m='O recurso de análise atingiu o limite temporário.';fb.innerHTML='<div class="parecer-inicial"><p class="erro-ia">'+esc(m)+'</p><p class="aviso">Sua peça continua salva. Para não perder o prazo, você pode tentar novamente ou enviá-la sem o parecer.</p><div class="botoes"><button onclick="pedirParecerInicial(\''+id+'\')">Tentar novamente</button><button class="primario" onclick="enviarPeca(\''+id+'\',true)">Enviar sem parecer</button></div></div>';return}
     const sinais=(d.sinaisPrompt||[]).length?'<div class="erro-ia"><b>Alerta técnico:</b> o arquivo contém possível '+esc(d.sinaisPrompt.join(', '))+'. Revise e remova qualquer instrução que não faça parte da peça.</div>':'';
     const rob=d.robotizacao&&d.robotizacao.nivel!=='baixo'?'<div class="aviso" style="color:#8a5a00"><b>Indícios de robotização para revisar:</b> '+esc((d.robotizacao.sinais||[]).join('; '))+'. Padrões formais não provam autoria por IA; servem para você conferir se o texto realmente tem sua voz e sua supervisão.</div>':'';
     window.__textoParecerInicial=texto;
@@ -1292,7 +1380,7 @@ async function enviarPeca(id,semParecer){
   if(!semParecer&&window.__textoParecerInicial!==texto){fb.innerHTML='<p class="erro-ia">A peça foi alterada depois do parecer. Solicite um novo parecer inicial antes de decidir o envio.</p>';return}
   if(!confirm('Enviar sua peça ao professor? Após o prazo pode não ser possível reenviar.'))return;
   try{const r=await apiPost('/api/entregar',{id,texto,arquivo:window.__arquivoAluno||null});const d=await r.json();
-  if(!r.ok){let m=(d.erro||'Erro');if(m==='PRAZO')m='⏰ O prazo desta peça encerrou ('+dataHoraBR(d.prazo)+'). Fale com o(a) professor(a) para renovar ou liberar sua entrega.';fb.innerHTML='<p class="erro-ia">'+esc(m)+'</p>';return}
+  if(!r.ok){let m=(d.mensagem||d.erro||'Erro');if(d.erro==='PRAZO')m='⏰ O prazo desta peça encerrou ('+dataHoraBR(d.prazo)+'). Fale com o(a) professor(a) para renovar ou liberar sua entrega.';fb.innerHTML='<p class="erro-ia">'+esc(m)+'</p>';return}
   sset('peca_'+id,'');sset('arquivo_'+id,'');
   const p=(window.__pecasAluno||[]).find(x=>x.id===id);if(p)p.enviado=true;
   fb.innerHTML='<div style="background:#eef5ee;border:1px solid #cfe3cf;border-radius:8px;padding:12px 14px;margin-top:12px;color:var(--verde);font-family:Arial,sans-serif">📨 <b>Peça enviada com sucesso.</b> O professor foi avisado. A revisão final ficará disponível em <b>Peças entregues</b> e também será enviada por e-mail.<div class="botoes"><button onclick="telaEntreguesAluno()">Ver peças entregues</button></div></div>';
