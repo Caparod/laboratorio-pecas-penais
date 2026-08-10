@@ -1,11 +1,12 @@
 'use strict';
 const assert = require('assert');
-const { limparEnunciadoIA, limparGabaritoIA, normalizarGabaritoPenal, validarEnunciado, analisarEspelho, normalizarEspelhoCinco, detectarJurisprudencia, similaridadeNarrativa, validarGabarito, validarCorrecao } = require('../validation');
+const { limparEnunciadoIA, limparGabaritoIA, limparCorrecaoIA, normalizarGabaritoPenal, validarEnunciado, analisarEspelho, normalizarEspelhoCinco, detectarJurisprudencia, similaridadeNarrativa, validarGabarito, validarCorrecao } = require('../validation');
 
 const enunciadoMarcado = '<enunciado>\n**Texto integral do caso.**\n</enunciado>';
 assert.equal(limparEnunciadoIA(enunciadoMarcado), 'Texto integral do caso.', 'marcação interna da IA deve ser removida');
 assert.ok(validarEnunciado(enunciadoMarcado).erros.some(e => /marca[cç][aã]o interna/i.test(e)), 'marcação interna não pode chegar à interface');
 assert.equal(limparGabaritoIA('Analisando as fontes...\n## Peça cabível\nApelação.'), '## Peça cabível\nApelação.', 'comentário técnico antes do gabarito deve ser removido');
+assert.equal(limparCorrecaoIA('Concluí a verificação.\nPasso à correção.\n---\n## Acertos\n- Item correto.'), '## Acertos\n- Item correto.', 'preâmbulo técnico da IA não pode chegar ao relatório');
 assert.equal(normalizarGabaritoPenal('## Prazo\n5 dias úteis; prazo contínuo, e não em dias corridos; art. 564, IV e V, do CPP.'), '## Prazo\n5 dias corridos; prazo contínuo, em dias corridos; art. 563 do CPP.', 'inconsistências penais conhecidas devem ser corrigidas');
 
 const enunciado = 'No processo nº 0712345-67.2026.8.07.0001, em 10/03/2026, João da Silva foi condenado pela Vara Criminal de Brasília. A defesa foi intimada em 16/03/2026 e todos os elementos probatórios relevantes foram descritos nos autos fictícios. O acusado pretende impugnar integralmente a sentença e apresentou ao advogado cópia da decisão e das provas. Na condição de advogado(a) de João da Silva, elabore a medida processual cabível, vedado o uso de habeas corpus. (Valor: 5,00)';
@@ -87,7 +88,17 @@ const correcao = `## Acertos
 ## Verificação de jurisprudência e citações
 - Artigos conferidos no texto oficial.
 ## Verificação de robotização e supervisão humana
-- Risco BAIXO. Não foram observados padrões formais suficientes para indicar produção automatizada sem revisão. Esta triagem não comprova autoria e a decisão permanece humana.
+- Risco: BAIXO. Não foram observados padrões formais suficientes para indicar produção automatizada sem revisão. Esta triagem não comprova autoria e a decisão permanece humana.
+PENALIDADE POR ROBOTIZAÇÃO: 0,00
+## Rastreabilidade dos descontos
+| Falha identificada | Aplicação | Desconto |
+|---|---|---:|
+| Aprofundamento insuficiente da tese | Item 4 do espelho | 0,50 |
+| Ausência do pedido subsidiário | Item 5 do espelho | 0,25 |
+| Fechamento formal inadequado | Item 6 do espelho | 0,25 |
+PENALIDADE POR JURISPRUDÊNCIA NÃO CONFIRMADA: 0,00
+OUTRAS PENALIDADES FORA DO ESPELHO: 0,00
+TOTAL DE PENALIDADES FORA DO ESPELHO: 0,00
 NOTA SUGERIDA: 4,00/5
 ## Propostas de aprimoramento
 - Desenvolver a tese e indicar o dispositivo correspondente, sem copiar texto pronto. A análise deve permanecer orientativa e explicar os critérios ao estudante com clareza suficiente para a revisão humana pelo professor. No pedido subsidiário, o aluno deve conferir a consequência jurídica prevista no gabarito e relacioná-la expressamente aos fatos. A organização em tópicos deve separar cabimento, mérito e pedidos, tornando visível a sequência lógica da argumentação.
@@ -97,5 +108,19 @@ assert.equal(validarCorrecao(correcao).ok, true, 'correção consistente deve pa
 assert.equal(validarCorrecao(correcao.replace(/\| Item \|[\s\S]*?\| 6 \|[^\n]+/, '- Cabimento: 1,00/1,00\n- Tempestividade: 0,50/0,50\n- Fatos: 0,50/0,50\n- Fundamentação: 1,00/1,50\n- Pedidos: 0,50/0,75\n- Técnica: 0,50/0,75')).ok, false, 'lista sem tabela OAB/FGV deve falhar');
 assert.equal(validarCorrecao(correcao.replace('NOTA SUGERIDA: 4,00/5', 'NOTA SUGERIDA: 3,50/5')).ok, false, 'nota divergente da soma deve falhar');
 assert.equal(validarCorrecao(correcao.replace('- Artigos conferidos no texto oficial.', '- Súmula 9999 — INEXISTENTE/FALSA.')).ok, false, 'citação falsa exige nota zero');
+const correcaoComAtencao = correcao
+  .replace('Risco: BAIXO', 'Risco: ATENÇÃO')
+  .replace('PENALIDADE POR ROBOTIZAÇÃO: 0,00', 'PENALIDADE POR ROBOTIZAÇÃO: -0,50')
+  .replace('TOTAL DE PENALIDADES FORA DO ESPELHO: 0,00', 'TOTAL DE PENALIDADES FORA DO ESPELHO: -0,50')
+  .replace('NOTA SUGERIDA: 4,00/5', 'NOTA SUGERIDA: 3,50/5');
+assert.equal(validarCorrecao(correcaoComAtencao).ok, true, 'risco ATENÇÃO deve descontar 0,50 fora do espelho');
+assert.equal(validarCorrecao(correcaoComAtencao.replace('-0,50', '0,00')).ok, false, 'risco ATENÇÃO sem penalidade deve ser bloqueado');
+assert.equal(validarCorrecao(correcao.replace('Cabimento e endereçamento', 'Cabimento, Súmulas 718/719 do STF')).ok, true, 'números de súmulas não podem ser confundidos com a pontuação');
+const correcaoComDuvidaJurisprudencial = correcao
+  .replace('- Artigos conferidos no texto oficial.', '- Precedente indicado — SUSPEITA; não foi possível confirmação oficial.')
+  .replace('PENALIDADE POR JURISPRUDÊNCIA NÃO CONFIRMADA: 0,00', 'PENALIDADE POR JURISPRUDÊNCIA NÃO CONFIRMADA: -0,25')
+  .replace('TOTAL DE PENALIDADES FORA DO ESPELHO: 0,00', 'TOTAL DE PENALIDADES FORA DO ESPELHO: -0,25')
+  .replace('NOTA SUGERIDA: 4,00/5', 'NOTA SUGERIDA: 3,75/5');
+assert.equal(validarCorrecao(correcaoComDuvidaJurisprudencial).ok, true, 'dúvida jurisprudencial deve gerar penalidade adicional de 0,25');
 
 console.log('OK: contratos determinísticos de IA, espelho e correção');

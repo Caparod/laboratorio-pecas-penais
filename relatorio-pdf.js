@@ -34,7 +34,11 @@ function linhasEspelho(linhas) {
   for (const original of linhas || []) {
     const linha = original.trim();
     if (!linha || /^\|?\s*[-:| ]+\|?$/.test(linha)) continue;
-    const par = linha.match(/(\d+(?:[.,]\d+)?)\s*\/\s*(\d+(?:[.,]\d+)?)/);
+    const pares = Array.from(linha.matchAll(/(\d+(?:[.,]\d+)?)\s*\/\s*(\d+(?:[.,]\d+)?)/g));
+    const par = pares.reverse().find(m => {
+      const obtido = Number(m[1].replace(',', '.')), maximo = Number(m[2].replace(',', '.'));
+      return Number.isFinite(obtido) && Number.isFinite(maximo) && obtido >= 0 && maximo > 0 && obtido <= maximo && maximo <= 5;
+    });
     if (!par) continue;
     let criterio = '', esperado = '', justificativa = '';
     if (linha.startsWith('|')) {

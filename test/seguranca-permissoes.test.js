@@ -190,7 +190,17 @@ async function executar() {
 ## Verificação de jurisprudência e citações
 - Os dispositivos legais relevantes foram conferidos na legislação oficial; não há citação jurisprudencial falsa identificada.
 ## Verificação de robotização e supervisão humana
-- Risco BAIXO. Não foram observados padrões formais suficientes para indicar produção automatizada sem revisão. Esta triagem não comprova autoria e a decisão permanece humana.
+- Risco: BAIXO. Não foram observados padrões formais suficientes para indicar produção automatizada sem revisão. Esta triagem não comprova autoria e a decisão permanece humana.
+PENALIDADE POR ROBOTIZAÇÃO: 0,00
+## Rastreabilidade dos descontos
+| Falha identificada | Aplicação | Desconto |
+|---|---|---:|
+| Fundamentação subsidiária incompleta | Item 4 do espelho | 0,50 |
+| Pedido subsidiário incompleto | Item 5 do espelho | 0,125 |
+| Fechamento formal incompleto | Item 6 do espelho | 0,125 |
+PENALIDADE POR JURISPRUDÊNCIA NÃO CONFIRMADA: 0,00
+OUTRAS PENALIDADES FORA DO ESPELHO: 0,00
+TOTAL DE PENALIDADES FORA DO ESPELHO: 0,00
 NOTA SUGERIDA: 4,25/5
 ## Propostas de aprimoramento
 - Aprofundar a tese subsidiária, ligando cada requisito normativo aos fatos do caso e explicando a consequência jurídica pretendida. Organizar os pedidos em itens separados e conferir o fechamento antes do envio. Essa orientação indica o caminho de revisão sem fornecer redação pronta ao estudante.
