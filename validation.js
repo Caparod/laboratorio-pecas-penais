@@ -41,6 +41,8 @@ function paresPontuacao(bloco) {
     if (!par) continue;
     const celulas = linha.slice(1, linha.endsWith('|') ? -1 : undefined).split('|').map(c => c.replace(/[*_`]/g, '').trim());
     const indiceNota = celulas.findIndex(c => c.includes(par.match));
+    const rotulos = celulas.slice(0, indiceNota < 0 ? 1 : indiceNota).map(normalizar);
+    if (rotulos.some(c => /^(?:total|subtotal|soma|pontuacao final|nota final)(?:\b|\s*:)/.test(c))) continue;
     const criterio = celulas.slice(0, indiceNota < 0 ? 1 : indiceNota).filter(c => c && !/^\d+$/.test(c) && !/^(?:item|crit[eé]rio avaliado)$/i.test(c)).join(' — ') || 'Critério avaliado';
     itens.push({ criterio: criterio.replace(/\|/g, '/'), obtido: par.obtido, maximo: par.maximo });
   }
@@ -62,7 +64,7 @@ function normalizarPenalidadesCorrecao(texto) {
   const outrasPenalidades = Math.min(5, Math.max(0, outrasMatch ? numeroBR(outrasMatch[1]) || 0 : 0));
   const totalPenalidades = Math.round((penalidadeRobotizacao + penalidadeJurisprudencia + outrasPenalidades) * 100) / 100;
   const citacaoFalsa = /(?:—|:)\s*INEXISTENTE(?:\/FALSA)?|CITA[CÇ][AÃ]O FALSA DETECTADA/i.test(original);
-  const nota = citacaoFalsa ? 0 : Math.max(0, Math.round((subtotal - totalPenalidades) * 100) / 100);
+  const nota = citacaoFalsa ? 0 : Math.min(5, Math.max(0, Math.round((subtotal - totalPenalidades) * 100) / 100));
 
   const linhas = original.split(/\r?\n/);
   const semRastreabilidade = [];

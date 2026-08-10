@@ -130,5 +130,12 @@ const correcaoPenalidadesNormalizadas = normalizarPenalidadesCorrecao(correcaoPe
 assert.equal(validarCorrecao(correcaoPenalidadesNormalizadas).ok, true, 'o servidor deve corrigir automaticamente a tabela e a conta de penalidades da IA');
 assert.match(correcaoPenalidadesNormalizadas, /PENALIDADE POR JURISPRUDÊNCIA NÃO CONFIRMADA: -0,25/);
 assert.match(correcaoPenalidadesNormalizadas, /NOTA SUGERIDA: 3,75\/5/);
+const correcaoComLinhaTotal = correcao.replace(
+  '| 6 | Técnica, linguagem e forma | 0,50/0,75 | A estrutura é compreensível, mas o fechamento formal precisa ser ajustado. |',
+  '| 6 | Técnica, linguagem e forma | 0,50/0,75 | A estrutura é compreensível, mas o fechamento formal precisa ser ajustado. |\n| Total | Pontuação final | 4,00/5,00 | Soma dos critérios avaliados. |'
+);
+const correcaoTotalNormalizada = normalizarPenalidadesCorrecao(correcaoComLinhaTotal);
+assert.equal(validarCorrecao(correcaoTotalNormalizada).ok, true, 'a linha Total não pode ser somada novamente aos critérios do espelho');
+assert.match(correcaoTotalNormalizada, /NOTA SUGERIDA: 4,00\/5/);
 
 console.log('OK: contratos determinísticos de IA, espelho e correção');
