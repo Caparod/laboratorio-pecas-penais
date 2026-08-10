@@ -580,6 +580,7 @@ function csvCelula(v) {
 
 // ===== Envio de e-mail (Gmail SMTP via nodemailer) =====
 let _transport = null;
+let _emailVerificadoEm = 0;
 let _pdfjsLib = null;
 async function carregarPdfJs() {
   if (_pdfjsLib) return _pdfjsLib;
@@ -598,9 +599,18 @@ async function enviarEmail(para, assunto, html, attachments) {
   const t = transporteEmail();
   if (!t) { console.log('[EMAIL] indisponível (defina GMAIL_USER e GMAIL_APP_PASSWORD). Assunto: ' + assunto); return { ok: false, motivo: 'sem-config' }; }
   try {
-    await t.sendMail({ from: 'Laboratório de Peças Penais - IESB <' + process.env.GMAIL_USER + '>', to: para, subject: assunto, html, attachments: attachments || [] });
-    return { ok: true };
+    const info = await t.sendMail({ from: 'Laboratório de Peças Penais - IESB <' + process.env.GMAIL_USER + '>', to: para, subject: assunto, html, attachments: attachments || [] });
+    const aceitos = Array.isArray(info.accepted) ? info.accepted : [];
+    if (!aceitos.length) return { ok: false, motivo: 'servidor-nao-aceitou-o-destinatario' };
+    return { ok: true, mensagemId: String(info.messageId || '').slice(0, 300) };
   } catch (e) { console.error('[EMAIL] falha:', e.message); return { ok: false, motivo: e.message }; }
+}
+async function verificarServicoEmail() {
+  const t = transporteEmail();
+  if (!t) return { ok: false, motivo: 'Gmail não configurado.' };
+  if (Date.now() - _emailVerificadoEm < 5 * 60000) return { ok: true };
+  try { await t.verify(); _emailVerificadoEm = Date.now(); return { ok: true }; }
+  catch (err) { return { ok: false, motivo: String(err.message || err || 'Falha de autenticação no Gmail.').slice(0, 200) }; }
 }
 function codigo6() { return String(crypto.randomInt(100000, 1000000)); }
 function senhaTemporaria() { return crypto.randomBytes(12).toString('base64url') + 'aA1!'; }
@@ -2194,7 +2204,7 @@ async function enviarEspelhoAluno(p, e, matricula) {
   const html = '<p>Olá, ' + escHtml(a.nome || '') + '!</p><p>Sua correção está disponível no sistema e o espelho detalhado segue anexado em PDF.</p>' + relatorioParaHtml(dados);
   return enviarEmail(a.email, 'Correção da Peça ' + rodadaDaPeca(p) + ' — Nota ' + e.nota.toString().replace('.', ','), html, [{ filename: nomeArquivoEspelho(p), content: pdf, contentType: 'application/pdf' }]);
 }
-async function validarEEnviarCorrecao(sess, p, e, matricula, automatico) {
+async function validarEEnviarCorrecao(sess, p, e, matricula, automatico, aoPersistir) {
   e.validado = true; e.validadoEm = Date.now(); e.validadoPor = sess.usuario;
   if (automatico) {
     e.validacaoAutomatica = { professorResponsavel: sess.usuario, em: e.validadoEm, notaFinal: e.nota, versaoPeca: e.versaoPeca || 1, modo: 'automatico-sem-supervisao' };
@@ -2204,7 +2214,37 @@ async function validarEEnviarCorrecao(sess, p, e, matricula, automatico) {
     delete e.validacaoAutomatica;
   }
   try { await salvarDbCritico(); } catch (err) { throw new Error('A correção não pôde ser persistida remotamente. Tente novamente.'); }
-  return enviarEspelhoAluno(p, e, matricula);
+  if (typeof aoPersistir === 'function') {
+    try { aoPersistir(); } catch (err) { console.error('[CORRECAO] falha ao publicar progresso:', err.message); }
+  }
+  let email;
+  for (let tentativaEmail = 1; tentativaEmail <= 2; tentativaEmail++) {
+    try { email = await enviarEspelhoAluno(p, e, matricula); }
+    catch (err) { email = { ok: false, motivo: String(err.message || err || 'falha-no-envio').slice(0, 300) }; }
+    if (email && (email.ok || email.motivo === 'sem-email-verificado')) break;
+    if (tentativaEmail < 2) await new Promise(resolve => setTimeout(resolve, 500));
+  }
+  email = email || { ok: false, motivo: 'falha-no-envio' };
+  e.emailCorrecaoEnviado = !!(email && email.ok);
+  e.emailCorrecaoTentadoEm = Date.now();
+  if (e.emailCorrecaoEnviado) {
+    e.emailCorrecaoEnviadoEm = e.emailCorrecaoTentadoEm;
+    e.emailCorrecaoMensagemId = String(email.mensagemId || '').slice(0, 300);
+    delete e.emailCorrecaoErro;
+  } else {
+    delete e.emailCorrecaoEnviadoEm;
+    delete e.emailCorrecaoMensagemId;
+    e.emailCorrecaoErro = String((email && email.motivo) || 'falha-no-envio').slice(0, 300);
+  }
+  try { await salvarDbCritico(); }
+  catch (err) {
+    // A correção e o resultado do envio já estão no estado local e a fila de
+    // persistência continuará tentando sincronizá-los. Nunca apague uma
+    // correção concluída apenas porque o registro do e-mail atrasou.
+    salvarDb();
+    email.estadoPersistenciaPendente = true;
+  }
+  return email;
 }
 // Professor: pedir à IA um relatório com nota para uma entrega
 async function entregaCorrigirIA(req, res) {
@@ -2266,6 +2306,7 @@ async function entregaValidar(req, res) {
   if (isNaN(notaNum) || notaNum < 0 || notaNum > 5) return falharSemResiduos(400, 'Nota inválida (0 a 5).');
   const notaAnterior = e.nota;
   e.nota = Math.round(notaNum * 100) / 100;
+  let emailResultado = null;
   if (d.validar) {
     const vr = validarCorrecao(e.relatorio);
     if (!vr.ok) return falharSemResiduos(400, 'O espelho OAB/FGV está inconsistente: ' + vr.erros.join(' '));
@@ -2279,6 +2320,7 @@ async function entregaValidar(req, res) {
     let correcaoConfirmada = false;
     try {
       const email = await validarEEnviarCorrecao(sess, p, e, String(d.matricula), false);
+      emailResultado = email;
       correcaoConfirmada = true;
       e.revisaoHumana.notaAnterior = notaAnterior == null ? null : notaAnterior;
       e.emailCorrecaoEnviado = !!(email && email.ok);
@@ -2291,7 +2333,9 @@ async function entregaValidar(req, res) {
   } else {
     try { await salvarDbCritico(); } catch (err) { return falharSemResiduos(503, 'O rascunho não pôde ser confirmado na persistência remota. Tente novamente.'); }
   }
-  json(res, 200, { ok: true, validado: !!e.validado, emailEnviado: !!(d.validar && db.alunos[String(d.matricula)] && db.alunos[String(d.matricula)].emailVerificado), pdfAnexado: !!d.validar });
+  const motivoEmail = emailResultado && !emailResultado.ok ? String(emailResultado.motivo || '') : '';
+  const avisoEmail = motivoEmail === 'sem-email-verificado' ? 'O aluno não possui e-mail verificado. O PDF está disponível no sistema.' : (motivoEmail ? 'A correção foi salva, mas o e-mail com o PDF não foi enviado.' : '');
+  json(res, 200, { ok: true, validado: !!e.validado, emailEnviado: !!(emailResultado && emailResultado.ok), pdfAnexado: !!(emailResultado && emailResultado.ok), avisoEmail });
 }
 
 async function entregaPreviaPdf(req, res) {
@@ -2324,28 +2368,61 @@ async function processarLoteCorrecao(job, sess, p, pendentes) {
     for (const item of pendentes) {
       job.atual = item.nome || item.matricula;
       const e = (db.entregas[p.id] || {})[item.matricula];
-      if (!e || e.validado) { job.concluidas++; continue; }
-      const estadoInicial = capturarEstadoCorrecao(e);
-      let expirou = false;
-      const timer = setTimeout(() => {
-        expirou = true;
-        limparEstadoTentativa(e, estadoInicial);
-      }, LIMITE_TENTATIVA_CORRECAO_MS);
-      if (timer.unref) timer.unref();
-      try {
-        const gerada = await gerarRelatorioCorrecao(sess, p, e);
-        if (expirou) throw new Error('A correção excedeu o tempo de segurança; o conteúdo parcial foi removido.');
-        if (!gerada.ok) throw new Error(gerada.erro || 'Falha na correção por IA.');
-        aplicarResultadoCorrecao(e, gerada, sess.usuario);
-        e.nota = Math.round(Number(gerada.notaSugerida) * 100) / 100;
-        const email = await validarEEnviarCorrecao(sess, p, e, item.matricula, true);
-        if (!email || !email.ok) job.semEmail++;
+      if (!e) { job.concluidas++; continue; }
+      if (e.validado) {
         job.concluidas++;
-      } catch (err) {
-        limparEstadoTentativa(e, estadoInicial);
-        job.falhas++;
-        job.erros.push({ aluno: item.nome || item.matricula, erro: (String(err.message || err).slice(0, 200) + ' Nenhum conteúdo parcial foi mantido.').slice(0, 240) });
-      } finally { clearTimeout(timer); }
+        job.itensConcluidos.push({ matricula: item.matricula, nome: item.nome || item.matricula, nota: e.nota, enviadoEm: e.enviadoEm });
+        continue;
+      }
+      for (let tentativa = 1; tentativa <= 2; tentativa++) {
+        const estadoInicial = capturarEstadoCorrecao(e);
+        let correcaoPersistida = false;
+        let expirou = false;
+        const timer = setTimeout(() => {
+          expirou = true;
+          limparEstadoTentativa(e, estadoInicial);
+        }, LIMITE_TENTATIVA_CORRECAO_MS);
+        if (timer.unref) timer.unref();
+        try {
+          const gerada = await gerarRelatorioCorrecao(sess, p, e);
+          if (expirou) throw new Error('A correção excedeu o tempo de segurança; o conteúdo parcial foi removido.');
+          if (!gerada.ok) throw new Error(gerada.erro || 'Falha na correção por IA.');
+          aplicarResultadoCorrecao(e, gerada, sess.usuario);
+          e.nota = Math.round(Number(gerada.notaSugerida) * 100) / 100;
+          const email = await validarEEnviarCorrecao(sess, p, e, item.matricula, true, () => {
+            correcaoPersistida = true;
+            clearTimeout(timer);
+            job.concluidas++;
+            job.itensConcluidos.push({ matricula: item.matricula, nome: item.nome || item.matricula, nota: e.nota, enviadoEm: e.enviadoEm });
+          });
+          if (email && email.ok) job.emailsEnviados++;
+          else {
+            job.semEmail++;
+            job.falhasEmail.push({ aluno: item.nome || item.matricula, erro: String((email && email.motivo) || 'E-mail não enviado.').slice(0, 200) });
+          }
+          job.repetindo = '';
+          break;
+        } catch (err) {
+          if (correcaoPersistida) {
+            job.semEmail++;
+            job.falhasEmail.push({ aluno: item.nome || item.matricula, erro: ('A correção foi salva, mas o envio do e-mail falhou: ' + String(err.message || err)).slice(0, 240) });
+            job.repetindo = '';
+            break;
+          }
+          limparEstadoTentativa(e, estadoInicial);
+          const mensagem = String(err.message || err);
+          const naoRetriavel = /gabarito|sem chave|limite mensal|acesso restrito|HTTP 401|HTTP 403/i.test(mensagem);
+          if (tentativa < 2 && !naoRetriavel) {
+            job.tentativasExtras++;
+            job.repetindo = item.nome || item.matricula;
+            continue;
+          }
+          job.falhas++;
+          job.repetindo = '';
+          job.erros.push({ aluno: item.nome || item.matricula, erro: (mensagem.slice(0, 200) + ' Nenhum conteúdo parcial foi mantido após as tentativas.').slice(0, 260) });
+          break;
+        } finally { clearTimeout(timer); }
+      }
     }
     job.status = 'concluido'; job.atual = ''; job.finalizadoEm = Date.now();
   } finally { pecasEmCorrecaoLote.delete(p.id); }
@@ -2360,8 +2437,12 @@ async function entregaCorrigirTodas(req, res) {
   if (Array.from(entregasEmCorrecao).some(chave => chave.startsWith(p.id + '\u0000'))) return json(res, 409, { erro: 'Há uma correção individual desta rodada em andamento. Aguarde a conclusão.' });
   const pendentes = Object.entries(db.entregas[p.id] || {}).filter(([mat, e]) => entregaPertenceTurma(mat, e, p) && !e.validado).map(([mat, e]) => ({ matricula: mat, nome: nomeParticipanteEntrega(mat, e) }));
   if (!pendentes.length) return json(res, 400, { erro: 'Não há entregas pendentes nesta rodada.' });
+  const destinatariosInvalidos = pendentes.filter(item => { const a = db.alunos[item.matricula]; return !a || !a.email || !a.emailVerificado; });
+  if (destinatariosInvalidos.length) return json(res, 400, { erro: 'O lote não foi iniciado: ' + destinatariosInvalidos.length + ' aluno(s) ainda não possuem e-mail verificado. Regularize os destinatários antes de corrigir todas.' });
+  const emailPronto = await verificarServicoEmail();
+  if (!emailPronto.ok) return json(res, 503, { erro: 'O lote não foi iniciado porque o serviço de e-mail não está operacional. Confira a configuração do Gmail.' });
   const id = crypto.randomUUID();
-  const job = { id, pecaId: p.id, professor: sess.usuario, status: 'processando', total: pendentes.length, concluidas: 0, falhas: 0, semEmail: 0, atual: '', erros: [], iniciadoEm: Date.now() };
+  const job = { id, pecaId: p.id, professor: sess.usuario, status: 'processando', total: pendentes.length, concluidas: 0, falhas: 0, tentativasExtras: 0, repetindo: '', emailsEnviados: 0, semEmail: 0, atual: '', erros: [], falhasEmail: [], itensConcluidos: [], iniciadoEm: Date.now() };
   lotesCorrecao.set(id, job); pecasEmCorrecaoLote.add(p.id);
   if (lotesCorrecao.size > 50) for (const [chave, antigo] of lotesCorrecao) if (antigo.status !== 'processando') { lotesCorrecao.delete(chave); if (lotesCorrecao.size <= 40) break; }
   setImmediate(() => processarLoteCorrecao(job, Object.assign({}, sess), p, pendentes).catch(err => { job.status = 'falhou'; job.atual = ''; job.finalizadoEm = Date.now(); job.falhas++; job.erros.push({ aluno: 'Lote', erro: (String(err.message || err).slice(0, 200) + ' O estado parcial foi limpo.').slice(0, 240) }); pecasEmCorrecaoLote.delete(p.id); }));

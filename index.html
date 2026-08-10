@@ -527,19 +527,34 @@ async function corrigirTodasRodada(id,rodada,total){
     await acompanharCorrecaoTodas(id,d.jobId);
   }catch(e){if(fb)fb.innerHTML='<p class="erro-ia">Falha de conexão. Tente novamente.</p>'}
 }
+function sincronizarConcluidasLote(pecaId,itens){
+  const p=(window.__propostasProfessor||[]).find(x=>x.id===pecaId);if(!p||!Array.isArray(itens)||!itens.length)return false;
+  p.aCorrigir=p.aCorrigir||[];p.corrigidas=p.corrigidas||[];let mudou=false;
+  for(const item of itens){
+    const mat=String(item.matricula||''),indice=p.aCorrigir.findIndex(x=>String(x.matricula)===mat);
+    const anterior=indice>=0?p.aCorrigir.splice(indice,1)[0]:{};
+    const registro=Object.assign({},anterior,item,{matricula:mat});
+    const ja=p.corrigidas.find(x=>String(x.matricula)===mat);
+    if(ja)Object.assign(ja,registro);else p.corrigidas.push(registro);
+    if(indice>=0||!ja)mudou=true;
+  }
+  return mudou;
+}
 async function acompanharCorrecaoTodas(pecaId,jobId){
-  const fb=document.getElementById('corrigir_todas_fb');if(!fb)return;
+  let fb=document.getElementById('corrigir_todas_fb');if(!fb)return;
   try{
     const r=await apiGet('/api/entrega/corrigir-todas-status?job='+encodeURIComponent(jobId));const d=await r.json();
     if(!r.ok){fb.innerHTML='<p class="erro-ia">'+esc(d.erro||'Não foi possível acompanhar a correção.')+'</p>';return}
     const j=d.job||{},processadas=(j.concluidas||0)+(j.falhas||0),pct=j.total?Math.round(processadas*100/j.total):0;
-    fb.innerHTML='<div class="parecer-inicial"><p><b>Correção automática em andamento: '+processadas+' de '+j.total+'</b>'+(j.atual?' · '+esc(j.atual):'')+'</p><div class="pbar"><div class="trilho"><div class="fill" style="width:'+pct+'%"></div></div></div>'+(j.falhas?'<p class="erro-ia">Falhas até agora: '+j.falhas+'</p>':'')+'</div>';
-    if(j.status==='processando'){setTimeout(()=>acompanharCorrecaoTodas(pecaId,jobId),3000);return}
+    if(sincronizarConcluidasLote(pecaId,j.itensConcluidos)){renderRodadaProposta(pecaId);fb=document.getElementById('corrigir_todas_fb')}
+    fb.innerHTML='<div class="parecer-inicial"><p><b>Concluídas neste lote: '+processadas+' de '+j.total+'</b>'+(j.atual?' · corrigindo '+esc(j.atual):'')+'</p>'+(j.repetindo?'<p style="color:var(--dourado);font-family:Arial,sans-serif">↻ Repetindo automaticamente a correção de '+esc(j.repetindo)+'.</p>':'')+'<div class="pbar"><div class="trilho"><div class="fill" style="width:'+pct+'%"></div></div></div><p style="font: .82rem Arial,sans-serif;color:var(--cinza)">Relatórios enviados por e-mail: '+(j.emailsEnviados||0)+(j.semEmail?' · não enviados: '+j.semEmail:'')+(j.tentativasExtras?' · repetições automáticas: '+j.tentativasExtras:'')+'</p>'+(j.falhas?'<p class="erro-ia">Falhas de correção até agora: '+j.falhas+'</p>':'')+'</div>';
+    if(j.status==='processando'){setTimeout(()=>acompanharCorrecaoTodas(pecaId,jobId),1500);return}
     if(j.status==='falhou'){
       fb.innerHTML='<div class="parecer-inicial"><p class="erro-ia"><b>A correção automática foi interrompida.</b> O conteúdo parcial foi removido e as entregas não concluídas continuam pendentes.</p>'+((j.erros||[]).length?'<ul class="erro-ia">'+j.erros.map(x=>'<li>'+esc(x.aluno)+': '+esc(x.erro)+'</li>').join('')+'</ul>':'')+'</div>';
       setTimeout(()=>atualizarPropostasProfessor(pecaId),1200);return;
     }
-    fb.innerHTML='<div class="parecer-inicial"><p style="color:var(--verde)"><b>✅ Lote concluído.</b> '+j.concluidas+' correção(ões) validada(s) e '+j.falhas+' falha(s).'+(j.semEmail?' '+j.semEmail+' aluno(s) sem e-mail verificado recebeu(ram) o PDF somente no sistema.':'')+'</p>'+((j.erros||[]).length?'<ul class="erro-ia">'+j.erros.map(x=>'<li>'+esc(x.aluno)+': '+esc(x.erro)+'</li>').join('')+'</ul>':'')+'</div>';
+    const loteOk=!(j.falhas||0);
+    fb.innerHTML='<div class="parecer-inicial"><p class="'+(loteOk?'':'erro-ia')+'" style="'+(loteOk?'color:var(--verde)':'')+'"><b>'+(loteOk?'✅ Todas as entregas do lote foram corrigidas.':'⚠️ Lote finalizado com pendência.')+'</b> '+j.concluidas+' correção(ões) validada(s), '+j.falhas+' falha(s) e '+(j.emailsEnviados||0)+' relatório(s) enviado(s) por e-mail.'+(j.semEmail?' '+j.semEmail+' relatório(s) não enviado(s) por e-mail; o PDF permanece disponível no sistema.':'')+'</p>'+((j.erros||[]).length?'<ul class="erro-ia">'+j.erros.map(x=>'<li>'+esc(x.aluno)+': '+esc(x.erro)+'</li>').join('')+'</ul>':'')+((j.falhasEmail||[]).length?'<p class="erro-ia"><b>Falhas de e-mail:</b></p><ul class="erro-ia">'+j.falhasEmail.map(x=>'<li>'+esc(x.aluno)+': '+esc(x.erro)+'</li>').join('')+'</ul>':'')+'</div>';
     setTimeout(()=>atualizarPropostasProfessor(pecaId),1200);
   }catch(e){fb.innerHTML='<p class="erro-ia">Falha ao acompanhar o lote. Atualize a página para consultar o resultado.</p>'}
 }
@@ -696,7 +711,9 @@ async function salvarEntrega(validar){
   if(validar&&window.__ent.recurso&&window.__ent.recurso.status==='pendente'){payload.resultadoRecurso=((document.getElementById('resultado_recurso')||{}).value||'');payload.decisaoRecurso=((document.getElementById('decisao_recurso')||{}).value||'').trim()}
   try{const r=await apiPost('/api/entrega/validar',payload);
   const d=await r.json();if(!r.ok){fb.innerHTML='<p class="erro-ia">'+esc(d.erro||'Erro')+'</p>';return}
-  fb.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif">'+(validar?(window.__ent.recurso?'✅ Recurso decidido, correção atualizada e enviada ao aluno.':'✅ Validada e enviada ao aluno.'):'💾 Rascunho salvo.')+'</p>';
+  if(validar&&d.emailEnviado)fb.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif">'+(window.__ent.recurso?'✅ Recurso decidido, correção atualizada e PDF enviado ao aluno por e-mail.':'✅ Correção validada e PDF enviado ao aluno por e-mail.')+'</p>';
+  else if(validar)fb.innerHTML='<p class="erro-ia">⚠️ Correção validada e disponível no sistema, mas o e-mail não foi enviado. '+esc(d.avisoEmail||'Confira o e-mail do aluno e a configuração de envio.')+'</p>';
+  else fb.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif">💾 Rascunho salvo.</p>';
   }catch(e){}
 }
 // ---- Nova peça (IA ou PDF ou manual) ----

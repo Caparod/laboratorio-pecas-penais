@@ -22,7 +22,7 @@ assert.equal(entrega.versaoGabaritoCorrecao, 3);
 const servidor = fs.readFileSync(path.resolve(__dirname, '..', 'server.js'), 'utf8');
 assert.match(servidor, /vigiarTentativa\(job[\s\S]*limparEstadoTentativa\(e, estadoInicial\)/, 'correção individual deve ter limpeza automática por prazo');
 assert.match(servidor, /catch \(err\) \{\s*limparEstadoTentativa\(e, estadoInicial\)/, 'falha individual deve restaurar o estado anterior');
-assert.match(servidor, /processarLoteCorrecao[\s\S]*catch \(err\) \{\s*limparEstadoTentativa\(e, estadoInicial\)/, 'cada aluno do lote deve ser tratado como transação isolada');
+assert.match(servidor, /processarLoteCorrecao[\s\S]*catch \(err\) \{[\s\S]*if \(correcaoPersistida\)[\s\S]*break;\s*\}\s*limparEstadoTentativa\(e, estadoInicial\)/, 'cada aluno do lote deve ser tratado como transação isolada, sem reverter correção já persistida por falha de e-mail');
 assert.match(servidor, /relatorioIAInvalido[\s\S]*correcao-incompleta-ou-invalida/, 'reinício do servidor deve remover resíduos antigos de IA');
 
 console.log('OK: correções interrompidas são transacionais e não deixam resíduos.');
