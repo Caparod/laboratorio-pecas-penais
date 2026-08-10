@@ -8,6 +8,7 @@ const { limparEnunciadoIA, limparGabaritoIA, limparCorrecaoIA, normalizarPenalid
 const { LIMITE_ARQUIVO, decodificarDataUrl, tipoArquivo, extrairTextoDocx, extrairTextoDocLegado, detectarSinaisPrompt, analisarRobotizacao, validarParecerInicial } = require('./arquivo-peca');
 const { gerarPdfEspelho, relatorioParaHtml } = require('./relatorio-pdf');
 const { capturarEstadoCorrecao, restaurarEstadoCorrecao, aplicarResultadoCorrecao } = require('./correcao-transacao');
+const { cabecalhosSupabase } = require('./supabase-auth');
 
 // Conteúdo jurídico avaliativo usa sempre o modelo de maior capacidade.
 // OCR e extrações mecânicas possuem configurações próprias mais abaixo.
@@ -207,7 +208,7 @@ const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\/+$/, '');
 // app_state contains the complete application database and must never be
 // accessed with a public Supabase key. The service role is kept server-side and
 // is the only role allowed to bypass the table's RLS protection.
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+const SUPABASE_KEY = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const SUPABASE_STATE_TABLE = process.env.SUPABASE_STATE_TABLE || 'app_state';
 const SUPABASE_STATE_ID = process.env.SUPABASE_STATE_ID || 'main';
 const SUPABASE_ATIVO = Boolean(SUPABASE_URL && SUPABASE_KEY);
@@ -225,7 +226,7 @@ function carregarDbLocal() {
 async function carregarDbSupabase() {
   if (!SUPABASE_ATIVO) return false;
   const url = `${SUPABASE_URL}/rest/v1/${SUPABASE_STATE_TABLE}?select=data&id=eq.${encodeURIComponent(SUPABASE_STATE_ID)}&limit=1`;
-  const resp = await fetchComTimeout(url, { headers: { apikey: SUPABASE_KEY, authorization: `Bearer ${SUPABASE_KEY}` } }, 15000);
+  const resp = await fetchComTimeout(url, { headers: cabecalhosSupabase(SUPABASE_KEY) }, 15000);
   if (resp.status === 404) {
     console.error(`[SUPABASE] Tabela ${SUPABASE_STATE_TABLE} nao encontrada pela API; iniciando com base local.`);
     return false;
@@ -243,8 +244,7 @@ async function salvarDbSupabase(snapshot) {
   const resp = await fetchComTimeout(url, {
     method: 'POST',
     headers: {
-      apikey: SUPABASE_KEY,
-      authorization: `Bearer ${SUPABASE_KEY}`,
+      ...cabecalhosSupabase(SUPABASE_KEY),
       'content-type': 'application/json',
       prefer: 'resolution=merge-duplicates,return=minimal'
     },

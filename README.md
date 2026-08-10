@@ -31,7 +31,8 @@ O sistema usa Supabase como banco principal quando as variáveis abaixo existem.
 Variáveis no Render:
 
 - `SUPABASE_URL`: URL do projeto Supabase.
-- `SUPABASE_SERVICE_ROLE_KEY`: chave service role do Supabase. Use apenas no servidor.
+- `SUPABASE_SECRET_KEY`: chave atual `sb_secret_...` do Supabase, recomendada. Use apenas no servidor.
+- `SUPABASE_SERVICE_ROLE_KEY`: chave service role legada (JWT), mantida por compatibilidade. Use apenas no servidor.
 - `SUPABASE_STATE_TABLE`: opcional, padrão `app_state`.
 - `SUPABASE_STATE_ID`: opcional, padrão `main`.
 
@@ -51,7 +52,7 @@ revoke all on table public.app_state from anon, authenticated;
 ```
 
 Se a tabela já existe, execute ao menos os dois últimos comandos no SQL Editor.
-Como a leitura e a escrita são feitas pelo servidor com `SUPABASE_SERVICE_ROLE_KEY`, não exponha essa chave no front-end.
+Como a leitura e a escrita são feitas pelo servidor com uma chave privilegiada, não exponha `SUPABASE_SECRET_KEY` nem `SUPABASE_SERVICE_ROLE_KEY` no front-end.
 
 ## Contas e senhas iniciais
 
