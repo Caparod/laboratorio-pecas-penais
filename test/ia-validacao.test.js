@@ -1,6 +1,6 @@
 'use strict';
 const assert = require('assert');
-const { limparEnunciadoIA, limparGabaritoIA, limparCorrecaoIA, normalizarGabaritoPenal, validarEnunciado, analisarEspelho, normalizarEspelhoCinco, detectarJurisprudencia, similaridadeNarrativa, validarGabarito, validarCorrecao } = require('../validation');
+const { limparEnunciadoIA, limparGabaritoIA, limparCorrecaoIA, normalizarPenalidadesCorrecao, normalizarGabaritoPenal, validarEnunciado, analisarEspelho, normalizarEspelhoCinco, detectarJurisprudencia, similaridadeNarrativa, validarGabarito, validarCorrecao } = require('../validation');
 
 const enunciadoMarcado = '<enunciado>\n**Texto integral do caso.**\n</enunciado>';
 assert.equal(limparEnunciadoIA(enunciadoMarcado), 'Texto integral do caso.', 'marcação interna da IA deve ser removida');
@@ -122,5 +122,13 @@ const correcaoComDuvidaJurisprudencial = correcao
   .replace('TOTAL DE PENALIDADES FORA DO ESPELHO: 0,00', 'TOTAL DE PENALIDADES FORA DO ESPELHO: -0,25')
   .replace('NOTA SUGERIDA: 4,00/5', 'NOTA SUGERIDA: 3,75/5');
 assert.equal(validarCorrecao(correcaoComDuvidaJurisprudencial).ok, true, 'dúvida jurisprudencial deve gerar penalidade adicional de 0,25');
+const correcaoPenalidadesInconsistentes = correcaoComDuvidaJurisprudencial
+  .replace('PENALIDADE POR JURISPRUDÊNCIA NÃO CONFIRMADA: -0,25', 'PENALIDADE POR JURISPRUDÊNCIA NÃO CONFIRMADA: 0,00')
+  .replace('TOTAL DE PENALIDADES FORA DO ESPELHO: -0,25', 'TOTAL DE PENALIDADES FORA DO ESPELHO: -0,75')
+  .replace('NOTA SUGERIDA: 3,75/5', 'NOTA SUGERIDA: 4,00/5');
+const correcaoPenalidadesNormalizadas = normalizarPenalidadesCorrecao(correcaoPenalidadesInconsistentes);
+assert.equal(validarCorrecao(correcaoPenalidadesNormalizadas).ok, true, 'o servidor deve corrigir automaticamente a tabela e a conta de penalidades da IA');
+assert.match(correcaoPenalidadesNormalizadas, /PENALIDADE POR JURISPRUDÊNCIA NÃO CONFIRMADA: -0,25/);
+assert.match(correcaoPenalidadesNormalizadas, /NOTA SUGERIDA: 3,75\/5/);
 
 console.log('OK: contratos determinísticos de IA, espelho e correção');

@@ -4,13 +4,15 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { limparEnunciadoIA, limparGabaritoIA, limparCorrecaoIA, normalizarGabaritoPenal, validarEnunciado, analisarEspelho, normalizarEspelhoCinco, detectarJurisprudencia, similaridadeNarrativa, validarGabarito, validarCorrecao } = require('./validation');
+const { limparEnunciadoIA, limparGabaritoIA, limparCorrecaoIA, normalizarPenalidadesCorrecao, normalizarGabaritoPenal, validarEnunciado, analisarEspelho, normalizarEspelhoCinco, detectarJurisprudencia, similaridadeNarrativa, validarGabarito, validarCorrecao } = require('./validation');
 const { LIMITE_ARQUIVO, decodificarDataUrl, tipoArquivo, extrairTextoDocx, extrairTextoDocLegado, detectarSinaisPrompt, analisarRobotizacao, validarParecerInicial } = require('./arquivo-peca');
 const { gerarPdfEspelho, relatorioParaHtml } = require('./relatorio-pdf');
 
 // Conteúdo jurídico avaliativo usa sempre o modelo de maior capacidade.
 // OCR e extrações mecânicas possuem configurações próprias mais abaixo.
 const MODELO_POTENTE = process.env.MODELO_POTENTE || 'claude-opus-4-8';
+// Usado somente para reorganizar respostas já produzidas pelo modelo principal.
+const MODELO_REPARO = process.env.MODELO_REPARO || 'claude-sonnet-5';
 
 const OWNER_LOGIN = process.env.PROF_LOGIN || '500686';
 const CONTAS_DEMO_ATIVAS = process.env.CRIAR_CONTAS_DEMO === 'true';
@@ -161,16 +163,17 @@ function migrarDb() {
 }
 // Preço estimado por milhão de tokens [entrada, saída], em US$
 const PRECOS_MTOK = { 'claude-sonnet-5': [2, 10], 'claude-haiku-4-5-20251001': [1, 5], 'claude-opus-4-8': [15, 75] };
-function custoUSD(model, inTok, outTok) {
+function custoUSD(model, inTok, outTok, cacheWriteTok, cacheReadTok) {
   const p = PRECOS_MTOK[model] || [3, 15];
-  return (inTok * p[0] + outTok * p[1]) / 1e6;
+  return (inTok * p[0] + outTok * p[1] + (cacheWriteTok || 0) * p[0] * 1.25 + (cacheReadTok || 0) * p[0] * 0.1) / 1e6;
 }
 // Registra o uso de IA de quem chamou, no mês corrente. Registro permanente e cumulativo.
 function registrarGasto(sess, model, usage) {
   try {
     if (!usage) return;
     const inTok = usage.input_tokens || 0, outTok = usage.output_tokens || 0;
-    if (!inTok && !outTok) return;
+    const cacheWriteTok = usage.cache_creation_input_tokens || 0, cacheReadTok = usage.cache_read_input_tokens || 0;
+    if (!inTok && !outTok && !cacheWriteTok && !cacheReadTok) return;
     const mes = new Date().toISOString().slice(0, 7); // ex.: 2026-07
     db.gastos = db.gastos || {};
     const m = db.gastos[mes] = db.gastos[mes] || {};
@@ -190,7 +193,8 @@ function registrarGasto(sess, model, usage) {
     const g = m[chave] = m[chave] || { nome, tipo, turma: turmaNome, chamadas: 0, entrada: 0, saida: 0, usd: 0 };
     g.nome = nome; g.tipo = tipo; if (turmaNome) g.turma = turmaNome; // snapshot: sobrevive à exclusão do aluno/turma
     g.chamadas++; g.entrada += inTok; g.saida += outTok;
-    g.usd = Math.round((g.usd + custoUSD(model, inTok, outTok)) * 1e6) / 1e6;
+    g.cacheGravado = (g.cacheGravado || 0) + cacheWriteTok; g.cacheReutilizado = (g.cacheReutilizado || 0) + cacheReadTok;
+    g.usd = Math.round((g.usd + custoUSD(model, inTok, outTok, cacheWriteTok, cacheReadTok)) * 1e6) / 1e6;
     salvarDb();
   } catch (e) { try { console.error('[GASTOS] falha ao registrar: ' + e.message); } catch (e2) {} }
 }
@@ -678,6 +682,7 @@ const SISTEMA_CORRECAO = SISTEMA
 const SISTEMA_CORRECAO_CRITERIOSO = SISTEMA_CORRECAO
   + '\n\nRIGOR AVALIATIVO INEGOCIÁVEL: examine TODAS as linhas do espelho atual do professor, uma por uma. Conceda pontos somente quando o conteúdo exigido estiver efetivamente desenvolvido na resposta do aluno; não presuma conhecimento, não complete raciocínios ausentes e não atribua pontuação por mera menção genérica. Tese sem aplicação aos fatos, dispositivo incorreto ou incompleto, pedido sem consequência jurídica, endereçamento impreciso e fundamento contraditório devem sofrer desconto proporcional e expressamente justificado. Para cada linha, indique com objetividade o que o aluno escreveu, o que o gabarito exigia e por que recebeu aquela fração. Confira a soma aritmética antes de concluir. Não seja benevolente para compensar falhas em outro item e não crie exigências que não constem do gabarito atual ou de fonte oficial confirmada.'
   + '\n\nPENALIDADES E RASTREABILIDADE: nenhum erro ou dúvida apontado pode ser apenas informativo. Cada erro formal e material deve indicar, em “## Rastreabilidade dos descontos”, a linha do espelho em que foi descontado e o valor perdido. Se a falha não couber no espelho do professor, desconte-a fora dele, sem duplicar o mesmo fato. Dúvida jurisprudencial classificada como SUSPEITA ou NÃO CONFIRMADA gera penalidade adicional de 0,25 por ocorrência, limitada a 1,00; citação INEXISTENTE/FALSA mantém a regra de nota zero. Inclua obrigatoriamente a seção “## Rastreabilidade dos descontos”, com tabela de colunas “Falha identificada”, “Aplicação” e “Desconto”, relacionando todos os erros formais, materiais e jurisprudenciais. Depois da tabela, declare exatamente: “PENALIDADE POR JURISPRUDÊNCIA NÃO CONFIRMADA: -X,XX”, “OUTRAS PENALIDADES FORA DO ESPELHO: -X,XX” e “TOTAL DE PENALIDADES FORA DO ESPELHO: -X,XX”. A tabela do espelho deve avaliar exclusivamente os critérios do gabarito e somar o subtotal obtido. Na seção “## Verificação de robotização e supervisão humana”, use exatamente “Risco: BAIXO”, “Risco: ATENÇÃO” ou “Risco: ALTO” e aplique, em linha própria, “PENALIDADE POR ROBOTIZAÇÃO: 0,00” para BAIXO, “PENALIDADE POR ROBOTIZAÇÃO: -0,50” para ATENÇÃO ou “PENALIDADE POR ROBOTIZAÇÃO: -1,00” para ALTO. O TOTAL DE PENALIDADES FORA DO ESPELHO é a soma da robotização, da jurisprudência não confirmada e das outras penalidades externas. A NOTA SUGERIDA deve ser o subtotal da tabela menos esse total, nunca inferior a zero, ressalvada a nota zero por citação falsa. Não escreva preâmbulo, saudação, relato de pesquisa ou comentário técnico antes de “## Acertos”. Não use barras entre números de súmulas: escreva “Súmulas 718 e 719”, reservando X,XX/Y,YY exclusivamente para pontuação.';
+const SISTEMA_REPARO_CORRECAO = 'Você recebe um relatório jurídico já elaborado por um modelo de alta capacidade e uma lista objetiva de falhas estruturais. Sua única função é reorganizar o mesmo conteúdo para cumprir o contrato informado, preservando integralmente a análise jurídica, as classificações de citações, os fundamentos, os descontos e as fontes. Não acrescente tese, precedente, fato ou conclusão jurídica. Não faça pesquisa. Retorne somente o relatório completo em markdown, iniciando por ## Acertos.';
 
 // Consulta direta à API pública de jurisprudência do TJDFT
 async function consultarTJDFT(consulta, tamanho) {
@@ -1200,7 +1205,7 @@ async function gastosListar(req, res) {
   for (const mes of meses) {
     const regs = (db.gastos || {})[mes] || {};
     out[mes] = {};
-    for (const [k, g] of Object.entries(regs)) out[mes][k] = { nome: g.nome, tipo: g.tipo, turma: g.turma || '', chamadas: g.chamadas, tokens: (g.entrada || 0) + (g.saida || 0), valor: Math.round(g.usd * multiplicadorInternoIA * 100) / 100 };
+    for (const [k, g] of Object.entries(regs)) out[mes][k] = { nome: g.nome, tipo: g.tipo, turma: g.turma || '', chamadas: g.chamadas, tokens: (g.entrada || 0) + (g.saida || 0) + (g.cacheGravado || 0) + (g.cacheReutilizado || 0), cacheGravado: g.cacheGravado || 0, cacheReutilizado: g.cacheReutilizado || 0, valor: Math.round(g.usd * multiplicadorInternoIA * 100) / 100 };
     const usoIA = Math.round(Object.values(out[mes]).reduce((s, g) => s + g.valor, 0) * 100) / 100;
     resumos[mes] = { manutencao: manutencaoMensal, usoIA, total: Math.round((manutencaoMensal + usoIA) * 100) / 100 };
   }
@@ -1606,9 +1611,11 @@ async function chamarAnthropic(body) {
 function documentoIA(valor, limite) {
   return String(valor || '').slice(0, limite).replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
-async function iaTexto(system, usuario, maxTokens, comBusca, sessGasto) {
-  const model = MODELO_POTENTE;
-  const body = { model, max_tokens: Math.max(8000, maxTokens || 8000), system, messages: [{ role: 'user', content: usuario }] };
+async function iaTexto(system, usuario, maxTokens, comBusca, sessGasto, opcoes) {
+  const model = (opcoes && opcoes.model) || MODELO_POTENTE;
+  const textoSistema = String(system || '');
+  const systemCacheado = textoSistema.length >= 8000 ? [{ type: 'text', text: textoSistema, cache_control: { type: 'ephemeral' } }] : textoSistema;
+  const body = { model, max_tokens: Math.max(8000, maxTokens || 8000), system: systemCacheado, messages: [{ role: 'user', content: usuario }] };
   if (model === 'claude-sonnet-5') body.thinking = { type: 'disabled' };
   if (comBusca) body.tools = [{ type: 'web_search_20250305', name: 'web_search', max_uses: 6, allowed_domains: ['stf.jus.br', 'jurisprudencia.stf.jus.br', 'stj.jus.br', 'scon.stj.jus.br', 'tjdft.jus.br', 'jurisdf.tjdft.jus.br', 'planalto.gov.br'] }, TOOL_TJDFT];
   const mensagens = body.messages; let r = null, d = null; const ini = Date.now();
@@ -2131,22 +2138,24 @@ async function gerarRelatorioCorrecao(sess, p, e) {
   const vg = validarGabarito(base.gab || '', base.nomePeca || p.nomePeca);
   if (!vg.ok) return { ok: false, erro: 'A correção foi bloqueada porque o gabarito desta entrega é inválido: ' + vg.erros.join(' ') };
   const robotizacao = analisarRobotizacao(e.texto);
-  const usuario = '<dados_controle>Peça esperada: ' + documentoIA(base.nomePeca || p.nomePeca, 120) + '; disciplina: ' + documentoIA(base.disc || p.disc, 120) + '; versão do enunciado entregue: ' + (original.versao || 1) + '; versão do gabarito atual: ' + (base.versaoGabarito || 1) + '</dados_controle>\n<caso>\n' + documentoIA(base.caso, 20000) + '\n</caso>\n<gabarito_atual_corrigido>\n' + documentoIA(base.gab, 30000) + '\n</gabarito_atual_corrigido>\n<resposta_aluno>\n' + documentoIA(e.texto, 60000) + '\n</resposta_aluno>\n<triagem_estilistica>\n' + documentoIA(JSON.stringify(robotizacao), 4000) + '\n</triagem_estilistica>\nCorrija exclusivamente segundo o gabarito ATUAL corrigido pelo professor, confira diretamente os sinais de robotização e devolva a estrutura obrigatória.';
-  let r = await iaTexto(SISTEMA_CORRECAO_CRITERIOSO, usuario, 12000, true, sess);
-  if (!r.ok && r.status === 504) {
-    r = await iaTexto(SISTEMA_CORRECAO_CRITERIOSO, usuario + '\nA tentativa anterior expirou antes da resposta. Refaça a correção completa agora, mantendo rigorosamente o contrato e a escala do Estágio de 0 a 5.', 12000, true, sess);
-  }
+  const contextoComum = '<dados_controle>Peça esperada: ' + documentoIA(base.nomePeca || p.nomePeca, 120) + '; disciplina: ' + documentoIA(base.disc || p.disc, 120) + '; versão do enunciado entregue: ' + (original.versao || 1) + '; versão do gabarito atual: ' + (base.versaoGabarito || 1) + '</dados_controle>\n<caso>\n' + documentoIA(base.caso, 20000) + '\n</caso>\n<gabarito_atual_corrigido>\n' + documentoIA(base.gab, 30000) + '\n</gabarito_atual_corrigido>';
+  const respostaIndividual = '<resposta_aluno>\n' + documentoIA(e.texto, 60000) + '\n</resposta_aluno>\n<triagem_estilistica>\n' + documentoIA(JSON.stringify(robotizacao), 4000) + '\n</triagem_estilistica>\nCorrija exclusivamente segundo o gabarito ATUAL corrigido pelo professor, confira diretamente os sinais de robotização e devolva a estrutura obrigatória.';
+  const blocoContexto = { type: 'text', text: contextoComum };
+  if (contextoComum.length >= 8000) blocoContexto.cache_control = { type: 'ephemeral' };
+  const usuario = [blocoContexto, { type: 'text', text: respostaIndividual }];
+  let r = await iaTexto(SISTEMA_CORRECAO_CRITERIOSO, usuario, 9000, true, sess);
   if (!r.ok) return { ok: false, erroIA: r, erro: r.erro || 'Falha na correção por IA.' };
-  let relatorio = limparCorrecaoIA(garantirLinksFontes((r.texto || '').trim(), true));
+  let relatorio = normalizarPenalidadesCorrecao(limparCorrecaoIA(garantirLinksFontes((r.texto || '').trim(), true)));
   let vr = validarCorrecao(relatorio);
   if (!vr.ok) {
-    r = await iaTexto(SISTEMA_CORRECAO_CRITERIOSO, usuario + '\n<correcao_rejeitada>\n' + relatorio.slice(0, 24000) + '\n</correcao_rejeitada>\nReescreva integralmente corrigindo: ' + vr.erros.join(' '), 12000, true, sess);
+    const reparo = '<relatorio_alta_capacidade>\n' + documentoIA(relatorio, 30000) + '\n</relatorio_alta_capacidade>\n<falhas_estruturais>\n' + documentoIA(vr.erros.join(' '), 4000) + '\n</falhas_estruturais>\nReorganize sem alterar o mérito jurídico.';
+    r = await iaTexto(SISTEMA_REPARO_CORRECAO, reparo, 8000, false, sess, { model: MODELO_REPARO });
     if (!r.ok) return { ok: false, erroIA: r, erro: r.erro || 'Falha na correção por IA.' };
-    relatorio = limparCorrecaoIA(garantirLinksFontes((r.texto || '').trim(), true));
+    relatorio = normalizarPenalidadesCorrecao(limparCorrecaoIA(garantirLinksFontes((r.texto || '').trim(), true)));
     vr = validarCorrecao(relatorio);
   }
   if (!vr.ok) return { ok: false, erro: 'A correção da IA foi bloqueada por inconsistência: ' + vr.erros.join(' ') };
-  e.relatorio = relatorio; e.robotizacao = robotizacao; e.notaSugerida = vr.detalhes.nota; e.corrigidoEm = Date.now(); e.corrigidoPor = sess.usuario; e.modeloCorrecao = MODELO_POTENTE; e.versaoPromptCorrecao = 6; e.versaoGabaritoCorrecao = base.versaoGabarito;
+  e.relatorio = relatorio; e.robotizacao = robotizacao; e.notaSugerida = vr.detalhes.nota; e.corrigidoEm = Date.now(); e.corrigidoPor = sess.usuario; e.modeloCorrecao = MODELO_POTENTE; e.versaoPromptCorrecao = 7; e.versaoGabaritoCorrecao = base.versaoGabarito;
   return { ok: true, relatorio, notaSugerida: e.notaSugerida, versaoPeca: original.versao || 1, versaoGabarito: base.versaoGabarito };
 }
 async function enviarEspelhoAluno(p, e, matricula) {
@@ -2347,12 +2356,12 @@ async function recursoAnalisarIA(req, res) {
   if (!r.ok) return erroIA(res, r);
   let texto = garantirLinksFontes(String(r.texto || '').trim(), true);
   let partes = texto.split(/^##\s+Espelho revisado proposto\s*$/mi);
-  let relatorio = partes.slice(1).join('\n').trim();
+  let relatorio = normalizarPenalidadesCorrecao(partes.slice(1).join('\n').trim());
   let vr = validarCorrecao(relatorio);
   if (partes.length < 2 || !vr.ok) {
     r = await iaTexto(sistema, usuario + '\n\nA resposta anterior não respeitou o contrato. Refaça integralmente e garanta um espelho OAB/FGV válido. Problemas: ' + (partes.length < 2 ? 'faltou o marcador ## Espelho revisado proposto. ' : '') + vr.erros.join(' '), 12000, true, sess);
     if (!r.ok) return erroIA(res, r);
-    texto = garantirLinksFontes(String(r.texto || '').trim(), true); partes = texto.split(/^##\s+Espelho revisado proposto\s*$/mi); relatorio = partes.slice(1).join('\n').trim(); vr = validarCorrecao(relatorio);
+    texto = garantirLinksFontes(String(r.texto || '').trim(), true); partes = texto.split(/^##\s+Espelho revisado proposto\s*$/mi); relatorio = normalizarPenalidadesCorrecao(partes.slice(1).join('\n').trim()); vr = validarCorrecao(relatorio);
   }
   if (partes.length < 2 || !vr.ok) return json(res, 502, { erro: 'A análise foi bloqueada porque o espelho revisado ficou inconsistente. Tente novamente.' });
   const analise = partes[0].trim();
