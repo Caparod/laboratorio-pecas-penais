@@ -1133,6 +1133,24 @@ function bannerOAB(){
    +'<a href="https://www.oabmentoria.com.br" target="_blank" rel="noopener" style="display:inline-block;background:var(--dourado);color:#20304a;padding:11px 26px;border-radius:6px;text-decoration:none;font-family:Arial,sans-serif;font-weight:bold;font-size:.9rem">www.oabmentoria.com.br →</a>'
    +'</div>';
 }
+function materiaisNpjHtml(compacto){
+  return '<div class="card" style="border-left:4px solid var(--dourado);background:#fffaf0">'
+   +'<h3 style="margin-top:0">📚 Materiais obrigatórios do NPJ</h3>'
+   +(compacto?'':'<p style="font: .88rem Arial,sans-serif;color:var(--cinza)">Baixe os arquivos oficiais antes de elaborar a peça. O descumprimento comprovado das regras formais reduz a nota da correção.</p>')
+   +'<div class="botoes"><a class="btn-link" style="background:var(--azul);color:#fff" href="/materiais/papel-timbrado-npj.docx" download>Baixar papel timbrado NPJ</a><a class="btn-link" href="/materiais/regras-formatacao-npj.pdf" download>Baixar regras de formatação</a></div>'
+   +(compacto?'':'<p style="font: .78rem Arial,sans-serif;color:var(--cinza);margin-top:10px">Resumo: PT Sans 12; entrelinhas 1,15; 6 pt antes/depois; margens 3 cm superior/esquerda e 2 cm inferior/direita; texto justificado; recuo de 2 cm; paginação no alto à direita desde a segunda página.</p>')
+   +'</div>';
+}
+function auditoriaFormatacaoHtml(auditoria){
+  if(!auditoria||!Array.isArray(auditoria.verificacoes))return '';
+  const falhas=auditoria.verificacoes.filter(v=>v.status==='nao_conforme');
+  const naoVerificaveis=auditoria.verificacoes.filter(v=>v.status==='nao_verificavel');
+  let html='';
+  if(falhas.length)html+='<div class="erro-ia"><b>⚠️ Formatação fora do padrão NPJ:</b><ul style="margin:6px 0 0 20px">'+falhas.map(v=>'<li>'+esc(v.rotulo)+': '+esc(v.detalhe)+'</li>').join('')+'</ul><p style="margin-top:8px"><b>Se permanecerem no arquivo entregue, essas falhas reduzirão a nota.</b></p></div>';
+  else html+='<p style="color:var(--verde);font: .83rem Arial,sans-serif"><b>✅ Nenhuma divergência objetiva de formatação foi confirmada automaticamente.</b></p>';
+  if(naoVerificaveis.length)html+='<p class="aviso" style="font-size:.78rem">Alguns itens não puderam ser comprovados automaticamente. Eles não gerarão desconto automático; confira-os nas regras oficiais.</p>';
+  return html;
+}
 async function telaAluno(){
   window.__abaAluno='pecas';
   if(professorEmVisaoAluno()){
@@ -1144,7 +1162,7 @@ async function telaAluno(){
   if(professorEmVisaoAluno()&&!TURMA_ATUACAO){document.getElementById('la').innerHTML='<p class="erro-ia">Selecione uma turma para ver o sistema como aluno(a).</p>';return}
   try{const r=await apiGet('/api/pecas-aluno');const d=await r.json();
     if(!r.ok){document.getElementById('la').innerHTML='<p class="erro-ia">'+esc(d.erro||'Erro')+'</p>';return}
-    if(!d.pecas.length){document.getElementById('la').innerHTML='<div class="card" style="text-align:center;padding:40px"><h3 style="color:var(--azul)">⏳ Aguarde o envio do(a) Professor(a)</h3><p style="color:var(--cinza)">Nenhuma peça foi publicada ainda para a sua turma. Assim que o(a) professor(a) enviar uma peça, ela aparecerá aqui com o prazo de entrega.</p></div>'+bannerOAB();return}
+    if(!d.pecas.length){document.getElementById('la').innerHTML=materiaisNpjHtml(false)+'<div class="card" style="text-align:center;padding:40px"><h3 style="color:var(--azul)">⏳ Aguarde o envio do(a) Professor(a)</h3><p style="color:var(--cinza)">Nenhuma peça foi publicada ainda para a sua turma. Assim que o(a) professor(a) enviar uma peça, ela aparecerá aqui com o prazo de entrega.</p></div>'+bannerOAB();return}
     let cards='';
     for(const p of d.pecas){
       const fechado=!p.noPrazo;
@@ -1153,7 +1171,7 @@ async function telaAluno(){
        +'<p style="font-family:Arial,sans-serif;font-size:.85rem;color:'+(fechado?'var(--vermelho)':(pesquisaPendente?'#8a6415':'var(--cinza)'))+'">Prazo: '+(p.prazo?dataHoraBR(p.prazo):'sem prazo')+' · '+(fechado?'🔴 Prazo encerrado':(pesquisaPendente?'🔒 Pesquisa obrigatória pendente':'⏳ A fazer'))+'</p>'
        +'<div class="botoes"><button class="'+(pesquisaPendente?'':'primario')+'" onclick="'+(pesquisaPendente?'telaPesquisaAluno()':'abrirPecaAluno(\''+p.id+'\')')+'">'+(pesquisaPendente?'Responder pesquisa para liberar a Peça 2':(fechado?'Ver enunciado':'Fazer esta peça'))+'</button></div></div>';
     }
-    document.getElementById('la').innerHTML=cards+bannerOAB();
+    document.getElementById('la').innerHTML=materiaisNpjHtml(false)+cards+bannerOAB();
     window.__pecasAluno=d.pecas;
   }catch(e){document.getElementById('la').innerHTML='<p class="erro-ia">Falha ao carregar.</p>';}
 }
@@ -1321,11 +1339,12 @@ function abrirPecaAluno(id){
   conteudo.innerHTML='<div class="botoes" style="margin-bottom:10px"><button onclick="telaAluno()">← Voltar</button></div>'
    +'<span class="badge">Peça '+p.num+' · '+esc(p.disc)+'</span><h2 class="titulo-peca">'+esc(p.nomePeca)+'</h2>'
    +'<p style="font-family:Arial,sans-serif;font-size:.85rem;color:'+(fechado?'var(--vermelho)':'var(--cinza)')+'">Prazo: '+(p.prazo?dataHoraBR(p.prazo):'sem prazo')+(fechado?' — PRAZO ENCERRADO':'')+'</p>'
+   +materiaisNpjHtml(true)
    +classificacaoHtml(p.classificacao)
    +'<div class="card"><h3>Enunciado</h3><div class="caso">'+esc(p.caso)+'</div></div>'
    +((p.gabLiberado&&p.gab)?'<div class="card"><h3>📖 Gabarito oficial</h3><p style="font-size:.82rem;color:var(--cinza);font-family:Arial,sans-serif">Liberado após o encerramento do prazo. Compare com a sua peça e confira as fontes pelos links.</p><div class="bloco" style="background:#eef5ee;border:1px solid #cfe3cf;border-radius:8px;padding:14px">'+linkCitacoesHtml(md2html(p.gab))+'</div></div>':'')
    +(fechado?'<div class="card"><p class="erro-ia">O prazo desta peça já encerrou. Não é possível enviar. Se precisar, fale com o(a) professor(a) para renovar o prazo ou liberar sua entrega.</p></div>'
-     :('<div class="card"><h3>Sua peça</h3><p style="font-size:.85rem;color:var(--cinza)">Você pode escrever aqui ou enviar um arquivo pronto. Em qualquer opção, confira o texto antes de entregar. Se citar jurisprudência, inclua no final as fontes e os links.</p>'
+     :('<div class="card"><h3>Sua peça</h3><p style="font-size:.85rem;color:var(--cinza)">Você pode escrever aqui ou enviar um arquivo pronto. Em qualquer opção, confira o texto antes de entregar. Use o papel timbrado e as regras oficiais acima. Se citar jurisprudência, inclua no final as fontes e os links.</p>'
    +'<div class="envio-opcoes">'
    +'<label class="envio-opcao"><span style="font-size:1.5rem">📄</span><span><b>Enviar PDF ou Word</b><small>PDF, DOCX ou DOC · até 6 MB</small></span><input type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="display:none" onchange="subirArquivoAluno(this,\''+id+'\')"></label>'
    +'<label class="envio-opcao"><span style="font-size:1.5rem">📷</span><span><b>Transcrever fotos</b><small>Até 6 páginas manuscritas, na ordem</small></span><input type="file" accept="image/*" multiple style="display:none" onchange="transcreverFotos(this,\''+id+'\')"></label>'
@@ -1333,7 +1352,7 @@ function abrirPecaAluno(id){
    +'<textarea id="al_texto" class="redacao" placeholder="EXCELENTÍSSIMO SENHOR...">'+esc(rasc)+'</textarea>'
    +'<div class="botoes"><button onclick="salvarRascunhoAluno(\''+id+'\')">💾 Salvar rascunho</button>'
    +(parecerUsado?'<button class="primario" onclick="enviarPeca(\''+id+'\',true)">📨 Enviar diretamente para correção</button>':'<button class="primario" onclick="pedirParecerInicial(\''+id+'\')">🔎 Receber pré-correção e decidir</button>')+'</div>'
-   +(parecerUsado?'<p class="aviso" style="margin-top:10px"><b>Pré-correção já utilizada.</b> Confira a versão revisada e envie diretamente para a correção do professor.</p>':'<p class="aviso" style="margin-top:10px"><b>Primeiro envio:</b> você receberá uma única pré-correção com alertas sobre referências, sinais de IA/prompts e riscos graves. Depois de revisar, a próxima versão será enviada diretamente para correção.</p>')
+   +(parecerUsado?'<p class="aviso" style="margin-top:10px"><b>Pré-correção já utilizada.</b> Confira a versão revisada e envie diretamente para a correção do professor.</p>':'<p class="aviso" style="margin-top:10px"><b>Primeiro envio:</b> você receberá uma única pré-correção com alertas sobre referências, sinais de IA/prompts, riscos graves e conformidade com o padrão NPJ. Falhas formais comprovadas reduzem a nota final. Depois de revisar, a próxima versão será enviada diretamente para correção.</p>')
    +(p.enviado?'<p class="aviso">Você já enviou esta peça. Reenviar substitui a anterior e cancela a correção pendente.</p>':'')
    +'<div id="al_fb"></div><div id="al_parecer"></div></div>'));
   window.__textoParecerInicial=null;
@@ -1353,7 +1372,7 @@ async function subirArquivoAluno(inp,id){
     if(!r.ok){fb.innerHTML='<p class="erro-ia">'+esc(d.erro||'Não foi possível ler o arquivo.')+'</p>';return}
     t.value=d.texto;sset('peca_'+id,t.value);window.__arquivoAluno=d.arquivo;sset('arquivo_'+id,JSON.stringify(d.arquivo));
     const avisos=(d.avisos||[]).map(a=>'<li>'+esc(a)+'</li>').join('');
-    fb.innerHTML='<p style="color:var(--verde);font: .85rem Arial,sans-serif">✅ <b>'+esc(d.arquivo.nome)+'</b> importado. Confira especialmente nomes, números e o final do documento antes de enviar.</p>'+(avisos?'<ul class="erro-ia" style="margin-left:20px">'+avisos+'</ul>':'');
+    fb.innerHTML='<p style="color:var(--verde);font: .85rem Arial,sans-serif">✅ <b>'+esc(d.arquivo.nome)+'</b> importado. Confira especialmente nomes, números e o final do documento antes de enviar.</p>'+auditoriaFormatacaoHtml(d.arquivo.formatacao)+(avisos?'<ul class="erro-ia" style="margin-left:20px">'+avisos+'</ul>':'');
     t.scrollIntoView({behavior:'smooth',block:'center'});t.focus();
   }catch(e){fb.innerHTML='<p class="erro-ia">Falha ao importar: '+esc(e.message)+'</p>'}
 }
@@ -1363,7 +1382,7 @@ async function pedirParecerInicial(id){
   if(texto.length<80){fb.innerHTML='<p class="erro-ia">Escreva ou importe a peça antes de pedir o parecer.</p>';return}
   const prog=progresso(fb,ETAPAS_PARECER,110);
   try{
-    const r=await apiPost('/api/aluno/parecer-inicial',{id,texto});const d=await r.json();prog.fim();
+    const r=await apiPost('/api/aluno/parecer-inicial',{id,texto,arquivo:window.__arquivoAluno||null});const d=await r.json();prog.fim();
     if(!r.ok){if(d.erro==='PARECER_JA_UTILIZADO'){const p=(window.__pecasAluno||[]).find(x=>x.id===id);if(p)p.parecerInicialUsado=true;fb.innerHTML='<div class="parecer-inicial"><p><b>A pré-correção desta peça já foi utilizada.</b> Revise o texto e envie esta versão diretamente para correção.</p><div class="botoes"><button class="primario" onclick="enviarPeca(\''+id+'\',true)">📨 Enviar diretamente para correção</button></div></div>';return}let m=d.mensagem||d.erro||'Não foi possível preparar o parecer agora.';if(m==='LIMITE_CREDITOS')m='O recurso de análise atingiu o limite temporário.';fb.innerHTML='<div class="parecer-inicial"><p class="erro-ia">'+esc(m)+'</p><p class="aviso">Sua peça continua salva. Para não perder o prazo, você pode tentar novamente ou enviá-la sem o parecer.</p><div class="botoes"><button onclick="pedirParecerInicial(\''+id+'\')">Tentar novamente</button><button class="primario" onclick="enviarPeca(\''+id+'\',true)">Enviar sem parecer</button></div></div>';return}
     const sinais=(d.sinaisPrompt||[]).length?'<div class="erro-ia"><b>Alerta técnico:</b> o arquivo contém possível '+esc(d.sinaisPrompt.join(', '))+'. Revise e remova qualquer instrução que não faça parte da peça.</div>':'';
     const rob=d.robotizacao&&d.robotizacao.nivel!=='baixo'?'<div class="aviso" style="color:#8a5a00"><b>Indícios de robotização para revisar:</b> '+esc((d.robotizacao.sinais||[]).join('; '))+'. Padrões formais não provam autoria por IA; servem para você conferir se o texto realmente tem sua voz e sua supervisão.</div>':'';

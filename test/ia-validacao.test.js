@@ -143,4 +143,15 @@ const correcaoTotalNormalizada = normalizarPenalidadesCorrecao(correcaoComLinhaT
 assert.equal(validarCorrecao(correcaoTotalNormalizada).ok, true, 'a linha Total não pode ser somada novamente aos critérios do espelho');
 assert.match(correcaoTotalNormalizada, /NOTA SUGERIDA: 4,00\/5/);
 
+const auditoriaFormatacao = { versao: 1, verificacoes: [
+  { codigo: 'papel_timbrado', rotulo: 'Papel timbrado oficial do NPJ/IESB', status: 'nao_conforme', detalhe: 'Cabeçalho e rodapé oficiais ausentes.', desconto: 0.15 },
+  { codigo: 'margens', rotulo: 'Margens oficiais', status: 'nao_verificavel', detalhe: 'Não foi possível medir.', desconto: 0 }
+] };
+const correcaoComDescontoFormal = normalizarPenalidadesCorrecao(correcao, auditoriaFormatacao);
+assert.equal(validarCorrecao(correcaoComDescontoFormal).ok, true, 'desconto objetivo de formatação deve integrar a conta final');
+assert.match(correcaoComDescontoFormal, /## Verificação da formatação NPJ/);
+assert.match(correcaoComDescontoFormal, /PENALIDADE POR FORMATAÇÃO NPJ: -0,15/);
+assert.match(correcaoComDescontoFormal, /NOTA SUGERIDA: 3,85\/5/);
+assert.doesNotMatch(correcaoComDescontoFormal, /\| Margens oficiais[^\n]*\|/, 'item não verificável não pode aparecer na tabela de falhas com desconto');
+
 console.log('OK: contratos determinísticos de IA, espelho e correção');

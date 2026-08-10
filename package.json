@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Laboratório de Peças Penais - Estágio I e II (IESB) - Prof. Rodrigo Silva",
   "main": "server.js",
-  "scripts": { "start": "node server.js", "test": "node test/arquivo-parecer.test.js && node test/ia-validacao.test.js && node test/correcao-transacao.test.js && node test/lote-progressivo.test.js && node test/html-sintaxe.test.js && node test/pdf-seguranca.test.js && node test/relatorio-pdf.test.js && node test/versao-app.test.js && node test/gastos-mensais.test.js && node test/sincronizacao-lista.test.js && node test/zerar-permissoes.test.js && node test/seguranca-permissoes.test.js && node test/persistencia-segura.test.js && node test/supabase-auth.test.js && node test/supabase-rls.test.js" },
+  "scripts": { "start": "node server.js", "test": "node test/arquivo-parecer.test.js && node test/ia-validacao.test.js && node test/materiais-formatacao.test.js && node test/correcao-transacao.test.js && node test/lote-progressivo.test.js && node test/html-sintaxe.test.js && node test/pdf-seguranca.test.js && node test/relatorio-pdf.test.js && node test/versao-app.test.js && node test/gastos-mensais.test.js && node test/sincronizacao-lista.test.js && node test/zerar-permissoes.test.js && node test/seguranca-permissoes.test.js && node test/persistencia-segura.test.js && node test/supabase-auth.test.js && node test/supabase-rls.test.js" },
   "engines": { "node": "24.x" },
   "dependencies": { "pdfjs-dist": "6.2.108", "nodemailer": "9.0.3" }
 }

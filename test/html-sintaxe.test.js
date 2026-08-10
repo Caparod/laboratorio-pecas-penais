@@ -27,6 +27,10 @@ for (const arquivo of [path.join(__dirname, '..', 'index.html'), path.join(__dir
     assert.match(html, /pelo menos três respostas/, 'interface deve explicar o limite mínimo de anonimato');
     assert.match(html, /Responder pesquisa para liberar a Peça 2/, 'Peça 2 deve orientar o aluno para a pesquisa obrigatória');
     assert.match(html, /OBRIGATÓRIA/, 'todas as afirmações obrigatórias devem estar identificadas no formulário');
+    assert.match(html, /\/materiais\/papel-timbrado-npj\.docx/, 'aluno deve poder baixar o papel timbrado oficial');
+    assert.match(html, /\/materiais\/regras-formatacao-npj\.pdf/, 'aluno deve poder baixar as regras de formatação');
+    assert.match(html, /Falhas formais comprovadas reduzem a nota final/, 'pré-correção deve alertar sobre a consequência acadêmica');
+    assert.match(html, /parecer-inicial',\{id,texto,arquivo:window\.__arquivoAluno\|\|null\}/, 'auditoria autenticada do arquivo deve acompanhar a pré-correção');
     assert.doesNotMatch(html, /notaInicial\)\.replace\('\.',','\)/, 'nota numérica não pode ser preenchida com vírgula no valor interno');
   }
   if (arquivo.endsWith(path.join('render-app', 'index.html'))) {

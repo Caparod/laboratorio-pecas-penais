@@ -68,7 +68,16 @@ function paresPontuacao(bloco) {
   return itens;
 }
 
-function normalizarPenalidadesCorrecao(texto) {
+function falhasFormatacaoNpj(auditoria) {
+  const verificacoes = auditoria && Array.isArray(auditoria.verificacoes) ? auditoria.verificacoes : [];
+  return verificacoes.filter(v => v && v.status === 'nao_conforme' && Number(v.desconto) > 0).map(v => ({
+    rotulo: String(v.rotulo || v.codigo || 'Regra de formatação NPJ').replace(/\|/g, '/'),
+    detalhe: String(v.detalhe || 'Descumprimento confirmado na auditoria do arquivo.').replace(/\|/g, '/'),
+    desconto: Math.max(0, Number(v.desconto) || 0)
+  }));
+}
+
+function normalizarPenalidadesCorrecao(texto, auditoriaFormatacao) {
   const original = limparCorrecaoIA(texto);
   const itens = paresPontuacao(secao(original, 'pontuacao item a item'));
   const subtotal = Math.round(itens.reduce((s, item) => s + item.obtido, 0) * 100) / 100;
@@ -81,7 +90,9 @@ function normalizarPenalidadesCorrecao(texto) {
   const penalidadeJurisprudencia = Math.min(1, ocorrenciasDuvidosas * 0.25);
   const outrasMatch = original.match(/OUTRAS\s+PENALIDADES\s+FORA\s+DO\s+ESPELHO\s*:\s*-?\s*(\d+(?:[.,]\d+)?)/i);
   const outrasPenalidades = Math.min(5, Math.max(0, outrasMatch ? numeroBR(outrasMatch[1]) || 0 : 0));
-  const totalPenalidades = Math.round((penalidadeRobotizacao + penalidadeJurisprudencia + outrasPenalidades) * 100) / 100;
+  const falhasFormatacao = falhasFormatacaoNpj(auditoriaFormatacao);
+  const penalidadeFormatacaoNpj = Math.min(0.60, Math.round(falhasFormatacao.reduce((s, item) => s + item.desconto, 0) * 100) / 100);
+  const totalPenalidades = Math.round((penalidadeRobotizacao + penalidadeJurisprudencia + penalidadeFormatacaoNpj + outrasPenalidades) * 100) / 100;
   const citacaoFalsa = /(?:—|:)\s*INEXISTENTE(?:\/FALSA)?|CITA[CÇ][AÃ]O FALSA DETECTADA/i.test(original);
   const nota = citacaoFalsa ? 0 : Math.min(5, Math.max(0, Math.round((subtotal - totalPenalidades) * 100) / 100));
 
@@ -92,7 +103,7 @@ function normalizarPenalidadesCorrecao(texto) {
     if (/^\s*##\s+.*rastreabilidade\s+dos\s+descontos/i.test(normalizar(linha))) { ignorandoRastreabilidade = true; continue; }
     if (ignorandoRastreabilidade && /^\s*##\s+/.test(linha)) ignorandoRastreabilidade = false;
     if (ignorandoRastreabilidade) continue;
-    if (/^\s*(?:PENALIDADE\s+POR\s+ROBOTIZA[CÇ][AÃ]O|PENALIDADE\s+POR\s+JURISPRUD[EÊ]NCIA\s+N[AÃ]O\s+CONFIRMADA|OUTRAS\s+PENALIDADES\s+FORA\s+DO\s+ESPELHO|TOTAL\s+DE\s+PENALIDADES\s+FORA\s+DO\s+ESPELHO|NOTA\s+SUGERIDA)\s*:/i.test(linha)) continue;
+    if (/^\s*(?:PENALIDADE\s+POR\s+ROBOTIZA[CÇ][AÃ]O|PENALIDADE\s+POR\s+JURISPRUD[EÊ]NCIA\s+N[AÃ]O\s+CONFIRMADA|PENALIDADE\s+POR\s+FORMATA[CÇ][AÃ]O\s+NPJ|OUTRAS\s+PENALIDADES\s+FORA\s+DO\s+ESPELHO|TOTAL\s+DE\s+PENALIDADES\s+FORA\s+DO\s+ESPELHO|NOTA\s+SUGERIDA)\s*:/i.test(linha)) continue;
     semRastreabilidade.push(linha);
   }
 
@@ -110,16 +121,29 @@ function normalizarPenalidadesCorrecao(texto) {
   }
   if (penalidadeRobotizacao) rastreabilidade.push('| Indícios concretos de robotização — risco ' + risco.toUpperCase() + ' | Penalidade fora do espelho | ' + formatarNota(penalidadeRobotizacao) + ' |');
   if (penalidadeJurisprudencia) rastreabilidade.push('| Jurisprudência suspeita ou não confirmada (' + ocorrenciasDuvidosas + ' ocorrência(s)) | Penalidade fora do espelho | ' + formatarNota(penalidadeJurisprudencia) + ' |');
+  for (const falha of falhasFormatacao) rastreabilidade.push('| ' + falha.rotulo + ': ' + falha.detalhe + ' | Penalidade objetiva de formatação NPJ, fora do espelho e sem duplicidade | ' + formatarNota(falha.desconto) + ' |');
   if (outrasPenalidades) rastreabilidade.push('| Outras falhas não abrangidas pelo espelho | Penalidade fora do espelho | ' + formatarNota(outrasPenalidades) + ' |');
   if (rastreabilidade.length === 3) rastreabilidade.push('| Nenhuma falha com desconto | Sem penalidade | 0,00 |');
   rastreabilidade.push('PENALIDADE POR JURISPRUDÊNCIA NÃO CONFIRMADA: ' + (penalidadeJurisprudencia ? '-' : '') + formatarNota(penalidadeJurisprudencia));
+  rastreabilidade.push('PENALIDADE POR FORMATAÇÃO NPJ: ' + (penalidadeFormatacaoNpj ? '-' : '') + formatarNota(penalidadeFormatacaoNpj));
   rastreabilidade.push('OUTRAS PENALIDADES FORA DO ESPELHO: ' + (outrasPenalidades ? '-' : '') + formatarNota(outrasPenalidades));
   rastreabilidade.push('TOTAL DE PENALIDADES FORA DO ESPELHO: ' + (totalPenalidades ? '-' : '') + formatarNota(totalPenalidades));
   rastreabilidade.push('NOTA SUGERIDA: ' + formatarNota(nota) + '/5');
 
   let inserirAntes = semRastreabilidade.findIndex(l => /^\s*##\s+/.test(l) && normalizar(l).includes('propostas de aprimoramento'));
   if (inserirAntes < 0) inserirAntes = semRastreabilidade.length;
-  semRastreabilidade.splice(inserirAntes, 0, ...rastreabilidade, '');
+  const verificacoesFormatacao = auditoriaFormatacao && Array.isArray(auditoriaFormatacao.verificacoes) ? auditoriaFormatacao.verificacoes : [];
+  const secaoFormatacao = [];
+  if (verificacoesFormatacao.length) {
+    secaoFormatacao.push('## Verificação da formatação NPJ');
+    for (const item of verificacoesFormatacao) {
+      const estado = item.status === 'conforme' ? 'CONFORME' : item.status === 'nao_conforme' ? 'NÃO CONFORME' : 'NÃO VERIFICÁVEL — sem desconto';
+      secaoFormatacao.push('- **' + estado + ' — ' + String(item.rotulo || item.codigo || 'Regra formal').replace(/[\r\n]+/g, ' ') + ':** ' + String(item.detalhe || '').replace(/[\r\n]+/g, ' '));
+    }
+    secaoFormatacao.push('- **Penalidade objetiva de formatação NPJ:** ' + (penalidadeFormatacaoNpj ? '-' : '') + formatarNota(penalidadeFormatacaoNpj) + '. Itens não verificáveis não foram penalizados.');
+    secaoFormatacao.push('');
+  }
+  semRastreabilidade.splice(inserirAntes, 0, ...secaoFormatacao, ...rastreabilidade, '');
   return semRastreabilidade.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
@@ -348,9 +372,11 @@ function validarCorrecao(texto, respostaAluno) {
   if (penalidade != null && penalidadeEsperada != null && Math.abs(penalidade - penalidadeEsperada) > 0.01) erros.push('A penalidade por robotização não corresponde ao risco: BAIXO = 0,00; ATENÇÃO = 0,50; ALTO = 1,00.');
   const blocoRastreabilidade = secao(t, 'rastreabilidade dos descontos');
   const penalidadeJurisMatch = blocoRastreabilidade.match(/PENALIDADE\s+POR\s+JURISPRUD[EÊ]NCIA\s+N[AÃ]O\s+CONFIRMADA\s*:\s*-?\s*(\d+(?:[.,]\d+)?)/i);
+  const penalidadeFormatacaoMatch = blocoRastreabilidade.match(/PENALIDADE\s+POR\s+FORMATA[CÇ][AÃ]O\s+NPJ\s*:\s*-?\s*(\d+(?:[.,]\d+)?)/i);
   const outrasPenalidadesMatch = blocoRastreabilidade.match(/OUTRAS\s+PENALIDADES\s+FORA\s+DO\s+ESPELHO\s*:\s*-?\s*(\d+(?:[.,]\d+)?)/i);
   const totalPenalidadesMatch = blocoRastreabilidade.match(/TOTAL\s+DE\s+PENALIDADES\s+FORA\s+DO\s+ESPELHO\s*:\s*-?\s*(\d+(?:[.,]\d+)?)/i);
   const penalidadeJurisprudencia = penalidadeJurisMatch ? numeroBR(penalidadeJurisMatch[1]) : null;
+  const penalidadeFormatacaoNpj = penalidadeFormatacaoMatch ? numeroBR(penalidadeFormatacaoMatch[1]) : 0;
   const outrasPenalidades = outrasPenalidadesMatch ? numeroBR(outrasPenalidadesMatch[1]) : null;
   const totalPenalidades = totalPenalidadesMatch ? numeroBR(totalPenalidadesMatch[1]) : null;
   if (penalidadeJurisprudencia == null || outrasPenalidades == null || totalPenalidades == null) erros.push('A rastreabilidade deve declarar as penalidades de jurisprudência, outras penalidades externas e o total fora do espelho.');
@@ -358,7 +384,8 @@ function validarCorrecao(texto, respostaAluno) {
   const ocorrenciasDuvidosas = blocoJurisprudencia.split(/\r?\n/).filter(l => /\b(?:SUSPEITA|N[AÃ]O\s+CONFIRMADA)\b/i.test(l)).length;
   const penalidadeJurisEsperada = Math.min(1, ocorrenciasDuvidosas * 0.25);
   if (penalidadeJurisprudencia != null && Math.abs(penalidadeJurisprudencia - penalidadeJurisEsperada) > 0.01) erros.push('A penalidade jurisprudencial deve ser de 0,25 por ocorrência SUSPEITA ou NÃO CONFIRMADA, limitada a 1,00.');
-  if (totalPenalidades != null && penalidade != null && penalidadeJurisprudencia != null && outrasPenalidades != null && Math.abs(totalPenalidades - (penalidade + penalidadeJurisprudencia + outrasPenalidades)) > 0.01) erros.push('O total de penalidades fora do espelho não corresponde à soma das penalidades declaradas.');
+  if (penalidadeFormatacaoNpj < 0 || penalidadeFormatacaoNpj > 0.60) erros.push('A penalidade objetiva por formatação NPJ deve ficar entre 0,00 e 0,60.');
+  if (totalPenalidades != null && penalidade != null && penalidadeJurisprudencia != null && outrasPenalidades != null && Math.abs(totalPenalidades - (penalidade + penalidadeJurisprudencia + penalidadeFormatacaoNpj + outrasPenalidades)) > 0.01) erros.push('O total de penalidades fora do espelho não corresponde à soma das penalidades declaradas.');
   const tabelaRastreabilidade = /\|\s*falha\s+identificada\s*\|[^\n]*aplica[cç][aã]o[^\n]*\|[^\n]*desconto/i.test(blocoRastreabilidade);
   if (!tabelaRastreabilidade) erros.push('A rastreabilidade dos descontos deve ser apresentada em tabela com falha, aplicação e desconto.');
   const linhasRastreabilidade = blocoRastreabilidade.split(/\r?\n/).filter(l => {
@@ -377,7 +404,7 @@ function validarCorrecao(texto, respostaAluno) {
   if (nota != null && nota > 0 && citacaoFalsa) erros.push('Foi detectada citação falsa, mas a nota não foi zerada.');
   if (t.length < 900) erros.push('O relatório está curto demais para um espelho OAB/FGV detalhado.');
   if (!/https:\/\/(?:www\.)?(?:planalto\.gov\.br|stf\.jus\.br|stj\.jus\.br|tjdft\.jus\.br|jurisprudencia\.stf\.jus\.br|scon\.stj\.jus\.br)/i.test(t)) erros.push('A correção não contém links para fontes oficiais.');
-  return resultado(erros, { nota, riscoRobotizacao: risco, penalidadeRobotizacao: penalidade, penalidadeJurisprudencia, outrasPenalidades, totalPenalidades });
+  return resultado(erros, { nota, riscoRobotizacao: risco, penalidadeRobotizacao: penalidade, penalidadeJurisprudencia, penalidadeFormatacaoNpj, outrasPenalidades, totalPenalidades });
 }
 
 module.exports = { normalizar, limparEnunciadoIA, limparGabaritoIA, limparCorrecaoIA, normalizarPenalidadesCorrecao, normalizarGabaritoPenal, validarEnunciado, analisarEspelho, normalizarEspelhoCinco, detectarJurisprudencia, similaridadeNarrativa, validarGabarito, validarCorrecao, contemTrechoExtensoCopiado };
