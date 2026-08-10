@@ -11,6 +11,7 @@ Versão do aviso: `2026-08`.
 - exclusão de entregas e sessões relacionada à exclusão da conta;
 - aviso para não enviar dados pessoais desnecessários.
 - coleta obrigatória de e-mail e WhatsApp do aluno, limitada às devolutivas e comunicações acadêmicas e visível apenas à equipe autorizada da turma.
+- pesquisa pedagógica com cinco itens obrigatórios e comentário opcional, vínculo de resposta por hash e resultados exibidos ao professor somente de forma agregada após o mínimo de três respostas;
 
 ## Operação recomendada
 

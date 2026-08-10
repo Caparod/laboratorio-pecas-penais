@@ -59,6 +59,8 @@ function migrarDb() {
   if (!db.pecas) db.pecas = {};
   if (typeof db.proximoNum !== 'number') db.proximoNum = 1 + Object.keys(db.pecas).length;
   if (!db.entregas) db.entregas = {};
+  if (!db.pesquisaPedagogica || typeof db.pesquisaPedagogica !== 'object') db.pesquisaPedagogica = { respostas: {} };
+  if (!db.pesquisaPedagogica.respostas || typeof db.pesquisaPedagogica.respostas !== 'object') db.pesquisaPedagogica.respostas = {};
   if (!db.sessoes) db.sessoes = {}; // sessões persistidas (sobrevivem a reinícios/deploys)
   if (!Array.isArray(db.historicoGeracoes)) db.historicoGeracoes = [];
   db.historicoGeracoes = db.historicoGeracoes.slice(-24);
@@ -494,6 +496,41 @@ function alunoDaSessao(sess) {
     };
   }
   return null;
+}
+
+const VERSAO_PESQUISA_PEDAGOGICA = '2026-08-v1';
+const PERGUNTAS_PESQUISA_PEDAGOGICA = [
+  'A atividade no sistema ajudou a compreender a estrutura da peça penal.',
+  'O enunciado e as orientações foram claros.',
+  'A devolutiva recebida ajudou a identificar acertos e pontos de melhoria.',
+  'Após a atividade, sinto mais autonomia e segurança para elaborar uma peça.',
+  'Gostaria de continuar usando o sistema em outras atividades práticas.'
+];
+const MINIMO_RESPOSTAS_PESQUISA = 3;
+
+function chaveRespostaPesquisa(turmaId, matricula) {
+  return crypto.createHash('sha256').update(String(turmaId) + '\0' + String(matricula)).digest('hex');
+}
+function alunoElegivelPesquisa(matricula, turmaId) {
+  return Object.values(db.pecas || {}).some(p => {
+    const e = p && p.turmaId === turmaId && (db.entregas[p.id] || {})[matricula];
+    return !!(e && e.validado);
+  });
+}
+function respostasPesquisaDaTurma(turmaId) {
+  const respostas = (db.pesquisaPedagogica && db.pesquisaPedagogica.respostas) || {};
+  return Object.values(respostas).filter(r => r && r.turmaId === turmaId && r.versao === VERSAO_PESQUISA_PEDAGOGICA);
+}
+function removerRespostaPesquisa(turmaId, matricula) {
+  const respostas = db.pesquisaPedagogica && db.pesquisaPedagogica.respostas;
+  if (respostas) delete respostas[chaveRespostaPesquisa(turmaId, matricula)];
+}
+function pesquisaRespondidaAluno(turmaId, matricula) {
+  const resposta = ((db.pesquisaPedagogica || {}).respostas || {})[chaveRespostaPesquisa(turmaId, matricula)];
+  return !!(resposta && resposta.versao === VERSAO_PESQUISA_PEDAGOGICA && Array.isArray(resposta.valores) && resposta.valores.length === PERGUNTAS_PESQUISA_PEDAGOGICA.length && resposta.valores.every(v => Number.isInteger(Number(v)) && Number(v) >= 1 && Number(v) <= 5));
+}
+function pesquisaObrigatoriaPendente(ctx, p) {
+  return !!(ctx && !ctx.virtual && p && p.turmaId && rodadaDaPeca(p) >= 2 && !pesquisaRespondidaAluno(p.turmaId, ctx.id));
 }
 function nomeParticipanteEntrega(mat, e) {
   if (db.alunos[mat]) return db.alunos[mat].nome || '';
@@ -1119,6 +1156,7 @@ async function alunoParecerInicial(req, res) {
   let d; try { d = await lerJson(req, 100000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
   const p = db.pecas[String(d.id || '')];
   if (!p || !p.publicada || !alunoPodeAcessarPeca(ctx.aluno, p)) return json(res, 404, { erro: 'Peça não encontrada.' });
+  if (pesquisaObrigatoriaPendente(ctx, p)) return json(res, 403, { erro: 'PESQUISA_OBRIGATORIA', mensagem: 'Responda à pesquisa pedagógica antes de iniciar a Peça 2.' });
   if (p.parecerInicialPorAluno && p.parecerInicialPorAluno[ctx.id]) {
     return json(res, 409, { erro: 'PARECER_JA_UTILIZADO', mensagem: 'A pré-correção desta peça já foi utilizada. Revise o texto e envie a nova versão diretamente para correção.' });
   }
@@ -1992,7 +2030,7 @@ async function pecasAluno(req, res) {
       noPrazo = Number.isNaN(limite) || agora <= limite || !!(p.liberados && p.liberados[ctx.id]);
     }
     gabLiberado = gabLiberado && validarGabarito(versaoAluno.gab || '', versaoAluno.nomePeca || p.nomePeca).ok;
-    pecas.push({ id: p.id, num: rodadaDaPeca(p), rodada: rodadaDaPeca(p), nomePeca: versaoAluno.nomePeca || p.nomePeca, disc: versaoAluno.disc || p.disc, prazo: p.prazo, caso: versaoAluno.caso || p.caso, classificacao: p.classificacao || {}, versao: versaoAluno.versao || p.versao || 1, enviado: false, enviadoEm: null, validado: false, nota: null, temRelatorio: false, noPrazo: noPrazo, gabLiberado: false, parecerInicialUsado: !!(p.parecerInicialPorAluno && p.parecerInicialPorAluno[ctx.id]) });
+    pecas.push({ id: p.id, num: rodadaDaPeca(p), rodada: rodadaDaPeca(p), nomePeca: versaoAluno.nomePeca || p.nomePeca, disc: versaoAluno.disc || p.disc, prazo: p.prazo, caso: versaoAluno.caso || p.caso, classificacao: p.classificacao || {}, versao: versaoAluno.versao || p.versao || 1, enviado: false, enviadoEm: null, validado: false, nota: null, temRelatorio: false, noPrazo: noPrazo, gabLiberado: false, pesquisaPendente: pesquisaObrigatoriaPendente(ctx, p), parecerInicialUsado: !!(p.parecerInicialPorAluno && p.parecerInicialPorAluno[ctx.id]) });
   }
   pecas.sort((a2, b2) => b2.num - a2.num);
   entregues.sort((a2, b2) => Number(b2.enviadoEm || 0) - Number(a2.enviadoEm || 0));
@@ -2007,6 +2045,7 @@ async function entregar(req, res) {
   let d; try { d = await lerJson(req, 300000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
   const p = db.pecas[String(d.id || '')]; if (!p || !p.publicada) return json(res, 404, { erro: 'Peça não encontrada.' });
   if (!alunoPodeAcessarPeca(a, p)) return json(res, 403, { erro: 'Esta peça não pertence à sua turma.' });
+  if (pesquisaObrigatoriaPendente(ctx, p)) return json(res, 403, { erro: 'PESQUISA_OBRIGATORIA', mensagem: 'Responda à pesquisa pedagógica antes de enviar a Peça 2.' });
   const texto = String(d.texto || '').trim();
   if (texto.length < 80) return json(res, 400, { erro: 'Escreva sua peça antes de enviar.' });
   if (texto.length > 60000) return json(res, 400, { erro: 'A peça ultrapassa o limite de 60.000 caracteres.' });
@@ -2346,6 +2385,105 @@ async function pecaLiberarPrazo(req, res) {
   salvarDb(); json(res, 200, { ok: true, foraDoPrazoGeral: !!p.foraDoPrazoGeral, liberados: p.liberados || {} });
 }
 
+// Pesquisa pedagógica: a identidade do aluno nunca é devolvida ao professor.
+// O vínculo é armazenado somente como hash para impedir respostas duplicadas.
+async function pesquisaAlunoGet(req, res) {
+  const sess = sessaoDe(req);
+  if (!sess) return json(res, 401, { erro: 'SESSAO' });
+  const ctx = alunoDaSessao(sess);
+  if (!ctx) return json(res, 403, { erro: 'Acesso restrito.' });
+  if (ctx.virtual) {
+    const turma = db.turmas[ctx.aluno.turmaId];
+    return json(res, 200, { ok: true, versao: VERSAO_PESQUISA_PEDAGOGICA, perguntas: PERGUNTAS_PESQUISA_PEDAGOGICA, modoDemonstracao: true, turmas: turma ? [{ id: turma.id, nome: turma.nome, elegivel: false, respondida: false }] : [] });
+  }
+  const turmas = turmasDoAluno(ctx.aluno).map(turmaId => {
+    const turma = db.turmas[turmaId];
+    const resposta = ((db.pesquisaPedagogica || {}).respostas || {})[chaveRespostaPesquisa(turmaId, ctx.id)];
+    return {
+      id: turmaId,
+      nome: (turma && turma.nome) || turmaId,
+      elegivel: alunoElegivelPesquisa(ctx.id, turmaId),
+      respondida: !!resposta,
+      resposta: resposta ? { valores: resposta.valores.slice(), comentario: resposta.comentario || '', atualizadoEm: resposta.atualizadoEm } : null
+    };
+  });
+  json(res, 200, { ok: true, versao: VERSAO_PESQUISA_PEDAGOGICA, perguntas: PERGUNTAS_PESQUISA_PEDAGOGICA, modoDemonstracao: false, turmas });
+}
+
+async function pesquisaResponder(req, res) {
+  const sess = sessaoDe(req);
+  if (!sess) return json(res, 401, { erro: 'SESSAO' });
+  const ctx = alunoDaSessao(sess);
+  if (!ctx || ctx.virtual) return json(res, 403, { erro: 'Somente estudantes podem responder à pesquisa.' });
+  let d; try { d = await lerJson(req, 12000); } catch { return json(res, 400, { erro: 'Resposta inválida.' }); }
+  const turmaId = String(d.turmaId || '');
+  if (!db.turmas[turmaId] || !alunoNaTurma(ctx.aluno, turmaId)) return json(res, 403, { erro: 'Turma inválida.' });
+  if (!alunoElegivelPesquisa(ctx.id, turmaId)) return json(res, 403, { erro: 'A pesquisa ficará disponível após a primeira devolutiva validada.' });
+  const valores = Array.isArray(d.valores) ? d.valores.map(Number) : [];
+  if (valores.length !== PERGUNTAS_PESQUISA_PEDAGOGICA.length || valores.some(v => !Number.isInteger(v) || v < 1 || v > 5)) return json(res, 400, { erro: 'Responda todas as afirmações usando a escala de 1 a 5.' });
+  const comentario = String(d.comentario || '').trim();
+  if (comentario.length > 1000) return json(res, 400, { erro: 'O comentário deve ter no máximo 1.000 caracteres.' });
+  const chave = chaveRespostaPesquisa(turmaId, ctx.id);
+  const anteriores = db.pesquisaPedagogica.respostas;
+  const anterior = anteriores[chave];
+  const agora = Date.now();
+  anteriores[chave] = { turmaId, versao: VERSAO_PESQUISA_PEDAGOGICA, valores, comentario, criadoEm: anterior ? anterior.criadoEm : agora, atualizadoEm: agora };
+  try { await salvarDbCritico(); } catch (e) { return json(res, 503, { erro: 'A resposta não pôde ser salva. Tente novamente.' }); }
+  json(res, 200, { ok: true, atualizada: !!anterior, atualizadoEm: agora });
+}
+
+function resumoPesquisaPedagogica(turmaId) {
+  const turma = db.turmas[turmaId];
+  const matriculas = Object.keys(db.alunos || {}).filter(m => alunoNaTurma(db.alunos[m], turmaId));
+  const elegiveis = matriculas.filter(m => alunoElegivelPesquisa(m, turmaId)).length;
+  const respostas = respostasPesquisaDaTurma(turmaId);
+  const liberado = respostas.length >= MINIMO_RESPOSTAS_PESQUISA;
+  const perguntas = PERGUNTAS_PESQUISA_PEDAGOGICA.map((texto, indice) => {
+    if (!liberado) return { indice, texto, media: null, distribuicao: null };
+    const valores = respostas.map(r => Number(r.valores[indice])).filter(v => Number.isInteger(v) && v >= 1 && v <= 5);
+    const distribuicao = [1, 2, 3, 4, 5].map(n => valores.filter(v => v === n).length);
+    return { indice, texto, media: valores.length ? arred1(valores.reduce((a, b) => a + b, 0) / valores.length) : null, distribuicao };
+  });
+  const todosValores = liberado ? respostas.flatMap(r => r.valores.map(Number).filter(v => Number.isInteger(v) && v >= 1 && v <= 5)) : [];
+  const comentarios = liberado ? respostas.map(r => String(r.comentario || '').trim()).filter(Boolean).sort((a, b) => crypto.createHash('sha256').update(a).digest('hex').localeCompare(crypto.createHash('sha256').update(b).digest('hex'))) : [];
+  return {
+    ok: true,
+    versao: VERSAO_PESQUISA_PEDAGOGICA,
+    turma: { id: turma.id, nome: turma.nome, alunos: matriculas.length },
+    resumo: { elegiveis, respostas: respostas.length, participacao: elegiveis ? arred1(respostas.length * 100 / elegiveis) : 0, mediaGeral: todosValores.length ? arred1(todosValores.reduce((a, b) => a + b, 0) / todosValores.length) : null, minimoAnonimato: MINIMO_RESPOSTAS_PESQUISA, dadosDisponiveis: liberado },
+    perguntas,
+    comentarios
+  };
+}
+
+async function pesquisaProfessor(req, res) {
+  const sess = sessaoDe(req);
+  if (!sess) return json(res, 401, { erro: 'SESSAO' });
+  if (sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
+  const turmaId = new URLSearchParams((req.url.split('?')[1]) || '').get('turma') || '';
+  if (!db.turmas[turmaId]) return json(res, 400, { erro: 'Informe a turma.' });
+  if (!podeAcessarTurma(sess.usuario, turmaId)) return json(res, 403, { erro: 'Sem acesso a esta turma.' });
+  json(res, 200, resumoPesquisaPedagogica(turmaId));
+}
+
+async function pesquisaCsv(req, res) {
+  const sess = sessaoDe(req);
+  if (!sess) { res.writeHead(401); return res.end('SESSAO'); }
+  if (sess.tipo !== 'professor') { res.writeHead(403); return res.end('restrito'); }
+  const turmaId = new URLSearchParams((req.url.split('?')[1]) || '').get('turma') || '';
+  if (!db.turmas[turmaId]) { res.writeHead(400); return res.end('Informe a turma.'); }
+  if (!podeAcessarTurma(sess.usuario, turmaId)) { res.writeHead(403); return res.end('Sem acesso a esta turma.'); }
+  const d = resumoPesquisaPedagogica(turmaId);
+  if (!d.resumo.dadosDisponiveis) { res.writeHead(409); return res.end('São necessárias pelo menos ' + MINIMO_RESPOSTAS_PESQUISA + ' respostas para exportar resultados anônimos.'); }
+  const linhas = [['Tipo', 'Item', 'Média', 'Respostas'].map(csvCelula).join(';')];
+  linhas.push(['Resumo', 'Média geral', String(d.resumo.mediaGeral).replace('.', ','), d.resumo.respostas].map(csvCelula).join(';'));
+  for (const p of d.perguntas) linhas.push(['Afirmação', p.texto, String(p.media).replace('.', ','), d.resumo.respostas].map(csvCelula).join(';'));
+  for (const comentario of d.comentarios) linhas.push(['Comentário anônimo', comentario, '', ''].map(csvCelula).join(';'));
+  const nomeArq = 'pesquisa-pedagogica-' + String(d.turma.nome).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9]+/g, '-').toLowerCase() + '.csv';
+  res.writeHead(200, { 'content-type': 'text/csv; charset=utf-8', 'content-disposition': 'attachment; filename="' + nomeArq + '"' });
+  res.end('\ufeff' + linhas.join('\r\n'));
+}
+
 // Professor: indicadores pedagógicos por turma, calculados apenas com notas validadas.
 // Quando o relatório contém pontuação "obtida/possível", agrega também os critérios.
 function numeroRelatorio(v) { const n = parseFloat(String(v || '').replace(',', '.')); return Number.isFinite(n) ? n : null; }
@@ -2477,6 +2615,10 @@ function invalidarSessoesDosAlunos(matriculas) {
 function removerAlunosCompletamente(matriculas) {
   const mats = matriculas instanceof Set ? matriculas : new Set(matriculas || []);
   let alunosApagados = 0, entregasApagadas = 0;
+  for (const mat of mats) {
+    const aluno = db.alunos && db.alunos[mat];
+    for (const turmaId of turmasDoAluno(aluno)) removerRespostaPesquisa(turmaId, mat);
+  }
   for (const mat of mats) if (db.alunos && db.alunos[mat]) { delete db.alunos[mat]; alunosApagados++; }
   for (const entregas of Object.values(db.entregas || {})) {
     for (const mat of mats) if (entregas && Object.prototype.hasOwnProperty.call(entregas, mat)) { delete entregas[mat]; entregasApagadas++; }
@@ -2489,6 +2631,7 @@ function removerAlunosCompletamente(matriculas) {
 function removerAlunoDaTurma(matricula, turmaId) {
   const a = db.alunos && db.alunos[matricula];
   if (!a || !alunoNaTurma(a, turmaId)) return { vinculosRemovidos: 0, alunosApagados: 0, entregasApagadas: 0, sessoesEncerradas: 0 };
+  removerRespostaPesquisa(turmaId, matricula);
   removerTurmaAluno(a, turmaId);
   if (turmasDoAluno(a).length) return { vinculosRemovidos: 1, alunosApagados: 0, entregasApagadas: 0, sessoesEncerradas: 0 };
   const removido = removerAlunosCompletamente(new Set([matricula]));
@@ -2537,7 +2680,7 @@ async function zerarSistema(req, res) {
   for (const sessao of sessoes.values()) if (sessao.tipo === 'aluno') matriculas.add(sessao.usuario);
   const resultado = { alunosApagados: totalAlunos, pecasApagadas: Object.keys(db.pecas || {}).length, entregasApagadas: Object.values(db.entregas || {}).reduce((n, entregas) => n + Object.keys(entregas || {}).length, 0) };
   resultado.sessoesEncerradas = invalidarSessoesDosAlunos(matriculas);
-  db.alunos = {}; db.pecas = {}; db.entregas = {}; db.gabCache = {}; db.proximoNum = 1; salvarDb();
+  db.alunos = {}; db.pecas = {}; db.entregas = {}; db.pesquisaPedagogica = { respostas: {} }; db.gabCache = {}; db.proximoNum = 1; salvarDb();
   json(res, 200, Object.assign({ ok: true, escopo: 'sistema' }, resultado));
 }
 
@@ -2591,6 +2734,8 @@ const server = http.createServer((req, res) => {
   if (req.method === 'GET' && req.url === '/api/pecas') return pecasListar(req, res);
   if (req.method === 'GET' && req.url.startsWith('/api/peca/get?')) { const id = new URLSearchParams(req.url.split('?')[1]).get('id'); return pecaGet(req, res, id); }
   if (req.method === 'GET' && req.url === '/api/pecas-aluno') return pecasAluno(req, res);
+  if (req.method === 'GET' && req.url === '/api/pesquisa-aluno') return pesquisaAlunoGet(req, res);
+  if (req.method === 'POST' && req.url === '/api/pesquisa/responder') return pesquisaResponder(req, res);
   if (req.method === 'POST' && req.url === '/api/entregar') return entregar(req, res);
   if (req.method === 'POST' && req.url === '/api/descadastrar') return descadastrarAluno(req, res);
   if (req.method === 'GET' && req.url.startsWith('/api/entrega?')) { const q = new URLSearchParams(req.url.split('?')[1]); return entregaGet(req, res, q.get('id'), q.get('matricula')); }
@@ -2607,6 +2752,8 @@ const server = http.createServer((req, res) => {
   if (req.method === 'POST' && req.url === '/api/peca/renovar-prazo') return pecaRenovarPrazo(req, res);
   if (req.method === 'POST' && req.url === '/api/peca/liberar-prazo') return pecaLiberarPrazo(req, res);
   if (req.method === 'GET' && req.url.startsWith('/api/painel?')) return painelPedagogico(req, res);
+  if (req.method === 'GET' && req.url.startsWith('/api/pesquisa?')) return pesquisaProfessor(req, res);
+  if (req.method === 'GET' && req.url.startsWith('/api/pesquisa.csv?')) return pesquisaCsv(req, res);
   if (req.method === 'GET' && req.url.startsWith('/api/notas.csv')) return notasPlanilha(req, res);
   if (req.method === 'POST' && req.url === '/api/zerar') return zerarSistema(req, res);
   if (req.method === 'POST' && req.url === '/api/gerar-caso') return gerarCaso(req, res);
