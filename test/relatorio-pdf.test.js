@@ -1,7 +1,7 @@
 'use strict';
 const assert = require('assert');
 const fs = require('fs');
-const { gerarPdfEspelho, relatorioParaHtml, linhasEspelho } = require('../relatorio-pdf');
+const { gerarPdfEspelho, relatorioParaHtml, linhasEspelho, extrairTabelaMarkdown } = require('../relatorio-pdf');
 
 const relatorio = `## Acertos
 - O cabimento, o endereçamento e a tese principal foram apresentados de acordo com o padrão de resposta.
@@ -22,6 +22,12 @@ const relatorio = `## Acertos
 - Os dispositivos citados foram conferidos em fonte oficial.
 ## Verificação de robotização e supervisão humana
 - Risco BAIXO. Não há evidência suficiente para concluir produção automatizada sem revisão.
+## Rastreabilidade dos descontos
+| Falha identificada | Aplicação | Desconto |
+|---|---|---:|
+| Fechamento formal incompleto | Desconto aplicado no próprio item do espelho | 0,25 |
+| Tese subsidiária insuficiente | Desconto aplicado no próprio item do espelho | 0,50 |
+TOTAL DE PENALIDADES FORA DO ESPELHO: 0,00
 NOTA SUGERIDA: 4,00/5
 ## Propostas de aprimoramento
 - Relacionar cada tese aos fatos, explicitar os pedidos subsidiários e conferir todos os elementos do fechamento formal.
@@ -36,8 +42,13 @@ assert.ok(linhasEspelho(relatorio.split('\n')).length >= 6, 'tabela deve ser con
 const linhaComSumulas = linhasEspelho(['| 4 | Regime prisional — Súmulas 718/719 do STF | 0,60/0,60 | Regime corretamente fundamentado. |'])[0];
 assert.equal(linhaComSumulas.obtido, '0,60', 'números de súmulas não podem ocupar a coluna de pontos obtidos');
 assert.equal(linhaComSumulas.maximo, '0,60', 'números de súmulas não podem ocupar a coluna de pontuação máxima');
+const rastreabilidade = extrairTabelaMarkdown(relatorio.split('## Rastreabilidade dos descontos')[1].split('## Propostas')[0].split('\n'));
+assert.deepEqual(rastreabilidade.cabecalho, ['Falha identificada', 'Aplicação', 'Desconto']);
+assert.equal(rastreabilidade.linhas.length, 2, 'tabela de rastreabilidade deve ser reconhecida fora da seção de pontuação');
 const html = relatorioParaHtml(dados);
 assert.match(html, /formato OAB\/FGV/i);
 assert.match(html, /Resultado do recurso/i);
+assert.match(html, /<th[^>]*>Falha identificada<\/th>/i, 'rastreabilidade deve aparecer como tabela real no relatório HTML');
+assert.doesNotMatch(html, /\|\s*Falha identificada\s*\|/, 'marcadores markdown da tabela não podem aparecer para o aluno');
 if (process.env.PDF_AMOSTRA) fs.writeFileSync(process.env.PDF_AMOSTRA, pdf);
 console.log('OK: espelho OAB/FGV em PDF e HTML validado.');

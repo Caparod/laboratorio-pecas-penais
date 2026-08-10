@@ -59,6 +59,27 @@ function linhasEspelho(linhas) {
   return itens;
 }
 
+function extrairTabelaMarkdown(linhas) {
+  const origem = Array.from(linhas || []);
+  const celulas = linha => linha.trim().slice(1, -1).split('|').map(limparMarkdown);
+  for (let i = 0; i < origem.length - 1; i++) {
+    const atual = origem[i].trim(), separador = origem[i + 1].trim();
+    if (!/^\|.*\|$/.test(atual) || !/^\|[\s:|\-]+\|$/.test(separador)) continue;
+    const cabecalho = celulas(atual);
+    if (cabecalho.length < 2) continue;
+    const linhasTabela = [];
+    let fim = i + 2;
+    while (fim < origem.length && /^\|.*\|$/.test(origem[fim].trim())) {
+      const linha = celulas(origem[fim]);
+      while (linha.length < cabecalho.length) linha.push('');
+      linhasTabela.push(linha.slice(0, cabecalho.length));
+      fim++;
+    }
+    return { cabecalho, linhas: linhasTabela, restantes: origem.slice(0, i).concat(origem.slice(fim)) };
+  }
+  return { cabecalho: [], linhas: [], restantes: origem };
+}
+
 function quebrarTexto(texto, largura, tamanho) {
   const max = Math.max(8, Math.floor(largura / (tamanho * 0.51)));
   const saida = [];
@@ -106,6 +127,49 @@ function gerarPdfEspelho(dados) {
   function tituloSecao(titulo) {
     espaco(54); y += 5; retangulo(MARGEM, y, LARGURA - 2 * MARGEM, 24, [0.92, 0.94, 0.97]);
     cmd(`BT /F2 10 Tf ${cor(corAzul)} ${MARGEM + 9} ${ALTURA - y - 16} Td (${escPdf(titulo.toUpperCase())}) Tj ET`); y += 31;
+  }
+  function linhaLista(texto) {
+    const tamanho = 9.1, lh = 13, x = MARGEM + 16, largura = LARGURA - 2 * MARGEM - 16;
+    const linhas = quebrarTexto(limparMarkdown(texto), largura, tamanho);
+    espaco(Math.max(lh, linhas.length * lh) + 3);
+    retangulo(MARGEM + 3, y + 5, 3.2, 3.2, corDourada);
+    for (const linha of linhas) {
+      cmd(`BT /F1 ${tamanho} Tf ${cor([0.13, 0.15, 0.18])} ${x} ${ALTURA - y - tamanho} Td (${escPdf(linha)}) Tj ET`);
+      y += lh;
+    }
+    y += 3;
+  }
+  function linhaResumo(texto) {
+    const tamanho = 8.5, lh = 11.5, linhas = quebrarTexto(limparMarkdown(texto), LARGURA - 2 * MARGEM - 18, tamanho);
+    const h = Math.max(25, linhas.length * lh + 11); espaco(h + 4);
+    retangulo(MARGEM, y, LARGURA - 2 * MARGEM, h, [0.97, 0.95, 0.89], [0.82, 0.75, 0.57]);
+    linhas.forEach((linha, i) => cmd(`BT /F2 ${tamanho} Tf ${cor(corAzul)} ${MARGEM + 9} ${ALTURA - y - 15 - i * lh} Td (${escPdf(linha)}) Tj ET`));
+    y += h + 4;
+  }
+  function renderTabelaMarkdown(tabela) {
+    const quantidade = tabela.cabecalho.length;
+    const total = LARGURA - 2 * MARGEM;
+    const proporcoes = quantidade === 3 ? [0.53, 0.32, 0.15] : Array(quantidade).fill(1 / quantidade);
+    const larguras = proporcoes.map(p => total * p);
+    const xs = []; let acumulado = MARGEM;
+    for (const largura of larguras) { xs.push(acumulado); acumulado += largura; }
+    function cabecalhoTabela() {
+      const textos = tabela.cabecalho.map((c, i) => quebrarTexto(c, larguras[i] - 10, 7.5));
+      const h = Math.max(26, Math.max(...textos.map(x => x.length)) * 9 + 9); espaco(h);
+      retangulo(MARGEM, y, total, h, corAzul);
+      textos.forEach((linhas, i) => linhas.forEach((linha, j) => cmd(`BT /F2 7.5 Tf 1 1 1 rg ${xs[i] + 5} ${ALTURA - y - 14 - j * 9} Td (${escPdf(linha)}) Tj ET`)));
+      y += h;
+    }
+    cabecalhoTabela();
+    tabela.linhas.forEach((celulas, indice) => {
+      const textos = tabela.cabecalho.map((_, i) => quebrarTexto(celulas[i] || '', larguras[i] - 10, i === quantidade - 1 ? 7.8 : 8));
+      const h = Math.max(27, Math.max(...textos.map(x => x.length)) * 10 + 9);
+      if (y + h > ALTURA - 54) { novaPagina(); cabecalhoTabela(); }
+      retangulo(MARGEM, y, total, h, indice % 2 ? [0.97, 0.975, 0.98] : [0.99, 0.99, 0.985], [0.78, 0.79, 0.8]);
+      textos.forEach((linhas, i) => linhas.forEach((linha, j) => cmd(`BT /${i === quantidade - 1 ? 'F2' : 'F1'} ${i === quantidade - 1 ? 7.8 : 8} Tf 0.12 0.14 0.17 rg ${xs[i] + 5} ${ALTURA - y - 14 - j * 10} Td (${escPdf(linha)}) Tj ET`)));
+      y += h;
+    });
+    y += 7;
   }
   cabecalho();
   linhaTexto('Identificação da avaliação', { negrito: true, tamanho: 12, cor: corAzul, depois: 4 });
@@ -158,9 +222,13 @@ function gerarPdfEspelho(dados) {
       }
       y += 5;
     } else {
-      for (const original of secao.linhas) {
+      const tabela = extrairTabelaMarkdown(secao.linhas);
+      if (tabela.linhas.length) renderTabelaMarkdown(tabela);
+      for (const original of tabela.restantes) {
         const linha = limparMarkdown(original); if (!linha || /^\|?\s*[-:| ]+\|?$/.test(linha)) continue;
-        linhaTexto((/^[-*]/.test(original.trim()) ? '- ' : '') + linha, { tamanho: 9.1, lh: 13, depois: 2 });
+        if (/^[-*]\s+/.test(original.trim())) linhaLista(original);
+        else if (/^(?:PENALIDADE|OUTRAS PENALIDADES|TOTAL DE PENALIDADES)\b/i.test(linha)) linhaResumo(linha);
+        else linhaTexto(linha, { tamanho: 9.1, lh: 13, depois: 4 });
       }
     }
   }
@@ -209,8 +277,26 @@ function relatorioParaHtml(dados) {
       for (const item of itens) corpo += '<tr><td style="border:1px solid #d8d8d8;padding:8px">' + escHtml(item.criterio + (item.esperado ? ' - ' + item.esperado : '')) + '</td><td style="border:1px solid #d8d8d8;padding:8px;text-align:center"><b>' + escHtml(item.obtido) + '</b></td><td style="border:1px solid #d8d8d8;padding:8px;text-align:center">' + escHtml(item.maximo) + '</td><td style="border:1px solid #d8d8d8;padding:8px">' + escHtml(item.justificativa) + '</td></tr>';
       corpo += '</tbody></table>';
     } else {
-      const linhas = secao.linhas.map(limparMarkdown).filter(x => x && !/^\|?\s*[-:| ]+\|?$/.test(x));
-      corpo += '<ul style="padding-left:20px">' + linhas.map(x => '<li style="margin:7px 0">' + escHtml(x) + '</li>').join('') + '</ul>';
+      const tabela = extrairTabelaMarkdown(secao.linhas);
+      if (tabela.linhas.length) {
+        corpo += '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:#133056;color:#fff">';
+        corpo += tabela.cabecalho.map(x => '<th style="padding:9px;text-align:left">' + escHtml(x) + '</th>').join('') + '</tr></thead><tbody>';
+        corpo += tabela.linhas.map((linha, i) => '<tr style="background:' + (i % 2 ? '#f7f8fa' : '#fff') + '">' + linha.map((x, j) => '<td style="border:1px solid #d8d8d8;padding:9px;vertical-align:top' + (j === linha.length - 1 ? ';font-weight:bold;white-space:nowrap' : '') + '">' + escHtml(x) + '</td>').join('') + '</tr>').join('');
+        corpo += '</tbody></table></div>';
+      }
+      let lista = false;
+      for (const original of tabela.restantes) {
+        const linha = limparMarkdown(original); if (!linha || /^\|?\s*[-:| ]+\|?$/.test(linha)) continue;
+        if (/^[-*]\s+/.test(original.trim())) {
+          if (!lista) { corpo += '<ul style="padding-left:22px;margin:10px 0">'; lista = true; }
+          corpo += '<li style="margin:8px 0;padding-left:3px">' + escHtml(linha) + '</li>';
+        } else {
+          if (lista) { corpo += '</ul>'; lista = false; }
+          if (/^(?:PENALIDADE|OUTRAS PENALIDADES|TOTAL DE PENALIDADES)\b/i.test(linha)) corpo += '<div style="border:1px solid #d8c89c;background:#fbf7eb;color:#133056;padding:8px 10px;margin:6px 0;font-weight:bold">' + escHtml(linha) + '</div>';
+          else corpo += '<p style="margin:9px 0">' + escHtml(linha) + '</p>';
+        }
+      }
+      if (lista) corpo += '</ul>';
     }
     corpo += '</section>';
   }
@@ -218,4 +304,4 @@ function relatorioParaHtml(dados) {
   return '<div style="font-family:Arial,sans-serif;color:#242a32;line-height:1.5"><div style="background:#133056;color:#fff;padding:18px 22px;border-bottom:5px solid #c89a38"><h1 style="font-size:20px;margin:0">Espelho de correção do Estágio</h1><p style="margin:5px 0 0">Formato OAB/FGV adaptado · escala da disciplina: 0 a 5 · Peça ' + escHtml(dados.rodada) + ' - ' + escHtml(dados.nomePeca) + '</p></div><div style="padding:18px 22px"><p><b>Aluno(a):</b> ' + escHtml(dados.aluno) + ' &nbsp; <b>Matrícula:</b> ' + escHtml(dados.matricula) + '<br><b>Turma:</b> ' + escHtml(dados.turma) + '</p><div style="display:inline-block;background:#133056;color:#fff;padding:10px 18px;border-radius:5px;font-size:18px"><b>Nota final: ' + escHtml(numeroPt(dados.nota)) + '/5</b></div>' + recurso + corpo + '</div></div>';
 }
 
-module.exports = { gerarPdfEspelho, relatorioParaHtml, linhasEspelho, secoesRelatorio };
+module.exports = { gerarPdfEspelho, relatorioParaHtml, linhasEspelho, secoesRelatorio, extrairTabelaMarkdown };
