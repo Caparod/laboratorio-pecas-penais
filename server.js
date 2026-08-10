@@ -7,6 +7,7 @@ const crypto = require('crypto');
 const { limparEnunciadoIA, limparGabaritoIA, limparCorrecaoIA, normalizarPenalidadesCorrecao, normalizarGabaritoPenal, validarEnunciado, analisarEspelho, normalizarEspelhoCinco, detectarJurisprudencia, similaridadeNarrativa, validarGabarito, validarCorrecao } = require('./validation');
 const { LIMITE_ARQUIVO, decodificarDataUrl, tipoArquivo, extrairTextoDocx, extrairTextoDocLegado, detectarSinaisPrompt, analisarRobotizacao, validarParecerInicial } = require('./arquivo-peca');
 const { gerarPdfEspelho, relatorioParaHtml } = require('./relatorio-pdf');
+const { capturarEstadoCorrecao, restaurarEstadoCorrecao, aplicarResultadoCorrecao } = require('./correcao-transacao');
 
 // Conteúdo jurídico avaliativo usa sempre o modelo de maior capacidade.
 // OCR e extrações mecânicas possuem configurações próprias mais abaixo.
@@ -133,13 +134,17 @@ function migrarDb() {
       if (e.relatorio) e.relatorio = limparCorrecaoIA(e.relatorio);
       if (e.recurso && e.recurso.relatorioRecorrido) e.recurso.relatorioRecorrido = limparCorrecaoIA(e.recurso.relatorioRecorrido);
       if (e.recurso && e.recurso.sugestaoIA && e.recurso.sugestaoIA.relatorio) e.recurso.sugestaoIA.relatorio = limparCorrecaoIA(e.recurso.sugestaoIA.relatorio);
-      if (!e.validado && e.relatorio && e.modeloCorrecao && Number(e.versaoPromptCorrecao || 0) < 6) {
-        e.relatorioIAAnterior = { texto: e.relatorio, notaSugerida: e.notaSugerida, versaoPrompt: e.versaoPromptCorrecao || 0, arquivadoEm: Date.now() };
+      const relatorioIAInvalido = !e.relatorio || !validarCorrecao(e.relatorio).ok;
+      if (!e.validado && e.modeloCorrecao && (Number(e.versaoPromptCorrecao || 0) < 6 || relatorioIAInvalido)) {
+        if (e.relatorio) e.relatorioIAAnterior = { texto: e.relatorio, notaSugerida: e.notaSugerida, versaoPrompt: e.versaoPromptCorrecao || 0, arquivadoEm: Date.now(), motivo: relatorioIAInvalido ? 'correcao-incompleta-ou-invalida' : 'versao-antiga' };
         e.relatorio = '';
         delete e.notaSugerida;
         delete e.corrigidoEm;
         delete e.corrigidoPor;
         delete e.modeloCorrecao;
+        delete e.robotizacao;
+        delete e.versaoPromptCorrecao;
+        delete e.versaoGabaritoCorrecao;
       }
     }
   }
@@ -614,6 +619,30 @@ const lotesCorrecao = new Map();
 const pecasEmCorrecaoLote = new Set();
 const correcoesIndividuais = new Map();
 const entregasEmCorrecao = new Set();
+const LIMITE_TENTATIVA_CORRECAO_MS = Math.max(60000, Number(process.env.CORRECAO_LIMITE_MS || 9 * 60 * 1000));
+const RETENCAO_JOB_CORRECAO_MS = 30 * 60 * 1000;
+function limparEstadoTentativa(entrega, estado) {
+  restaurarEstadoCorrecao(entrega, estado);
+  salvarDb();
+}
+function vigiarTentativa(job, aoExpirar) {
+  const timer = setTimeout(() => {
+    if (job.status !== 'processando') return;
+    job.cancelado = true; job.status = 'falhou'; job.finalizadoEm = Date.now();
+    job.erro = 'A correção excedeu o tempo de segurança. Qualquer conteúdo parcial foi removido; tente novamente.';
+    try { aoExpirar(); } catch (e) { console.error('[CORREÇÃO] falha ao limpar tentativa expirada:', e.message); }
+  }, LIMITE_TENTATIVA_CORRECAO_MS);
+  if (timer.unref) timer.unref();
+  Object.defineProperty(job, '_timerLimpeza', { value: timer, writable: true, enumerable: false });
+}
+function encerrarVigilancia(job) {
+  if (job && job._timerLimpeza) { clearTimeout(job._timerLimpeza); job._timerLimpeza = null; }
+}
+function podarJobsCorrecao() {
+  const agora = Date.now();
+  for (const [id, job] of correcoesIndividuais) if (job.status !== 'processando' && agora - Number(job.finalizadoEm || job.iniciadoEm || 0) > RETENCAO_JOB_CORRECAO_MS) correcoesIndividuais.delete(id);
+  for (const [id, job] of lotesCorrecao) if (job.status !== 'processando' && agora - Number(job.finalizadoEm || job.iniciadoEm || 0) > RETENCAO_JOB_CORRECAO_MS) lotesCorrecao.delete(id);
+}
 function ipCliente(req) {
   if (process.env.CONFIAR_PROXY === 'true') {
     const encaminhado = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
@@ -2155,8 +2184,7 @@ async function gerarRelatorioCorrecao(sess, p, e) {
     vr = validarCorrecao(relatorio);
   }
   if (!vr.ok) return { ok: false, erro: 'A correção da IA foi bloqueada por inconsistência: ' + vr.erros.join(' ') };
-  e.relatorio = relatorio; e.robotizacao = robotizacao; e.notaSugerida = vr.detalhes.nota; e.corrigidoEm = Date.now(); e.corrigidoPor = sess.usuario; e.modeloCorrecao = MODELO_POTENTE; e.versaoPromptCorrecao = 7; e.versaoGabaritoCorrecao = base.versaoGabarito;
-  return { ok: true, relatorio, notaSugerida: e.notaSugerida, versaoPeca: original.versao || 1, versaoGabarito: base.versaoGabarito };
+  return { ok: true, relatorio, robotizacao, notaSugerida: vr.detalhes.nota, versaoPeca: original.versao || 1, versaoGabarito: base.versaoGabarito, modeloCorrecao: MODELO_POTENTE, versaoPromptCorrecao: 8 };
 }
 async function enviarEspelhoAluno(p, e, matricula) {
   const a = db.alunos[String(matricula)];
@@ -2180,6 +2208,7 @@ async function validarEEnviarCorrecao(sess, p, e, matricula, automatico) {
 }
 // Professor: pedir à IA um relatório com nota para uma entrega
 async function entregaCorrigirIA(req, res) {
+  podarJobsCorrecao();
   const sess = sessaoDe(req); if (!sess) return json(res, 401, { erro: 'SESSAO' }); if (sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
   if (limitado('ia:' + sess.tipo + ':' + sess.usuario)) return json(res, 429, { erro: 'Aguarde um minuto.' });
   let d; try { d = await lerJson(req, 5000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
@@ -2190,24 +2219,33 @@ async function entregaCorrigirIA(req, res) {
   if (pecasEmCorrecaoLote.has(p.id)) return json(res, 409, { erro: 'A rodada está sendo corrigida automaticamente. Aguarde a conclusão.' });
   const chaveEntrega = p.id + '\u0000' + matricula;
   if (entregasEmCorrecao.has(chaveEntrega)) return json(res, 409, { erro: 'Esta entrega já está sendo corrigida.' });
+  const estadoInicial = capturarEstadoCorrecao(e);
   const id = crypto.randomUUID();
   const job = { id, pecaId: p.id, matricula, professor: sess.usuario, status: 'processando', iniciadoEm: Date.now(), resultado: null, erro: '' };
   correcoesIndividuais.set(id, job); entregasEmCorrecao.add(chaveEntrega);
+  vigiarTentativa(job, () => { limparEstadoTentativa(e, estadoInicial); });
   if (correcoesIndividuais.size > 80) for (const [chave, antigo] of correcoesIndividuais) if (antigo.status !== 'processando') { correcoesIndividuais.delete(chave); if (correcoesIndividuais.size <= 60) break; }
   setImmediate(async () => {
     try {
       const resultado = await gerarRelatorioCorrecao(Object.assign({}, sess), p, e);
       if (!resultado.ok) throw new Error(resultado.erro || 'A IA não concluiu a correção.');
+      if (job.cancelado) { limparEstadoTentativa(e, estadoInicial); return; }
+      aplicarResultadoCorrecao(e, resultado, sess.usuario);
       await salvarDbCritico();
+      if (job.cancelado) { limparEstadoTentativa(e, estadoInicial); return; }
       job.resultado = resultado; job.status = 'concluido'; job.finalizadoEm = Date.now();
     } catch (err) {
-      job.erro = String(err.message || err || 'A correção não pôde ser concluída.').slice(0, 500);
-      job.status = 'falhou'; job.finalizadoEm = Date.now();
-    } finally { entregasEmCorrecao.delete(chaveEntrega); }
+      limparEstadoTentativa(e, estadoInicial);
+      if (!job.cancelado) {
+        job.erro = String(err.message || err || 'A correção não pôde ser concluída.').slice(0, 500) + ' Nenhum conteúdo parcial foi mantido.';
+        job.status = 'falhou'; job.finalizadoEm = Date.now();
+      }
+    } finally { encerrarVigilancia(job); entregasEmCorrecao.delete(chaveEntrega); }
   });
   json(res, 202, { ok: true, jobId: id, status: job.status });
 }
 async function entregaCorrigirIAStatus(req, res, id) {
+  podarJobsCorrecao();
   const sess = sessaoDe(req); if (!sess) return json(res, 401, { erro: 'SESSAO' }); if (sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
   const job = correcoesIndividuais.get(String(id || ''));
   if (!job || job.professor !== sess.usuario) return json(res, 404, { erro: 'Correção não encontrada.' });
@@ -2220,30 +2258,38 @@ async function entregaValidar(req, res) {
   const p = db.pecas[String(d.id || '')]; const e = p && (db.entregas[p.id] || {})[String(d.matricula || '')];
   if (!e) return json(res, 404, { erro: 'Entrega não encontrada.' });
   if (!podeAcessarPeca(sess.usuario, p)) return json(res, 403, { erro: 'Sem acesso a esta peça.' });
+  const estadoInicial = capturarEstadoCorrecao(e);
+  const falharSemResiduos = (status, mensagem) => { limparEstadoTentativa(e, estadoInicial); return json(res, status, { erro: mensagem }); };
   e.relatorio = String(d.relatorio || '').trim();
-  if (e.relatorio.length < 100) return json(res, 400, { erro: 'O relatório de correção está incompleto.' });
+  if (e.relatorio.length < 100) return falharSemResiduos(400, 'O relatório de correção está incompleto.');
   const notaNum = parseFloat(String(d.nota).replace(',', '.'));
-  if (isNaN(notaNum) || notaNum < 0 || notaNum > 5) return json(res, 400, { erro: 'Nota inválida (0 a 5).' });
+  if (isNaN(notaNum) || notaNum < 0 || notaNum > 5) return falharSemResiduos(400, 'Nota inválida (0 a 5).');
   const notaAnterior = e.nota;
   e.nota = Math.round(notaNum * 100) / 100;
   if (d.validar) {
     const vr = validarCorrecao(e.relatorio);
-    if (!vr.ok) { e.nota = notaAnterior; return json(res, 400, { erro: 'O espelho OAB/FGV está inconsistente: ' + vr.erros.join(' ') }); }
-    if (Math.abs(Number(vr.detalhes.nota) - e.nota) > 0.01) { e.nota = notaAnterior; return json(res, 400, { erro: 'A nota informada deve ser igual à NOTA SUGERIDA e à soma do espelho (' + String(vr.detalhes.nota).replace('.', ',') + '/5).' }); }
+    if (!vr.ok) return falharSemResiduos(400, 'O espelho OAB/FGV está inconsistente: ' + vr.erros.join(' '));
+    if (Math.abs(Number(vr.detalhes.nota) - e.nota) > 0.01) return falharSemResiduos(400, 'A nota informada deve ser igual à NOTA SUGERIDA e à soma do espelho (' + String(vr.detalhes.nota).replace('.', ',') + '/5).');
     if (e.recurso && e.recurso.status === 'pendente') {
       const resultado = String(d.resultadoRecurso || '').trim();
       const decisao = String(d.decisaoRecurso || '').trim();
-      if (!['Deferido', 'Deferido parcialmente', 'Indeferido'].includes(resultado) || decisao.length < 30) { e.nota = notaAnterior; return json(res, 400, { erro: 'Para concluir a recorreção, informe o resultado do recurso e uma decisão fundamentada com ao menos 30 caracteres.' }); }
+      if (!['Deferido', 'Deferido parcialmente', 'Indeferido'].includes(resultado) || decisao.length < 30) return falharSemResiduos(400, 'Para concluir a recorreção, informe o resultado do recurso e uma decisão fundamentada com ao menos 30 caracteres.');
       e.recurso.status = 'decidido'; e.recurso.resultado = resultado; e.recurso.decisao = decisao; e.recurso.decididoEm = Date.now(); e.recurso.decididoPor = sess.usuario; e.recurso.notaAnterior = notaAnterior == null ? null : notaAnterior; e.recurso.notaAposRecurso = e.nota;
     }
+    let correcaoConfirmada = false;
     try {
       const email = await validarEEnviarCorrecao(sess, p, e, String(d.matricula), false);
+      correcaoConfirmada = true;
       e.revisaoHumana.notaAnterior = notaAnterior == null ? null : notaAnterior;
       e.emailCorrecaoEnviado = !!(email && email.ok);
       await salvarDbCritico();
-    } catch (err) { return json(res, 503, { erro: err.message || 'A validação não pôde ser confirmada na persistência remota. Tente novamente.' }); }
+    } catch (err) {
+      if (!correcaoConfirmada) return falharSemResiduos(503, err.message || 'A validação não pôde ser confirmada na persistência remota. Tente novamente.');
+      salvarDb();
+      return json(res, 503, { erro: 'A correção foi validada, mas o estado do envio do e-mail não pôde ser confirmado. A correção completa foi mantida.' });
+    }
   } else {
-    try { await salvarDbCritico(); } catch (err) { return json(res, 503, { erro: 'O rascunho não pôde ser confirmado na persistência remota. Tente novamente.' }); }
+    try { await salvarDbCritico(); } catch (err) { return falharSemResiduos(503, 'O rascunho não pôde ser confirmado na persistência remota. Tente novamente.'); }
   }
   json(res, 200, { ok: true, validado: !!e.validado, emailEnviado: !!(d.validar && db.alunos[String(d.matricula)] && db.alunos[String(d.matricula)].emailVerificado), pdfAnexado: !!d.validar });
 }
@@ -2277,24 +2323,35 @@ async function processarLoteCorrecao(job, sess, p, pendentes) {
   try {
     for (const item of pendentes) {
       job.atual = item.nome || item.matricula;
+      const e = (db.entregas[p.id] || {})[item.matricula];
+      if (!e || e.validado) { job.concluidas++; continue; }
+      const estadoInicial = capturarEstadoCorrecao(e);
+      let expirou = false;
+      const timer = setTimeout(() => {
+        expirou = true;
+        limparEstadoTentativa(e, estadoInicial);
+      }, LIMITE_TENTATIVA_CORRECAO_MS);
+      if (timer.unref) timer.unref();
       try {
-        const e = (db.entregas[p.id] || {})[item.matricula];
-        if (!e || e.validado) { job.concluidas++; continue; }
         const gerada = await gerarRelatorioCorrecao(sess, p, e);
+        if (expirou) throw new Error('A correção excedeu o tempo de segurança; o conteúdo parcial foi removido.');
         if (!gerada.ok) throw new Error(gerada.erro || 'Falha na correção por IA.');
+        aplicarResultadoCorrecao(e, gerada, sess.usuario);
         e.nota = Math.round(Number(gerada.notaSugerida) * 100) / 100;
         const email = await validarEEnviarCorrecao(sess, p, e, item.matricula, true);
         if (!email || !email.ok) job.semEmail++;
         job.concluidas++;
       } catch (err) {
+        limparEstadoTentativa(e, estadoInicial);
         job.falhas++;
-        job.erros.push({ aluno: item.nome || item.matricula, erro: String(err.message || err).slice(0, 240) });
-      }
+        job.erros.push({ aluno: item.nome || item.matricula, erro: (String(err.message || err).slice(0, 200) + ' Nenhum conteúdo parcial foi mantido.').slice(0, 240) });
+      } finally { clearTimeout(timer); }
     }
     job.status = 'concluido'; job.atual = ''; job.finalizadoEm = Date.now();
   } finally { pecasEmCorrecaoLote.delete(p.id); }
 }
 async function entregaCorrigirTodas(req, res) {
+  podarJobsCorrecao();
   const sess = sessaoDe(req); if (!sess) return json(res, 401, { erro: 'SESSAO' }); if (sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
   let d; try { d = await lerJson(req, 5000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
   const p = db.pecas[String(d.id || '')]; if (!p) return json(res, 404, { erro: 'Peça não encontrada.' });
@@ -2306,11 +2363,12 @@ async function entregaCorrigirTodas(req, res) {
   const id = crypto.randomUUID();
   const job = { id, pecaId: p.id, professor: sess.usuario, status: 'processando', total: pendentes.length, concluidas: 0, falhas: 0, semEmail: 0, atual: '', erros: [], iniciadoEm: Date.now() };
   lotesCorrecao.set(id, job); pecasEmCorrecaoLote.add(p.id);
-  if (lotesCorrecao.size > 50) for (const [chave, antigo] of lotesCorrecao) if (antigo.status === 'concluido') { lotesCorrecao.delete(chave); if (lotesCorrecao.size <= 40) break; }
-  setImmediate(() => processarLoteCorrecao(job, Object.assign({}, sess), p, pendentes).catch(err => { job.status = 'concluido'; job.falhas++; job.erros.push({ aluno: 'Lote', erro: String(err.message || err) }); pecasEmCorrecaoLote.delete(p.id); }));
+  if (lotesCorrecao.size > 50) for (const [chave, antigo] of lotesCorrecao) if (antigo.status !== 'processando') { lotesCorrecao.delete(chave); if (lotesCorrecao.size <= 40) break; }
+  setImmediate(() => processarLoteCorrecao(job, Object.assign({}, sess), p, pendentes).catch(err => { job.status = 'falhou'; job.atual = ''; job.finalizadoEm = Date.now(); job.falhas++; job.erros.push({ aluno: 'Lote', erro: (String(err.message || err).slice(0, 200) + ' O estado parcial foi limpo.').slice(0, 240) }); pecasEmCorrecaoLote.delete(p.id); }));
   json(res, 202, { ok: true, jobId: id, total: pendentes.length });
 }
 async function entregaCorrigirTodasStatus(req, res, id) {
+  podarJobsCorrecao();
   const sess = sessaoDe(req); if (!sess) return json(res, 401, { erro: 'SESSAO' }); if (sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
   const job = lotesCorrecao.get(String(id || ''));
   if (!job || job.professor !== sess.usuario) return json(res, 404, { erro: 'Processamento não encontrado.' });

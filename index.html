@@ -534,7 +534,11 @@ async function acompanharCorrecaoTodas(pecaId,jobId){
     if(!r.ok){fb.innerHTML='<p class="erro-ia">'+esc(d.erro||'Não foi possível acompanhar a correção.')+'</p>';return}
     const j=d.job||{},processadas=(j.concluidas||0)+(j.falhas||0),pct=j.total?Math.round(processadas*100/j.total):0;
     fb.innerHTML='<div class="parecer-inicial"><p><b>Correção automática em andamento: '+processadas+' de '+j.total+'</b>'+(j.atual?' · '+esc(j.atual):'')+'</p><div class="pbar"><div class="trilho"><div class="fill" style="width:'+pct+'%"></div></div></div>'+(j.falhas?'<p class="erro-ia">Falhas até agora: '+j.falhas+'</p>':'')+'</div>';
-    if(j.status!=='concluido'){setTimeout(()=>acompanharCorrecaoTodas(pecaId,jobId),3000);return}
+    if(j.status==='processando'){setTimeout(()=>acompanharCorrecaoTodas(pecaId,jobId),3000);return}
+    if(j.status==='falhou'){
+      fb.innerHTML='<div class="parecer-inicial"><p class="erro-ia"><b>A correção automática foi interrompida.</b> O conteúdo parcial foi removido e as entregas não concluídas continuam pendentes.</p>'+((j.erros||[]).length?'<ul class="erro-ia">'+j.erros.map(x=>'<li>'+esc(x.aluno)+': '+esc(x.erro)+'</li>').join('')+'</ul>':'')+'</div>';
+      setTimeout(()=>atualizarPropostasProfessor(pecaId),1200);return;
+    }
     fb.innerHTML='<div class="parecer-inicial"><p style="color:var(--verde)"><b>✅ Lote concluído.</b> '+j.concluidas+' correção(ões) validada(s) e '+j.falhas+' falha(s).'+(j.semEmail?' '+j.semEmail+' aluno(s) sem e-mail verificado recebeu(ram) o PDF somente no sistema.':'')+'</p>'+((j.erros||[]).length?'<ul class="erro-ia">'+j.erros.map(x=>'<li>'+esc(x.aluno)+': '+esc(x.erro)+'</li>').join('')+'</ul>':'')+'</div>';
     setTimeout(()=>atualizarPropostasProfessor(pecaId),1200);
   }catch(e){fb.innerHTML='<p class="erro-ia">Falha ao acompanhar o lote. Atualize a página para consultar o resultado.</p>'}
@@ -660,25 +664,28 @@ function atualizarDisponibilidadePrevia(){
 }
 const ETAPAS_CORR=[[0,'📖 Lendo a peça do aluno...'],[10,'⚖️ Verificando jurisprudência (STF/STJ)...'],[45,'🧐 Conferindo citações e anexo...'],[75,'🧮 Calculando a nota ponto a ponto...']];
 async function corrigirEntregaIA(){
-  const fb=document.getElementById('corrfb');const prog=progresso(fb,ETAPAS_CORR,110);
+  const fb=document.getElementById('corrfb'),campoRel=document.getElementById('relatorio'),campoNota=document.getElementById('nota');
+  const estadoAnterior={relatorio:campoRel?campoRel.value:'',nota:campoNota?campoNota.value:''};
+  const restaurarTela=function(){if(campoRel)campoRel.value=estadoAnterior.relatorio;if(campoNota)campoNota.value=estadoAnterior.nota;atualizarDisponibilidadePrevia()};
+  const prog=progresso(fb,ETAPAS_CORR,110);
   try{
     const r=await apiPost('/api/entrega/corrigir',{id:window.__ent.id,matricula:window.__ent.mat});
     let d=await r.json();
-    if(!r.ok){prog.fim();let m=(d&&d.erro)||'Erro';if(m==='LIMITE_CREDITOS')m='⛔ Limite mensal de uso da IA atingido. A IA volta quando o limite for renovado ou aumentado no painel do provedor.';fb.innerHTML='<p class="erro-ia">'+esc(m)+'</p>';return}
+    if(!r.ok){prog.fim();restaurarTela();let m=(d&&d.erro)||'Erro';if(m==='LIMITE_CREDITOS')m='⛔ Limite mensal de uso da IA atingido. A IA volta quando o limite for renovado ou aumentado no painel do provedor.';fb.innerHTML='<p class="erro-ia">'+esc(m)+'</p>';return}
     const job=d.jobId;let pronto=null;
     for(let i=0;i<240;i++){
       await new Promise(ok=>setTimeout(ok,2500));
       const sr=await apiGet('/api/entrega/corrigir-status?job='+encodeURIComponent(job));const sd=await sr.json();
-      if(!sr.ok){prog.fim();fb.innerHTML='<p class="erro-ia">'+esc(sd.erro||'Não foi possível acompanhar a correção.')+'</p>';return}
-      if(sd.status==='falhou'){prog.fim();fb.innerHTML='<p class="erro-ia">'+esc(sd.erro||'A correção não pôde ser concluída mesmo após a tentativa automática.')+'</p><div class="botoes"><button onclick="corrigirEntregaIA()">Tentar novamente</button></div>';return}
+      if(!sr.ok){prog.fim();restaurarTela();fb.innerHTML='<p class="erro-ia">'+esc(sd.erro||'Não foi possível acompanhar a correção.')+'</p>';return}
+      if(sd.status==='falhou'){prog.fim();restaurarTela();fb.innerHTML='<p class="erro-ia">'+esc(sd.erro||'A correção não pôde ser concluída. Nenhum conteúdo parcial foi mantido.')+'</p><div class="botoes"><button onclick="corrigirEntregaIA()">Tentar novamente</button></div>';return}
       if(sd.status==='concluido'){pronto=sd.resultado;break}
     }
-    prog.fim();if(!pronto){fb.innerHTML='<p class="erro-ia">A correção continua além do tempo esperado. Clique novamente em alguns instantes para verificar.</p>';return}
+    prog.fim();if(!pronto){restaurarTela();fb.innerHTML='<p class="erro-ia">A correção excedeu o tempo esperado. O estado anterior foi restaurado; tente novamente em instantes.</p>';return}
     document.getElementById('relatorio').value=pronto.relatorio;
     if(pronto.notaSugerida!=null)document.getElementById('nota').value=String(pronto.notaSugerida);
     atualizarDisponibilidadePrevia();
     fb.innerHTML='<p style="font-family:Arial,sans-serif;font-size:.85rem;color:var(--verde)">Relatório gerado pela IA. Revise, ajuste a nota e valide.</p>';
-  }catch(e){prog.fim();fb.innerHTML='<p class="erro-ia">Falha: '+esc(e.message)+'</p>';}
+  }catch(e){prog.fim();restaurarTela();fb.innerHTML='<p class="erro-ia">Falha: '+esc(e.message)+'. O estado anterior foi restaurado.</p>';}
 }
 async function salvarEntrega(validar){
   const rel=document.getElementById('relatorio').value.trim();const nota=document.getElementById('nota').value.trim();
