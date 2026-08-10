@@ -56,6 +56,7 @@ async function executar() {
   assert.equal(pagina.headers.get('x-content-type-options'), 'nosniff');
   assert.equal(pagina.headers.get('x-frame-options'), 'DENY');
   assert.match(pagina.headers.get('content-security-policy') || '', /frame-ancestors 'none'/);
+  assert.match(pagina.headers.get('content-security-policy') || '', /frame-src 'self' blob:/, 'prévia local do PDF deve ser permitida sem liberar frames externos');
 
   const coord1 = await loginBruto('Any', '123456');
   const coord2 = await loginBruto('Any', '123456');
