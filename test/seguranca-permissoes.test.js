@@ -213,6 +213,16 @@ NOTA SUGERIDA: 4,25/5
 - [Código de Processo Penal](https://www.planalto.gov.br/ccivil_03/decreto-lei/del3689compilado.htm)`;
   r = await requisitar('/api/entrega/validar', professor, { id: pecaId, matricula: '9100001', relatorio: relatorioValidado, nota: '4,25', validar: true });
   assert.equal(r.status, 200, JSON.stringify(r.body));
+  let respostaPdf = await fetch(base + '/api/minha-correcao.pdf?id=' + encodeURIComponent(pecaId), { headers: { authorization: 'Bearer ' + alunoInicial.token } });
+  assert.equal(respostaPdf.status, 200);
+  assert.match(respostaPdf.headers.get('content-type') || '', /^application\/pdf/i);
+  assert.match(respostaPdf.headers.get('content-disposition') || '', /^inline;/i, 'PDF deve abrir no visualizador nativo do celular');
+  assert.equal(respostaPdf.headers.get('accept-ranges'), 'bytes', 'visualizadores móveis precisam poder carregar o PDF por faixas');
+  assert.equal(Buffer.from(await respostaPdf.arrayBuffer()).subarray(0, 8).toString('ascii'), '%PDF-1.4');
+  respostaPdf = await fetch(base + '/api/minha-correcao.pdf?id=' + encodeURIComponent(pecaId), { headers: { authorization: 'Bearer ' + alunoInicial.token, range: 'bytes=0-7' } });
+  assert.equal(respostaPdf.status, 206, 'servidor deve atender leitura parcial usada por visualizadores móveis');
+  assert.match(respostaPdf.headers.get('content-range') || '', /^bytes 0-7\//);
+  assert.equal(Buffer.from(await respostaPdf.arrayBuffer()).toString('ascii'), '%PDF-1.4');
   r = await requisitar('/api/pesquisa-aluno', alunoInicial.token);
   assert.equal(r.status, 200);
   assert.equal(r.body.turmas.find(t => t.id === turmaA).elegivel, true, 'devolutiva validada deve liberar a pesquisa');

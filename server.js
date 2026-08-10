@@ -135,7 +135,7 @@ function migrarDb() {
       if (e.relatorio) e.relatorio = limparCorrecaoIA(e.relatorio);
       if (e.recurso && e.recurso.relatorioRecorrido) e.recurso.relatorioRecorrido = limparCorrecaoIA(e.recurso.relatorioRecorrido);
       if (e.recurso && e.recurso.sugestaoIA && e.recurso.sugestaoIA.relatorio) e.recurso.sugestaoIA.relatorio = limparCorrecaoIA(e.recurso.sugestaoIA.relatorio);
-      const relatorioIAInvalido = !e.relatorio || !validarCorrecao(e.relatorio).ok;
+      const relatorioIAInvalido = !e.relatorio || !validarCorrecao(e.relatorio, e.texto).ok;
       if (!e.validado && e.modeloCorrecao && (Number(e.versaoPromptCorrecao || 0) < 6 || relatorioIAInvalido)) {
         if (e.relatorio) e.relatorioIAAnterior = { texto: e.relatorio, notaSugerida: e.notaSugerida, versaoPrompt: e.versaoPromptCorrecao || 0, arquivadoEm: Date.now(), motivo: relatorioIAInvalido ? 'correcao-incompleta-ou-invalida' : 'versao-antiga' };
         e.relatorio = '';
@@ -720,8 +720,9 @@ const SISTEMA_CORRECAO = SISTEMA
   + '\n\nFORMATO OBRIGATÓRIO DO ESPELHO: use a organização detalhada de espelho de resposta da OAB/FGV, adaptada à disciplina. A escala oficial da prova da OAB é 0 a 6, mas a ESCALA DESTA DISCIPLINA DE ESTÁGIO É OBRIGATORIAMENTE 0 A 5. A seção de pontuação deve se chamar exatamente “## Pontuação item a item — espelho OAB/FGV adaptado ao Estágio (0 a 5)” e conter uma tabela Markdown com as colunas “Item”, “Critério avaliado”, “Pontos obtidos/possíveis” e “Justificativa detalhada”. Crie uma linha para cada item do espelho do professor; na falta dele, use todos os seis critérios da grade genérica. Em cada justificativa, declare objetivamente o que o gabarito exigia, o que o aluno apresentou ou omitiu, o fundamento aplicável e a razão exata do desconto. Use sempre o formato numérico X,XX/Y,YY em cada linha e faça a soma coincidir com o SUBTOTAL DO ESPELHO. Não multiplique por 2; a soma máxima do espelho deve ser 5/5. A NOTA SUGERIDA é o subtotal menos as penalidades adicionais externas, ressalvada a nota zero por citação falsa. O relatório deve ser detalhado, individualizado e autossuficiente; não use comentários genéricos.';
 const SISTEMA_CORRECAO_CRITERIOSO = SISTEMA_CORRECAO
   + '\n\nRIGOR AVALIATIVO INEGOCIÁVEL: examine TODAS as linhas do espelho atual do professor, uma por uma. Conceda pontos somente quando o conteúdo exigido estiver efetivamente desenvolvido na resposta do aluno; não presuma conhecimento, não complete raciocínios ausentes e não atribua pontuação por mera menção genérica. Tese sem aplicação aos fatos, dispositivo incorreto ou incompleto, pedido sem consequência jurídica, endereçamento impreciso e fundamento contraditório devem sofrer desconto proporcional e expressamente justificado. Para cada linha, indique com objetividade o que o aluno escreveu, o que o gabarito exigia e por que recebeu aquela fração. Confira a soma aritmética antes de concluir. Não seja benevolente para compensar falhas em outro item e não crie exigências que não constem do gabarito atual ou de fonte oficial confirmada.'
+  + '\n\nINTEGRIDADE DO RELATÓRIO: nas seções “## Acertos”, “## Erros formais” e “## Erros materiais (direito)”, escreva cada observação como um item de lista completo e autossuficiente. Nunca deixe uma frase terminada em dois-pontos seguida por um parágrafo solto. Não copie nem cole trechos extensos da resposta do aluno; descreva o conteúdo avaliado por paráfrase objetiva, deixando claro que se trata da análise do professor.'
   + '\n\nPENALIDADES E RASTREABILIDADE: nenhum erro ou dúvida apontado pode ser apenas informativo. Cada erro formal e material deve indicar, em “## Rastreabilidade dos descontos”, a linha do espelho em que foi descontado e o valor perdido. Se a falha não couber no espelho do professor, desconte-a fora dele, sem duplicar o mesmo fato. Dúvida jurisprudencial classificada como SUSPEITA ou NÃO CONFIRMADA gera penalidade adicional de 0,25 por ocorrência, limitada a 1,00; citação INEXISTENTE/FALSA mantém a regra de nota zero. Inclua obrigatoriamente a seção “## Rastreabilidade dos descontos”, com tabela de colunas “Falha identificada”, “Aplicação” e “Desconto”, relacionando todos os erros formais, materiais e jurisprudenciais. Depois da tabela, declare exatamente: “PENALIDADE POR JURISPRUDÊNCIA NÃO CONFIRMADA: -X,XX”, “OUTRAS PENALIDADES FORA DO ESPELHO: -X,XX” e “TOTAL DE PENALIDADES FORA DO ESPELHO: -X,XX”. A tabela do espelho deve avaliar exclusivamente os critérios do gabarito e somar o subtotal obtido. Na seção “## Verificação de robotização e supervisão humana”, use exatamente “Risco: BAIXO”, “Risco: ATENÇÃO” ou “Risco: ALTO” e aplique, em linha própria, “PENALIDADE POR ROBOTIZAÇÃO: 0,00” para BAIXO, “PENALIDADE POR ROBOTIZAÇÃO: -0,50” para ATENÇÃO ou “PENALIDADE POR ROBOTIZAÇÃO: -1,00” para ALTO. O TOTAL DE PENALIDADES FORA DO ESPELHO é a soma da robotização, da jurisprudência não confirmada e das outras penalidades externas. A NOTA SUGERIDA deve ser o subtotal da tabela menos esse total, nunca inferior a zero, ressalvada a nota zero por citação falsa. Não escreva preâmbulo, saudação, relato de pesquisa ou comentário técnico antes de “## Acertos”. Não use barras entre números de súmulas: escreva “Súmulas 718 e 719”, reservando X,XX/Y,YY exclusivamente para pontuação.';
-const SISTEMA_REPARO_CORRECAO = 'Você recebe um relatório jurídico já elaborado por um modelo de alta capacidade e uma lista objetiva de falhas estruturais. Sua única função é reorganizar o mesmo conteúdo para cumprir o contrato informado, preservando integralmente a análise jurídica, as classificações de citações, os fundamentos, os descontos e as fontes. Não acrescente tese, precedente, fato ou conclusão jurídica. Não faça pesquisa. Retorne somente o relatório completo em markdown, iniciando por ## Acertos.';
+const SISTEMA_REPARO_CORRECAO = 'Você recebe um relatório jurídico já elaborado por um modelo de alta capacidade e uma lista objetiva de falhas estruturais. Sua única função é reorganizar o mesmo conteúdo para cumprir o contrato informado, preservando integralmente a análise jurídica, as classificações de citações, os fundamentos, os descontos e as fontes. Não preserve transcrições literais extensas da peça do aluno: converta-as em síntese avaliativa por paráfrase, sem mudar o mérito. Nas seções de acertos e erros, cada observação deve ser um item de lista completo; elimine parágrafos soltos e frases penduradas em dois-pontos. Não acrescente tese, precedente, fato ou conclusão jurídica. Não faça pesquisa. Retorne somente o relatório completo em markdown, iniciando por ## Acertos.';
 
 // Consulta direta à API pública de jurisprudência do TJDFT
 async function consultarTJDFT(consulta, tamanho) {
@@ -2148,7 +2149,7 @@ async function entregaGet(req, res, id, mat) {
   const e = (db.entregas[id] || {})[mat]; if (!e) return json(res, 404, { erro: 'Entrega não encontrada.' });
   if (!entregaPertenceTurma(mat, e, p)) return json(res, 403, { erro: 'Aluno fora da turma desta peça.' });
   const base = e.snapshotPeca || fotografiaPeca(p, { legado: true });
-  const validacaoRelatorio = e.relatorio ? validarCorrecao(e.relatorio) : null;
+  const validacaoRelatorio = e.relatorio ? validarCorrecao(e.relatorio, e.texto) : null;
   const notaSugerida = e.notaSugerida != null ? e.notaSugerida : (validacaoRelatorio && validacaoRelatorio.detalhes ? validacaoRelatorio.detalhes.nota : null);
   json(res, 200, { ok: true, peca: { num: rodadaDaPeca(p), rodada: rodadaDaPeca(p), nomePeca: base.nomePeca, caso: base.caso, gab: base.gab, versao: base.versao || 1 }, aluno: { matricula: mat, nome: nomeParticipanteEntrega(mat, e) }, texto: e.texto, arquivo: e.arquivo || null, relatorio: e.relatorio || '', nota: (e.nota != null ? e.nota : ''), notaSugerida, validado: !!e.validado, recurso: e.recurso || null });
 }
@@ -2168,6 +2169,32 @@ function dadosEspelhoCorrecao(p, e, matricula) {
   };
 }
 function nomeArquivoEspelho(p) { return 'espelho-correcao-peca-' + rodadaDaPeca(p) + '.pdf'; }
+function responderPdf(req, res, pdf, nomeArquivo, disposicao) {
+  const total = pdf.length;
+  const nome = String(nomeArquivo || 'relatorio.pdf').replace(/["\\\r\n]/g, '_');
+  const headers = {
+    'content-type': 'application/pdf',
+    'content-disposition': (disposicao || 'inline') + '; filename="' + nome + '"; filename*=UTF-8\'\'' + encodeURIComponent(nome),
+    'cache-control': 'private, no-store, max-age=0',
+    'accept-ranges': 'bytes'
+  };
+  const faixa = String(req.headers.range || '').match(/^bytes=(\d*)-(\d*)$/i);
+  if (faixa) {
+    let inicio = faixa[1] === '' ? null : Number(faixa[1]);
+    let fim = faixa[2] === '' ? null : Number(faixa[2]);
+    if (inicio == null && fim != null) { inicio = Math.max(0, total - fim); fim = total - 1; }
+    else { inicio = inicio == null ? 0 : inicio; fim = fim == null ? total - 1 : Math.min(fim, total - 1); }
+    if (!Number.isInteger(inicio) || !Number.isInteger(fim) || inicio < 0 || inicio > fim || inicio >= total) {
+      res.writeHead(416, Object.assign(headers, { 'content-range': 'bytes */' + total, 'content-length': '0' }));
+      return res.end();
+    }
+    const parcial = pdf.subarray(inicio, fim + 1);
+    res.writeHead(206, Object.assign(headers, { 'content-range': 'bytes ' + inicio + '-' + fim + '/' + total, 'content-length': String(parcial.length) }));
+    return req.method === 'HEAD' ? res.end() : res.end(parcial);
+  }
+  res.writeHead(200, Object.assign(headers, { 'content-length': String(total) }));
+  return req.method === 'HEAD' ? res.end() : res.end(pdf);
+}
 async function gerarRelatorioCorrecao(sess, p, e) {
   if (!process.env.ANTHROPIC_API_KEY) return { ok: false, erro: 'Servidor sem chave configurada.' };
   // O enunciado permanece o que o aluno efetivamente recebeu, mas a referência
@@ -2185,13 +2212,13 @@ async function gerarRelatorioCorrecao(sess, p, e) {
   let r = await iaTexto(SISTEMA_CORRECAO_CRITERIOSO, usuario, 9000, true, sess);
   if (!r.ok) return { ok: false, erroIA: r, erro: r.erro || 'Falha na correção por IA.' };
   let relatorio = normalizarPenalidadesCorrecao(limparCorrecaoIA(garantirLinksFontes((r.texto || '').trim(), true)));
-  let vr = validarCorrecao(relatorio);
+  let vr = validarCorrecao(relatorio, e.texto);
   if (!vr.ok) {
     const reparo = '<relatorio_alta_capacidade>\n' + documentoIA(relatorio, 30000) + '\n</relatorio_alta_capacidade>\n<falhas_estruturais>\n' + documentoIA(vr.erros.join(' '), 4000) + '\n</falhas_estruturais>\nReorganize sem alterar o mérito jurídico.';
     r = await iaTexto(SISTEMA_REPARO_CORRECAO, reparo, 8000, false, sess, { model: MODELO_REPARO });
     if (!r.ok) return { ok: false, erroIA: r, erro: r.erro || 'Falha na correção por IA.' };
     relatorio = normalizarPenalidadesCorrecao(limparCorrecaoIA(garantirLinksFontes((r.texto || '').trim(), true)));
-    vr = validarCorrecao(relatorio);
+    vr = validarCorrecao(relatorio, e.texto);
   }
   if (!vr.ok) return { ok: false, erro: 'A correção da IA foi bloqueada por inconsistência: ' + vr.erros.join(' ') };
   return { ok: true, relatorio, robotizacao, notaSugerida: vr.detalhes.nota, versaoPeca: original.versao || 1, versaoGabarito: base.versaoGabarito, modeloCorrecao: MODELO_POTENTE, versaoPromptCorrecao: 8 };
@@ -2308,7 +2335,7 @@ async function entregaValidar(req, res) {
   e.nota = Math.round(notaNum * 100) / 100;
   let emailResultado = null;
   if (d.validar) {
-    const vr = validarCorrecao(e.relatorio);
+    const vr = validarCorrecao(e.relatorio, e.texto);
     if (!vr.ok) return falharSemResiduos(400, 'O espelho OAB/FGV está inconsistente: ' + vr.erros.join(' '));
     if (Math.abs(Number(vr.detalhes.nota) - e.nota) > 0.01) return falharSemResiduos(400, 'A nota informada deve ser igual à NOTA SUGERIDA e à soma do espelho (' + String(vr.detalhes.nota).replace('.', ',') + '/5).');
     if (e.recurso && e.recurso.status === 'pendente') {
@@ -2350,8 +2377,7 @@ async function entregaPreviaPdf(req, res) {
   const amostra = Object.assign({}, e, { relatorio, nota, validadoEm: Date.now() });
   if (e.recurso && e.recurso.status === 'pendente' && d.resultadoRecurso && d.decisaoRecurso) amostra.recurso = Object.assign({}, e.recurso, { status: 'decidido', resultado: String(d.resultadoRecurso), decisao: String(d.decisaoRecurso), notaAposRecurso: nota });
   const pdf = gerarPdfEspelho(dadosEspelhoCorrecao(p, amostra, String(d.matricula)));
-  res.writeHead(200, { 'content-type': 'application/pdf', 'content-disposition': 'inline; filename="' + nomeArquivoEspelho(p) + '"', 'cache-control': 'no-store', 'content-length': pdf.length });
-  res.end(pdf);
+  responderPdf(req, res, pdf, nomeArquivoEspelho(p), 'inline');
 }
 async function minhaCorrecaoPdf(req, res, id) {
   const sess = sessaoDe(req); if (!sess) return json(res, 401, { erro: 'SESSAO' });
@@ -2359,8 +2385,7 @@ async function minhaCorrecaoPdf(req, res, id) {
   const p = db.pecas[String(id || '')]; const e = p && (db.entregas[p.id] || {})[ctx.id];
   if (!e || !e.validado || !e.relatorio || !alunoPodeAcessarPeca(ctx.aluno, p)) return json(res, 404, { erro: 'Correção não encontrada.' });
   const pdf = gerarPdfEspelho(dadosEspelhoCorrecao(p, e, ctx.id));
-  res.writeHead(200, { 'content-type': 'application/pdf', 'content-disposition': 'attachment; filename="' + nomeArquivoEspelho(p) + '"', 'cache-control': 'no-store', 'content-length': pdf.length });
-  res.end(pdf);
+  responderPdf(req, res, pdf, nomeArquivoEspelho(p), 'inline');
 }
 
 async function processarLoteCorrecao(job, sess, p, pendentes) {
@@ -2496,11 +2521,11 @@ async function recursoAnalisarIA(req, res) {
   let texto = garantirLinksFontes(String(r.texto || '').trim(), true);
   let partes = texto.split(/^##\s+Espelho revisado proposto\s*$/mi);
   let relatorio = normalizarPenalidadesCorrecao(partes.slice(1).join('\n').trim());
-  let vr = validarCorrecao(relatorio);
+  let vr = validarCorrecao(relatorio, e.texto);
   if (partes.length < 2 || !vr.ok) {
     r = await iaTexto(sistema, usuario + '\n\nA resposta anterior não respeitou o contrato. Refaça integralmente e garanta um espelho OAB/FGV válido. Problemas: ' + (partes.length < 2 ? 'faltou o marcador ## Espelho revisado proposto. ' : '') + vr.erros.join(' '), 12000, true, sess);
     if (!r.ok) return erroIA(res, r);
-    texto = garantirLinksFontes(String(r.texto || '').trim(), true); partes = texto.split(/^##\s+Espelho revisado proposto\s*$/mi); relatorio = normalizarPenalidadesCorrecao(partes.slice(1).join('\n').trim()); vr = validarCorrecao(relatorio);
+    texto = garantirLinksFontes(String(r.texto || '').trim(), true); partes = texto.split(/^##\s+Espelho revisado proposto\s*$/mi); relatorio = normalizarPenalidadesCorrecao(partes.slice(1).join('\n').trim()); vr = validarCorrecao(relatorio, e.texto);
   }
   if (partes.length < 2 || !vr.ok) return json(res, 502, { erro: 'A análise foi bloqueada porque o espelho revisado ficou inconsistente. Tente novamente.' });
   const analise = partes[0].trim();
@@ -2893,7 +2918,7 @@ const server = http.createServer((req, res) => {
   if (req.method === 'POST' && req.url === '/api/entrega/validar') return entregaValidar(req, res);
   if (req.method === 'POST' && req.url === '/api/entrega/corrigir-todas') return entregaCorrigirTodas(req, res);
   if (req.method === 'GET' && req.url.startsWith('/api/entrega/corrigir-todas-status?')) { const q = new URLSearchParams(req.url.split('?')[1]); return entregaCorrigirTodasStatus(req, res, q.get('job')); }
-  if (req.method === 'GET' && req.url.startsWith('/api/minha-correcao.pdf?')) { const q = new URLSearchParams(req.url.split('?')[1]); return minhaCorrecaoPdf(req, res, q.get('id')); }
+  if ((req.method === 'GET' || req.method === 'HEAD') && req.url.startsWith('/api/minha-correcao.pdf?')) { const q = new URLSearchParams(req.url.split('?')[1]); return minhaCorrecaoPdf(req, res, q.get('id')); }
   if (req.method === 'POST' && req.url === '/api/recurso') return recursoAluno(req, res);
   if (req.method === 'GET' && req.url === '/api/recursos') return recursosListar(req, res);
   if (req.method === 'POST' && req.url === '/api/recurso/analisar-ia') return recursoAnalisarIA(req, res);

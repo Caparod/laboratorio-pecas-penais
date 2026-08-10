@@ -30,6 +30,25 @@ function formatarNota(valor) {
   return Math.max(0, Number(valor) || 0).toFixed(2).replace('.', ',');
 }
 
+function contemTrechoExtensoCopiado(relatorio, respostaAluno, quantidade) {
+  const tamanho = Math.max(12, Number(quantidade) || 18);
+  const tokens = valor => normalizar(valor).match(/[a-z0-9]+/g) || [];
+  const origem = tokens(respostaAluno);
+  const destino = tokens(relatorio);
+  if (origem.length < tamanho || destino.length < tamanho) return false;
+  const sequencias = new Set();
+  for (let i = 0; i <= origem.length - tamanho; i++) sequencias.add(origem.slice(i, i + tamanho).join(' '));
+  for (let i = 0; i <= destino.length - tamanho; i++) if (sequencias.has(destino.slice(i, i + tamanho).join(' '))) return true;
+  return false;
+}
+
+function linhasSoltasEmLista(texto, titulo) {
+  return secao(texto, titulo).split(/\r?\n/).slice(1).filter(linha => {
+    const l = linha.trim();
+    return l && !/^[-*+]\s+/.test(l) && !/^\d+[.)]\s+/.test(l);
+  });
+}
+
 function paresPontuacao(bloco) {
   const itens = [];
   for (const linha of String(bloco || '').split(/\r?\n/)) {
@@ -297,12 +316,16 @@ function validarGabarito(texto, nomePeca) {
   return resultado(erros, espelho);
 }
 
-function validarCorrecao(texto) {
+function validarCorrecao(texto, respostaAluno) {
   const t = String(texto || '').trim();
   const n = normalizar(t);
   const erros = [];
   const obrigatorias = ['acertos', 'erros formais', 'erros materiais', 'pontuacao item a item', 'verificacao de jurisprudencia e citacoes', 'verificacao de robotizacao e supervisao humana', 'rastreabilidade dos descontos', 'propostas de aprimoramento', 'fontes e links'];
   for (const titulo of obrigatorias) if (!new RegExp('^\\s*##\\s+.*' + titulo.replace(/ /g, '.*'), 'mi').test(n)) erros.push('Falta a seção “' + titulo + '”.');
+  for (const titulo of ['acertos', 'erros formais', 'erros materiais']) {
+    if (linhasSoltasEmLista(t, titulo).length) erros.push('A seção “' + titulo + '” contém parágrafo solto ou trecho da peça do aluno. Cada observação deve ser uma frase avaliativa completa em um item de lista, sem transcrição literal extensa.');
+  }
+  if (respostaAluno && contemTrechoExtensoCopiado(t, respostaAluno, 18)) erros.push('O relatório reproduz um trecho extenso da peça do aluno. Parafraseie apenas o ponto necessário e mantenha a análise em linguagem avaliativa.');
   const notas = Array.from(t.matchAll(/NOTA\s+SUGERIDA\s*:\s*(\d+(?:[.,]\d+)?)\s*\/\s*5/gi));
   if (notas.length !== 1) erros.push('A correção precisa conter exatamente uma NOTA SUGERIDA: X/5.');
   const nota = notas.length === 1 ? numeroBR(notas[0][1]) : null;
@@ -357,4 +380,4 @@ function validarCorrecao(texto) {
   return resultado(erros, { nota, riscoRobotizacao: risco, penalidadeRobotizacao: penalidade, penalidadeJurisprudencia, outrasPenalidades, totalPenalidades });
 }
 
-module.exports = { normalizar, limparEnunciadoIA, limparGabaritoIA, limparCorrecaoIA, normalizarPenalidadesCorrecao, normalizarGabaritoPenal, validarEnunciado, analisarEspelho, normalizarEspelhoCinco, detectarJurisprudencia, similaridadeNarrativa, validarGabarito, validarCorrecao };
+module.exports = { normalizar, limparEnunciadoIA, limparGabaritoIA, limparCorrecaoIA, normalizarPenalidadesCorrecao, normalizarGabaritoPenal, validarEnunciado, analisarEspelho, normalizarEspelhoCinco, detectarJurisprudencia, similaridadeNarrativa, validarGabarito, validarCorrecao, contemTrechoExtensoCopiado };

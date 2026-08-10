@@ -1202,7 +1202,7 @@ async function telaEntreguesAluno(){
       cards+='<div class="card"><span class="badge">Peça '+p.num+'</span> <b>'+esc(p.nomePeca)+'</b>'
        +'<p style="font-family:Arial,sans-serif;font-size:.85rem;color:var(--cinza)">Entregue em '+esc(dataHora(p.enviadoEm))+'</p>'
        +'<p style="font-family:Arial,sans-serif;font-weight:bold;color:'+(corrigida?'var(--verde)':'var(--dourado)')+'">'+(corrigida?'✅ Corrigida · Nota '+(p.nota!=null?esc(String(p.nota).replace('.',',')):'—')+'/5':'⏳ A corrigir')+'</p>'
-       +(corrigida&&p.temRelatorio?'<div class="botoes"><button class="primario" onclick="verMinhaCorrecao(\''+p.id+'\')">Ver relatório e nota</button><button onclick="baixarMinhaCorrecao(\''+p.id+'\')">Baixar PDF</button>'+(!p.recurso?'<button onclick="abrirRecursoAluno(\''+p.id+'\')">Apresentar recurso</button>':'')+'</div>':'')
+       +(corrigida&&p.temRelatorio?'<div class="botoes"><button class="primario" onclick="verMinhaCorrecao(\''+p.id+'\')">Ver relatório e nota</button><button onclick="baixarMinhaCorrecao(\''+p.id+'\')">Abrir PDF</button>'+(!p.recurso?'<button onclick="abrirRecursoAluno(\''+p.id+'\')">Apresentar recurso</button>':'')+'</div>':'')
        +(p.recurso?'<p class="aviso" style="color:'+(p.recurso.status==='pendente'?'#8a6415':'var(--verde)')+'"><b>'+(p.recurso.status==='pendente'?'⏳ Recurso pendente de recorreção':'✅ Recurso decidido: '+esc(p.recurso.resultado))+'</b></p>':'')+'</div>';
     }
     document.getElementById('le').innerHTML=cards;
@@ -1417,7 +1417,7 @@ function verMinhaCorrecao(id){
   conteudo.innerHTML='<div class="botoes" style="margin-bottom:10px"><button onclick="telaEntreguesAluno()">← Voltar às peças entregues</button></div>'
    +'<span class="badge">Peça '+p.num+'</span><h2 class="titulo-peca">'+esc(p.nomePeca)+'</h2>'
    +'<div class="card"><h3>Resultado da correção</h3><div class="nota">Nota '+esc(String(p.nota).replace('.',','))+'/5</div>'
-   +(p.validadoEm?'<p style="font: .82rem Arial,sans-serif;color:var(--cinza)">Correção liberada em '+esc(dataHora(p.validadoEm))+'.</p>':'')+'<div class="botoes"><button class="primario" onclick="baixarMinhaCorrecao(\''+p.id+'\')">⬇ Baixar espelho em PDF</button>'+(!p.recurso?'<button onclick="abrirRecursoAluno(\''+p.id+'\')">Apresentar recurso</button>':'')+'</div></div>'
+   +(p.validadoEm?'<p style="font: .82rem Arial,sans-serif;color:var(--cinza)">Correção liberada em '+esc(dataHora(p.validadoEm))+'.</p>':'')+'<div class="botoes"><button class="primario" onclick="baixarMinhaCorrecao(\''+p.id+'\')">📄 Abrir espelho em PDF</button>'+(!p.recurso?'<button onclick="abrirRecursoAluno(\''+p.id+'\')">Apresentar recurso</button>':'')+'</div></div>'
    +(p.recurso?'<div class="card" style="border-color:#d9bd64;background:#fffaf0"><h3>'+(p.recurso.status==='pendente'?'Recurso aguardando recorreção':'Resultado do recurso — '+esc(p.recurso.resultado))+'</h3><p style="white-space:pre-wrap">'+esc(p.recurso.status==='pendente'?p.recurso.motivo:p.recurso.decisao)+'</p>'+(p.recurso.status==='decidido'?'<p class="aviso">Nota após o recurso: '+esc(String(p.recurso.notaAposRecurso).replace('.',','))+'/5</p>':'')+'</div>':'')
    +'<div class="card"><h3>Espelho no formato OAB/FGV · escala do Estágio (0 a 5)</h3><div class="resultado espelho-oab">'+linkCitacoesHtml(md2html(p.relatorio))+'</div></div>';
 }
@@ -1429,7 +1429,9 @@ function abrirRecursoAluno(id){
   overlay.append(modal);document.body.append(overlay);modal.querySelector('#recurso_motivo').focus();
 }
 async function baixarMinhaCorrecao(id){
-  try{const r=await apiGet('/api/minha-correcao.pdf?id='+encodeURIComponent(id));if(!r.ok){const d=await r.json();alert(d.erro||'PDF não disponível.');return}const url=URL.createObjectURL(await r.blob()),a=document.createElement('a');a.href=url;a.download='espelho-correcao.pdf';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2000)}catch(e){alert('Não foi possível baixar o PDF.')}
+  const caminho='/api/minha-correcao.pdf?id='+encodeURIComponent(id);
+  if(!professorEmVisaoAluno()){window.location.assign(caminho);return}
+  try{const r=await apiGet(caminho);if(!r.ok){const d=await r.json();alert(d.erro||'PDF não disponível.');return}const url=URL.createObjectURL(await r.blob()),a=document.createElement('a');a.href=url;a.target='_blank';a.rel='noopener';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000)}catch(e){alert('Não foi possível abrir o PDF.')}
 }
 
 async function restaurarSessao(){

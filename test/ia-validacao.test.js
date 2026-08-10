@@ -105,6 +105,11 @@ NOTA SUGERIDA: 4,00/5
 ## Fontes e links
 - [CPP](https://www.planalto.gov.br/ccivil_03/decreto-lei/del3689compilado.htm)`;
 assert.equal(validarCorrecao(correcao).ok, true, 'correção consistente deve passar');
+const trechoCopiado = 'o reconhecimento de pessoa presencialmente ou por fotografia realizado na fase do inquérito policial apenas é apto para identificar o réu quando observadas as formalidades legais e corroborado por outras provas colhidas na fase judicial';
+const correcaoComParagrafoSolto = correcao.replace('- Cabimento adequado.', '- Identificou corretamente a peça cabível:\n' + trechoCopiado);
+assert.equal(validarCorrecao(correcaoComParagrafoSolto).ok, false, 'parágrafo solto no meio da lista de acertos deve bloquear a correção');
+const correcaoComCopiaExtensa = correcao.replace('- Cabimento adequado.', '- O aluno apresentou o seguinte conteúdo: ' + trechoCopiado + '.');
+assert.equal(validarCorrecao(correcaoComCopiaExtensa, trechoCopiado).ok, false, 'trecho extenso copiado da peça do aluno deve ser parafraseado antes do envio');
 assert.equal(validarCorrecao(correcao.replace(/\| Item \|[\s\S]*?\| 6 \|[^\n]+/, '- Cabimento: 1,00/1,00\n- Tempestividade: 0,50/0,50\n- Fatos: 0,50/0,50\n- Fundamentação: 1,00/1,50\n- Pedidos: 0,50/0,75\n- Técnica: 0,50/0,75')).ok, false, 'lista sem tabela OAB/FGV deve falhar');
 assert.equal(validarCorrecao(correcao.replace('NOTA SUGERIDA: 4,00/5', 'NOTA SUGERIDA: 3,50/5')).ok, false, 'nota divergente da soma deve falhar');
 assert.equal(validarCorrecao(correcao.replace('- Artigos conferidos no texto oficial.', '- Súmula 9999 — INEXISTENTE/FALSA.')).ok, false, 'citação falsa exige nota zero');
