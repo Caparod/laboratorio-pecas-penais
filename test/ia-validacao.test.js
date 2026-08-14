@@ -60,7 +60,8 @@ assert.equal(validarGabarito(gabarito.replace('Cinco dias.', 'Cinco dias úteis.
 assert.equal(espelho.soma, 5);
 assert.equal(espelho.total, 5);
 assert.equal(validarGabarito(gabarito, 'Apelação Criminal').ok, true, 'gabarito íntegro deve passar');
-assert.equal(validarGabarito(gabarito.replace('Teses conforme o caso.', 'Aplicação da Súmula 241.'), 'Apelação Criminal').ok, false, 'súmula sem tribunal deve bloquear importação e publicação');
+assert.equal(validarGabarito(gabarito.replace('Teses conforme o caso.', 'Aplicação da Súmula 241.'), 'Apelação Criminal').ok, true, 'gabarito legado com súmula sem tribunal não deve ser marcado retroativamente');
+assert.equal(validarGabarito(gabarito.replace('Teses conforme o caso.', 'Aplicação da Súmula 241.'), 'Apelação Criminal', { exigirTribunalSumula: true }).ok, false, 'súmula sem tribunal deve bloquear nova importação e publicação');
 assert.equal(validarGabarito(gabarito.replace('Teses conforme o caso.', 'Aplicação da Súmula 241 do STJ.'), 'Apelação Criminal').ok, true, 'súmula com tribunal explícito deve permanecer válida');
 assert.equal(validarGabarito(gabarito.replace('| Pedidos | 1,50 |', '| Pedidos | 1,40 |'), 'Apelação Criminal').ok, false, 'soma diferente de 5 deve falhar');
 const espelhoComDetalhamento = gabarito
