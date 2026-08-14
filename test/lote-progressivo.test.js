@@ -16,7 +16,8 @@ assert.match(servidor, /correcaoPersistida = true;\s*clearTimeout\(timer\);/, 'u
 assert.match(servidor, /for \(let tentativa = 1; tentativa <= 2; tentativa\+\+\)[\s\S]*job\.tentativasExtras\+\+/, 'falhas transitórias de correção devem receber uma repetição automática controlada');
 assert.match(servidor, /for \(let tentativaEmail = 1; tentativaEmail <= 2; tentativaEmail\+\+\)/, 'o envio do PDF deve ser repetido uma vez quando houver falha transitória');
 assert.match(interfaceHtml, /sincronizarConcluidasLote\(pecaId,j\.itensConcluidos\)[\s\S]*renderRodadaProposta\(pecaId\)/, 'a interface deve mover cada aluno para a coluna de corrigidas durante o lote');
-assert.match(interfaceHtml, /acompanharCorrecaoTodas\(pecaId,jobId\),1500/, 'o progresso deve ser atualizado continuamente');
+assert.match(interfaceHtml, /acompanharCorrecaoTodas\(pecaId,jobId,proc\),1500/, 'o progresso deve ser atualizado continuamente sem liberar os outros botões');
+assert.match(interfaceHtml, /proc\.atualizar\(pct,/, 'a barra global deve refletir o avanço real do lote');
 assert.match(interfaceHtml, /Concluídas neste lote:/, 'o contador deve deixar claro que começa em zero apenas para as pendências do lote atual');
 assert.match(interfaceHtml, /Todas as entregas do lote foram corrigidas/, 'a interface só deve declarar sucesso integral quando não houver falhas');
 assert.match(interfaceHtml, /if\(validar&&d\.emailEnviado\)/, 'a interface só pode afirmar envio quando o servidor confirmar o e-mail');

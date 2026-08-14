@@ -44,6 +44,12 @@ for (const arquivo of [path.join(__dirname, '..', 'index.html'), path.join(__dir
     assert.match(html, /sset\(chaveRascunhoAluno\(id\)/, 'rascunho do aluno só deve persistir no clique de salvar');
     assert.doesNotMatch(html, /sset\('peca_'\+id/, 'digitação e importação não podem ser gravadas silenciosamente');
     assert.doesNotMatch(html, /sset\('arquivo_'\+id/, 'arquivo importado não pode ser gravado silenciosamente');
+    assert.match(html, /id="processamento_global"/, 'toda operação deve ter uma barra global de progresso');
+    assert.match(html, /function iniciarProcessamento\(/, 'a interface deve centralizar o acompanhamento de processamento');
+    assert.match(html, /document\.body\.classList\.contains\('operacao-critica'\)/, 'cliques conflitantes devem ser bloqueados durante operações críticas');
+    assert.match(html, /async function apiPost\(u,b\)\{\s*const proc=iniciarProcessamento/, 'todas as gravações da API devem acionar a barra e a trava');
+    assert.match(html, /async function apiGet\(u\)\{\s*const proc=iniciarProcessamento/, 'todos os carregamentos da API devem acionar a barra');
+    assert.match(html, /acompanharCorrecaoTodas\(pecaId,jobId,proc\)/, 'o lote deve manter a trava durante todo o processamento no servidor');
     assert.doesNotMatch(html, /notaInicial\)\.replace\('\.',','\)/, 'nota numérica não pode ser preenchida com vírgula no valor interno');
   }
   if (arquivo.endsWith(path.join('render-app', 'index.html'))) {

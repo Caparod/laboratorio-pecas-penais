@@ -6,6 +6,8 @@ const enunciadoMarcado = '<enunciado>\n**Texto integral do caso.**\n</enunciado>
 assert.equal(limparEnunciadoIA(enunciadoMarcado), 'Texto integral do caso.', 'marcação interna da IA deve ser removida');
 assert.ok(validarEnunciado(enunciadoMarcado).erros.some(e => /marca[cç][aã]o interna/i.test(e)), 'marcação interna não pode chegar à interface');
 assert.equal(limparGabaritoIA('Analisando as fontes...\n## Peça cabível\nApelação.'), '## Peça cabível\nApelação.', 'comentário técnico antes do gabarito deve ser removido');
+const gabaritoComAvisoInterno = '## Fontes\n- ⚠️ Súmula 241 ⚠️ — o texto não indica o tribunal; a auditoria deveria ter normalizado. Confira em STF ou STJ e corrija o texto.\n- Fonte oficial.';
+assert.equal(limparGabaritoIA(gabaritoComAvisoInterno), '## Fontes\n- Fonte oficial.', 'aviso interno da auditoria jamais pode contaminar o gabarito');
 assert.equal(limparCorrecaoIA('Concluí a verificação.\nPasso à correção.\n---\n## Acertos\n- Item correto.'), '## Acertos\n- Item correto.', 'preâmbulo técnico da IA não pode chegar ao relatório');
 assert.equal(normalizarGabaritoPenal('## Prazo\n5 dias úteis; prazo contínuo, e não em dias corridos; art. 564, IV e V, do CPP.'), '## Prazo\n5 dias corridos; prazo contínuo, em dias corridos; art. 563 do CPP.', 'inconsistências penais conhecidas devem ser corrigidas');
 
@@ -58,6 +60,8 @@ assert.equal(validarGabarito(gabarito.replace('Cinco dias.', 'Cinco dias úteis.
 assert.equal(espelho.soma, 5);
 assert.equal(espelho.total, 5);
 assert.equal(validarGabarito(gabarito, 'Apelação Criminal').ok, true, 'gabarito íntegro deve passar');
+assert.equal(validarGabarito(gabarito.replace('Teses conforme o caso.', 'Aplicação da Súmula 241.'), 'Apelação Criminal').ok, false, 'súmula sem tribunal deve bloquear importação e publicação');
+assert.equal(validarGabarito(gabarito.replace('Teses conforme o caso.', 'Aplicação da Súmula 241 do STJ.'), 'Apelação Criminal').ok, true, 'súmula com tribunal explícito deve permanecer válida');
 assert.equal(validarGabarito(gabarito.replace('| Pedidos | 1,50 |', '| Pedidos | 1,40 |'), 'Apelação Criminal').ok, false, 'soma diferente de 5 deve falhar');
 const espelhoComDetalhamento = gabarito
   .replace('| Cabimento | 0,50 |', '| Cabimento | 0,50 (0,30 pela tese + 0,20 pelo dispositivo) |')
