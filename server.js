@@ -1946,11 +1946,8 @@ function garantirLinksFontes(gab, auditou) {
       itens.set(termo + '/' + trib, trib === 'STJ' ? urlBuscaSTJ(termo) : urlBuscaSTF(termo));
     };
     for (const [k, tribs] of sumTrib) for (const trib of tribs) addSum(k, trib);
-    for (const k of sumSemTrib) if (!sumTrib.has(k)) {
-      const vinc = k[0] === 'V'; const n = vinc ? k.slice(1) : k;
-      const termo = 'Súmula ' + (vinc ? 'Vinculante ' : '') + n;
-      itens.set(termo + ' ⚠️', '__SEM_TRIBUNAL__');
-    }
+    // Referências sem tribunal não recebem link nem comentário dentro do material.
+    // A validação posterior exige STF/STJ e devolve o erro separadamente ao professor.
     const reSTJ = /\b(REsp|AREsp|EREsp|AgRg(?:\s+no\s+REsp)?|AgInt(?:\s+no\s+AREsp)?|RMS|RHC|APn|CC)\s+(?:n[ºo°.]*\s*)?([\d\.]{2,})\b/gi;
     while ((m = reSTJ.exec(gab))) itens.set(m[1] + ' ' + m[2] + ' (STJ)', urlBuscaSTJ(m[1] + ' ' + m[2]));
     const reSTF = /\b(RE|ARE|ADI|ADPF|ADC)\s+(?:n[ºo°.]*\s*)?([\d\.]{3,})\b/g;
@@ -1975,7 +1972,6 @@ function garantirLinksFontes(gab, auditou) {
       : 'O teor das citações foi verificado pela auditoria com busca nos sites oficiais (seção "Verificação de citações", acima). ') + 'Os links abaixo abrem a fonte oficial (Planalto) ou a busca oficial do tribunal já preenchida com a citação:\n\n';
     for (const [rot, url] of itens) {
       if (url === '__INEXISTENTE__') sec += '- ❌ ' + rot + ' — número acima da faixa de súmulas desse tribunal: citação provavelmente INEXISTENTE, remova ou corrija.\n';
-      else if (url === '__SEM_TRIBUNAL__') { const termo = rot.replace(' ⚠️', ''); sec += '- ⚠️ ' + rot + ' — o texto não indica o tribunal; a auditoria deveria ter normalizado. Confira em [STF](' + urlBuscaSTF(termo) + ') ou [STJ](' + urlBuscaSTJ(termo) + ') e corrija o texto.\n'; }
       else sec += '- [' + rot + '](' + url + ')\n';
     }
     return gab + sec;
@@ -2102,7 +2098,7 @@ async function processarPublicacoesAgendadas() {
 async function pecaSalvar(req, res) {
   const sess = sessaoDe(req); if (!sess) return json(res, 401, { erro: 'SESSAO' }); if (sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
   let d; try { d = await lerJson(req, 300000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
-  const caso = String(d.caso || '').trim(); const gab = String(d.gab || '').trim();
+  const caso = String(d.caso || '').trim(); const gab = limparGabaritoIA(d.gab);
   const turmaId = (d.turmaId && db.turmas[d.turmaId]) ? d.turmaId : null;
   const disc = turmaId ? db.turmas[turmaId].nome : ((d.disc === 'Estágio II') ? 'Estágio II' : 'Estágio I');
   const nomePeca = String(d.nomePeca || 'Peça').trim().slice(0, 120);

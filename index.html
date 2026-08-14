@@ -89,6 +89,11 @@ textarea.redacao{width:100%;min-height:340px;margin-top:14px;padding:16px;font-f
 .pbar .tempo{float:right;color:var(--cinza);font-size:.8rem}
 .spinner{display:inline-block;width:16px;height:16px;border:3px solid #d4dce8;border-top-color:var(--azul);border-radius:50%;animation:gira .8s linear infinite;vertical-align:middle;margin-right:8px}
 @keyframes gira{to{transform:rotate(360deg)}}
+.processamento-global{position:fixed;z-index:12000;top:0;left:0;right:0;min-height:34px;padding:5px 16px 7px;background:rgba(21,42,70,.97);color:#fff;font:600 .8rem Arial,sans-serif;box-shadow:0 3px 14px rgba(0,0,0,.22);transform:translateY(-110%);opacity:0;transition:transform .2s ease,opacity .2s ease;pointer-events:none}
+.processamento-global.ativo{transform:translateY(0);opacity:1}
+.processamento-global .pg-linha{display:flex;align-items:center;justify-content:space-between;gap:14px;max-width:1180px;margin:0 auto 4px}.processamento-global .pg-dica{font-weight:400;color:var(--dourado-claro);white-space:nowrap}
+.processamento-global .pg-trilho{height:5px;max-width:1180px;margin:auto;background:rgba(255,255,255,.25);border-radius:5px;overflow:hidden}.processamento-global .pg-fill{height:100%;width:2%;background:linear-gradient(90deg,var(--dourado),#ffe38a);border-radius:5px;transition:width .45s ease}
+body.operacao-critica button,body.operacao-critica a,body.operacao-critica .envio-opcao,body.operacao-critica header h1{cursor:wait!important}body.operacao-critica button:not(.btn-sair),body.operacao-critica .envio-opcao{opacity:.58}
 .campo-chave{width:100%;padding:9px 12px;border:1px solid #cfc9b8;border-radius:6px;font-family:Arial,sans-serif;font-size:.85rem;margin-top:8px}
 .erro-ia{color:var(--vermelho);font-size:.88rem;margin-top:10px;font-family:Arial,sans-serif}
 .loginwrap{max-width:420px;margin:60px auto;background:#fff;border:1px solid #e3ded2;border-radius:12px;padding:30px 34px;box-shadow:0 2px 10px rgba(0,0,0,.06)}
@@ -133,6 +138,10 @@ textarea.redacao{width:100%;min-height:340px;margin-top:14px;padding:16px;font-f
 </style>
 </head>
 <body>
+<div id="processamento_global" class="processamento-global" role="status" aria-live="polite" aria-hidden="true">
+  <div class="pg-linha"><span class="pg-texto">Processando...</span><span class="pg-dica">Aguarde para usar outros botões</span></div>
+  <div class="pg-trilho"><div class="pg-fill"></div></div>
+</div>
 <header>
   <div>
     <h1 onclick="irInicio()" style="cursor:pointer" title="Voltar ao início">⚖️ Laboratório de Peças Penais</h1>
@@ -188,7 +197,50 @@ function aplicarCabecalhosVisao(h){
     if(TURMA_ATUACAO)h['x-turma-atuacao']=TURMA_ATUACAO;
   }
 }
+let SEQ_PROCESSAMENTO=0,TIMER_PROCESSAMENTO=null;
+const PROCESSAMENTOS=new Map();
+function rotuloProcessamento(u,metodo){
+  const rota=String(u||'').toLowerCase();
+  if(rota.includes('extrair-pdf')||rota.includes('extrair-arquivo'))return 'Lendo e formatando o arquivo...';
+  if(rota.includes('transcrever'))return 'Transcrevendo as imagens...';
+  if(rota.includes('parecer-inicial'))return 'Preparando o parecer inicial...';
+  if(rota.includes('corrigir'))return 'Processando a correção...';
+  if(rota.includes('gerar-gabarito'))return 'Gerando e auditando o gabarito...';
+  if(rota.includes('gerar-ia'))return 'Gerando o enunciado e o gabarito...';
+  if(rota.includes('previa-pdf'))return 'Preparando a prévia em PDF...';
+  if(rota.includes('/entregar'))return 'Enviando a peça...';
+  if(rota.includes('/salvar')||rota.includes('/validar')||rota.includes('/responder'))return 'Salvando as alterações...';
+  if(rota.includes('/admin')||rota.includes('/turmas')||rota.includes('/professores'))return metodo==='POST'?'Atualizando os cadastros...':'Carregando os cadastros...';
+  return metodo==='POST'?'Processando a solicitação...':'Carregando os dados...';
+}
+function atualizarBarraProcessamento(){
+  const caixa=document.getElementById('processamento_global');if(!caixa)return;
+  if(!PROCESSAMENTOS.size){caixa.classList.remove('ativo');caixa.setAttribute('aria-hidden','true');document.body.classList.remove('operacao-critica');document.querySelector('main')?.removeAttribute('aria-busy');if(TIMER_PROCESSAMENTO){clearInterval(TIMER_PROCESSAMENTO);TIMER_PROCESSAMENTO=null}return}
+  const lista=Array.from(PROCESSAMENTOS.values()),bloqueios=lista.filter(x=>x.bloqueia),ativos=bloqueios.length?bloqueios:lista;
+  const atual=ativos.sort((a,b)=>(b.prioridade-a.prioridade)||(b.inicio-a.inicio))[0],seg=(Date.now()-Math.min(...lista.map(x=>x.inicio)))/1000;
+  const estimado=Math.min(94,Math.max(3,94*(1-Math.exp(-seg/18)))),valor=Number.isFinite(atual.percentual)?Math.max(2,Math.min(99,atual.percentual)):estimado;
+  caixa.querySelector('.pg-texto').textContent=(lista.length>1?lista.length+' tarefas · ':'')+atual.rotulo;
+  caixa.querySelector('.pg-dica').textContent=bloqueios.length?'Aguarde para usar outros botões':'Carregando...';
+  caixa.querySelector('.pg-fill').style.width=valor.toFixed(1)+'%';caixa.classList.add('ativo');caixa.setAttribute('aria-hidden','false');
+  document.body.classList.toggle('operacao-critica',!!bloqueios.length);document.querySelector('main')?.setAttribute('aria-busy','true');
+  if(!TIMER_PROCESSAMENTO)TIMER_PROCESSAMENTO=setInterval(atualizarBarraProcessamento,450);
+}
+function iniciarProcessamento(rotulo,opcoes){
+  const o=opcoes||{},id=++SEQ_PROCESSAMENTO;
+  PROCESSAMENTOS.set(id,{id,rotulo:rotulo||'Processando...',bloqueia:!!o.bloqueia,prioridade:Number(o.prioridade||0),inicio:Date.now(),percentual:null});atualizarBarraProcessamento();
+  let terminou=false;return{
+    atualizar(percentual,novoRotulo){const p=PROCESSAMENTOS.get(id);if(!p)return;if(Number.isFinite(Number(percentual)))p.percentual=Number(percentual);if(novoRotulo)p.rotulo=novoRotulo;atualizarBarraProcessamento()},
+    fim(){if(terminou)return;terminou=true;const p=PROCESSAMENTOS.get(id);if(p){p.percentual=100;atualizarBarraProcessamento()}setTimeout(()=>{PROCESSAMENTOS.delete(id);atualizarBarraProcessamento()},180)}
+  };
+}
+document.addEventListener('click',function(e){
+  if(!document.body.classList.contains('operacao-critica'))return;
+  const alvo=e.target&&e.target.closest&&e.target.closest('button,a,.envio-opcao,input[type="file"],header h1');if(!alvo||alvo.closest('#processamento_global'))return;
+  e.preventDefault();e.stopImmediatePropagation();const p=Array.from(PROCESSAMENTOS.values()).filter(x=>x.bloqueia).sort((a,b)=>b.inicio-a.inicio)[0];if(p){p.rotulo='Aguarde: '+p.rotulo.replace(/^Aguarde:\s*/, '');atualizarBarraProcessamento()}
+},true);
 async function apiPost(u,b){
+  const proc=iniciarProcessamento(rotuloProcessamento(u,'POST'),{bloqueia:true,prioridade:2});
+  try{
   const h={'content-type':'application/json'};
   aplicarCabecalhosVisao(h);
   const r=await fetch(u,{method:'POST',headers:h,credentials:'same-origin',body:JSON.stringify(b)});
@@ -200,8 +252,11 @@ async function apiPost(u,b){
     if(d&&d.erro==='VERIFICAR_EMAIL'&&AUTH){AUTH.emailVerificado=false;aset(JSON.stringify(AUTH));renderVerificarEmail();throw new Error('verificar_email')}
     if(d&&d.erro==='ACEITAR_PRIVACIDADE'&&AUTH){AUTH.precisaAceitarPrivacidade=true;aset(JSON.stringify(AUTH));renderPrivacidade();throw new Error('privacidade')}}
   return r;
+  }finally{proc.fim()}
 }
 async function apiGet(u){
+  const proc=iniciarProcessamento(rotuloProcessamento(u,'GET'),{bloqueia:false,prioridade:1});
+  try{
   const h={};
   aplicarCabecalhosVisao(h);
   const r=await fetch(u,{headers:h,credentials:'same-origin'});
@@ -213,6 +268,7 @@ async function apiGet(u){
     if(d&&d.erro==='VERIFICAR_EMAIL'&&AUTH){AUTH.emailVerificado=false;aset(JSON.stringify(AUTH));renderVerificarEmail();throw new Error('verificar_email')}
     if(d&&d.erro==='ACEITAR_PRIVACIDADE'&&AUTH){AUTH.precisaAceitarPrivacidade=true;aset(JSON.stringify(AUTH));renderPrivacidade();throw new Error('privacidade')}}
   return r;
+  }finally{proc.fim()}
 }
 function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 function escAttr(t){return esc(t).replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
@@ -279,10 +335,11 @@ function linkCitacoesHtml(html){
   }).join('');
 }
 function progresso(el,etapas,dur){
+  const global=iniciarProcessamento((etapas[0]&&etapas[0][1])||'Processando...',{bloqueia:true,prioridade:10});
   el.innerHTML='<div class="pbar"><div class="trilho"><div class="fill"></div></div><div class="etapa"><span class="et"></span><span class="tempo"></span></div></div>';
   const fill=el.querySelector('.fill'),et=el.querySelector('.et'),tempo=el.querySelector('.tempo');const ini=Date.now();
   function tick(){const seg=(Date.now()-ini)/1000;const p=Math.min(95,95*(1-Math.exp(-seg/(dur/2.5))));fill.style.width=p.toFixed(1)+'%';let a=etapas[0];for(const par of etapas)if(seg>=par[0])a=par;et.textContent=a[1];const mm=Math.floor(seg/60),ss=Math.floor(seg%60);tempo.textContent='⏱ '+(mm?mm+'min ':'')+ss+'s';}
-  tick();const iv=setInterval(tick,600);return{fim(){clearInterval(iv);try{fill.style.width='100%'}catch(e){}}};
+  tick();const iv=setInterval(tick,600);return{fim(){clearInterval(iv);try{fill.style.width='100%'}catch(e){}global.atualizar(100,'Concluindo...');global.fim()}};
 }
 const PECAS_ESTAGIO_I=['Queixa-Crime','Resposta à Acusação','Alegações Finais por Memoriais','Pedido de Liberdade Provisória','Relaxamento de Prisão em Flagrante','Revogação de Prisão Preventiva'];
 const PECAS_ESTAGIO_II=['Apelação Criminal','Recurso em Sentido Estrito (RESE)','Contrarrazões de Apelação','Embargos de Declaração','Embargos Infringentes e de Nulidade','Agravo em Execução','Habeas Corpus','Revisão Criminal'];
@@ -325,7 +382,7 @@ async function fazerLogin(){
   if(!u||!p){e.innerHTML='<p class="erro-ia">Preencha login e senha.</p>';return}
   e.innerHTML='<p style="font-family:Arial,sans-serif;font-size:.85rem"><span class="spinner"></span>Entrando... (o servidor pode levar até 1 min para acordar)</p>';
   try{
-    const r=await fetch('/api/login',{method:'POST',headers:{'content-type':'application/json'},credentials:'same-origin',body:JSON.stringify({usuario:u,senha:p})});
+    const r=await apiPost('/api/login',{usuario:u,senha:p});
     const d=await r.json();
     if(!r.ok){e.innerHTML='<p class="erro-ia">'+esc(d.erro||'Falha no login.')+'</p>';return}
     AUTH={tipo:d.tipo,usuario:d.usuario||u,nome:d.nome||'',papel:d.papel||'',admin:!!d.admin,gereProf:!!d.gereProf,gereCoord:!!d.gereCoord,turmaAtiva:d.turmaAtiva,precisaTrocarSenha:d.precisaTrocarSenha,precisaCompletarCadastro:d.precisaCompletarCadastro,precisaAceitarPrivacidade:d.precisaAceitarPrivacidade,emailVerificado:d.emailVerificado,email:d.email||'',whatsapp:d.whatsapp||''};
@@ -532,12 +589,13 @@ async function atualizarPropostasProfessor(id){
 async function corrigirTodasRodada(id,rodada,total){
   if(!confirm('Corrigir automaticamente '+total+' entrega(s) da Peça '+rodada+'? O sistema validará as notas e enviará os relatórios em PDF aos alunos SEM revisão do professor.'))return;
   const fb=document.getElementById('corrigir_todas_fb');
+  const proc=iniciarProcessamento('Corrigindo o lote da Peça '+rodada+'...',{bloqueia:true,prioridade:10});
   fb.innerHTML='<div class="parecer-inicial"><p><span class="spinner"></span>Iniciando correção automática...</p></div>';
   try{
     const r=await apiPost('/api/entrega/corrigir-todas',{id});const d=await r.json();
-    if(!r.ok){fb.innerHTML='<p class="erro-ia">'+esc(d.erro||'Não foi possível iniciar.')+'</p>';return}
-    await acompanharCorrecaoTodas(id,d.jobId);
-  }catch(e){if(fb)fb.innerHTML='<p class="erro-ia">Falha de conexão. Tente novamente.</p>'}
+    if(!r.ok){proc.fim();fb.innerHTML='<p class="erro-ia">'+esc(d.erro||'Não foi possível iniciar.')+'</p>';return}
+    await acompanharCorrecaoTodas(id,d.jobId,proc);
+  }catch(e){proc.fim();if(fb)fb.innerHTML='<p class="erro-ia">Falha de conexão. Tente novamente.</p>'}
 }
 function sincronizarConcluidasLote(pecaId,itens){
   const p=(window.__propostasProfessor||[]).find(x=>x.id===pecaId);if(!p||!Array.isArray(itens)||!itens.length)return false;
@@ -552,23 +610,26 @@ function sincronizarConcluidasLote(pecaId,itens){
   }
   return mudou;
 }
-async function acompanharCorrecaoTodas(pecaId,jobId){
-  let fb=document.getElementById('corrigir_todas_fb');if(!fb)return;
+async function acompanharCorrecaoTodas(pecaId,jobId,proc){
+  let fb=document.getElementById('corrigir_todas_fb');if(!fb){if(proc)proc.fim();return}
   try{
     const r=await apiGet('/api/entrega/corrigir-todas-status?job='+encodeURIComponent(jobId));const d=await r.json();
-    if(!r.ok){fb.innerHTML='<p class="erro-ia">'+esc(d.erro||'Não foi possível acompanhar a correção.')+'</p>';return}
+    if(!r.ok){if(proc)proc.fim();fb.innerHTML='<p class="erro-ia">'+esc(d.erro||'Não foi possível acompanhar a correção.')+'</p>';return}
     const j=d.job||{},processadas=(j.concluidas||0)+(j.falhas||0),pct=j.total?Math.round(processadas*100/j.total):0;
+    if(proc)proc.atualizar(pct,j.atual?'Corrigindo '+j.atual+'...':'Acompanhando a correção do lote...');
     if(sincronizarConcluidasLote(pecaId,j.itensConcluidos)){renderRodadaProposta(pecaId);fb=document.getElementById('corrigir_todas_fb')}
     fb.innerHTML='<div class="parecer-inicial"><p><b>Concluídas neste lote: '+processadas+' de '+j.total+'</b>'+(j.atual?' · corrigindo '+esc(j.atual):'')+'</p>'+(j.repetindo?'<p style="color:var(--dourado);font-family:Arial,sans-serif">↻ Repetindo automaticamente a correção de '+esc(j.repetindo)+'.</p>':'')+'<div class="pbar"><div class="trilho"><div class="fill" style="width:'+pct+'%"></div></div></div><p style="font: .82rem Arial,sans-serif;color:var(--cinza)">Relatórios enviados por e-mail: '+(j.emailsEnviados||0)+(j.semEmail?' · não enviados: '+j.semEmail:'')+(j.tentativasExtras?' · repetições automáticas: '+j.tentativasExtras:'')+'</p>'+(j.falhas?'<p class="erro-ia">Falhas de correção até agora: '+j.falhas+'</p>':'')+'</div>';
-    if(j.status==='processando'){setTimeout(()=>acompanharCorrecaoTodas(pecaId,jobId),1500);return}
+    if(j.status==='processando'){setTimeout(()=>acompanharCorrecaoTodas(pecaId,jobId,proc),1500);return}
     if(j.status==='falhou'){
+      if(proc)proc.fim();
       fb.innerHTML='<div class="parecer-inicial"><p class="erro-ia"><b>A correção automática foi interrompida.</b> O conteúdo parcial foi removido e as entregas não concluídas continuam pendentes.</p>'+((j.erros||[]).length?'<ul class="erro-ia">'+j.erros.map(x=>'<li>'+esc(x.aluno)+': '+esc(x.erro)+'</li>').join('')+'</ul>':'')+'</div>';
       setTimeout(()=>atualizarPropostasProfessor(pecaId),1200);return;
     }
+    if(proc)proc.fim();
     const loteOk=!(j.falhas||0);
     fb.innerHTML='<div class="parecer-inicial"><p class="'+(loteOk?'':'erro-ia')+'" style="'+(loteOk?'color:var(--verde)':'')+'"><b>'+(loteOk?'✅ Todas as entregas do lote foram corrigidas.':'⚠️ Lote finalizado com pendência.')+'</b> '+j.concluidas+' correção(ões) validada(s), '+j.falhas+' falha(s) e '+(j.emailsEnviados||0)+' relatório(s) enviado(s) por e-mail.'+(j.semEmail?' '+j.semEmail+' relatório(s) não enviado(s) por e-mail; o PDF permanece disponível no sistema.':'')+'</p>'+((j.erros||[]).length?'<ul class="erro-ia">'+j.erros.map(x=>'<li>'+esc(x.aluno)+': '+esc(x.erro)+'</li>').join('')+'</ul>':'')+((j.falhasEmail||[]).length?'<p class="erro-ia"><b>Falhas de e-mail:</b></p><ul class="erro-ia">'+j.falhasEmail.map(x=>'<li>'+esc(x.aluno)+': '+esc(x.erro)+'</li>').join('')+'</ul>':'')+'</div>';
     setTimeout(()=>atualizarPropostasProfessor(pecaId),1200);
-  }catch(e){fb.innerHTML='<p class="erro-ia">Falha ao acompanhar o lote. Atualize a página para consultar o resultado.</p>'}
+  }catch(e){if(proc)proc.fim();fb.innerHTML='<p class="erro-ia">Falha ao acompanhar o lote. Atualize a página para consultar o resultado.</p>'}
 }
 function dataBR(iso){if(!iso)return '';const p=iso.split('T')[0].split('-');return p.length===3?(p[2]+'/'+p[1]+'/'+p[0]):iso;}
 function dataHoraBR(iso){if(!iso)return '';const t=iso.split('T');const dd=dataBR(t[0]);const hh=t[1]?(' às '+t[1].slice(0,5)):'';return dd+hh;}
@@ -1210,9 +1271,8 @@ async function visualizarPreviaCorrecao(){
   if(!rel||!nota){fb.innerHTML='<p class="erro-ia">Preencha o relatório e a nota para visualizar a prévia.</p>';return}
   fb.innerHTML='<p style="font: .85rem Arial,sans-serif"><span class="spinner"></span>Preparando a prévia exatamente como o aluno receberá...</p>';
   try{
-    const h={'content-type':'application/json'};aplicarCabecalhosVisao(h);
     const previa={id:window.__ent.id,matricula:window.__ent.mat,relatorio:rel,nota};if(window.__ent.recurso&&window.__ent.recurso.status==='pendente'){previa.resultadoRecurso=((document.getElementById('resultado_recurso')||{}).value||'');previa.decisaoRecurso=((document.getElementById('decisao_recurso')||{}).value||'').trim()}
-    const r=await fetch('/api/entrega/previa-pdf',{method:'POST',headers:h,credentials:'same-origin',body:JSON.stringify(previa)});
+    const r=await apiPost('/api/entrega/previa-pdf',previa);
     if(!r.ok){const d=await r.json();fb.innerHTML='<p class="erro-ia">'+esc(d.erro||'Não foi possível gerar a prévia.')+'</p>';return}
     const url=URL.createObjectURL(await r.blob());fb.innerHTML='';abrirPreviaPdf(url);
   }catch(e){fb.innerHTML='<p class="erro-ia">Falha ao gerar a prévia.</p>'}
@@ -1525,6 +1585,7 @@ async function baixarMinhaCorrecao(id){
 async function restaurarSessao(){
   if(!AUTH){renderLogin();return}
   const tokenLegado=AUTH.token||'';
+  const proc=iniciarProcessamento('Restaurando a sessão...',{bloqueia:true,prioridade:2});
   try{
     const h=tokenLegado?{authorization:'Bearer '+tokenLegado}:{};
     const r=await fetch('/api/sessao',{headers:h,credentials:'same-origin'});
@@ -1533,6 +1594,7 @@ async function restaurarSessao(){
     AUTH={tipo:d.tipo,usuario:d.usuario,nome:d.nome||'',papel:d.papel||'',admin:!!d.admin,gereProf:!!d.gereProf,gereCoord:!!d.gereCoord,turmaAtiva:d.turmaAtiva,precisaTrocarSenha:d.precisaTrocarSenha,precisaCompletarCadastro:d.precisaCompletarCadastro,precisaAceitarPrivacidade:d.precisaAceitarPrivacidade,emailVerificado:d.emailVerificado,email:d.email||'',whatsapp:d.whatsapp||''};
     aset(JSON.stringify(AUTH));iniciar();
   }catch(e){renderLogin('Não foi possível validar a sessão. Tente novamente.');}
+  finally{proc.fim()}
 }
 restaurarSessao();
 </script>

@@ -14,7 +14,17 @@ function limparEnunciadoIA(texto) {
 }
 
 function limparGabaritoIA(texto) {
-  const t = String(texto || '').trim();
+  const t = String(texto || '')
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .filter(linha => {
+      const n = normalizar(linha);
+      return !n.includes('auditoria deveria ter normalizado')
+        && !(n.includes('o texto nao indica o tribunal') && n.includes('corrija o texto'));
+    })
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
   const inicio = t.search(/^\s*##\s+/m);
   return inicio >= 0 ? t.slice(inicio).trim() : t;
 }
@@ -327,6 +337,8 @@ function validarGabarito(texto, nomePeca) {
   if (/\bdias úteis\b/i.test(t)) erros.push('Prazos processuais penais não devem ser apresentados como dias úteis.');
   if (/cont[ií]nuo,\s*e\s*n[aã]o\s*em\s*dias\s*corridos/i.test(t)) erros.push('A descrição do prazo penal está contraditória.');
   if (/art\.\s*564,\s*IV\s*e\s*V/i.test(t)) erros.push('O gabarito cita inciso inexistente do art. 564 do CPP.');
+  const sumulaSemTribunal = /\bS[úu]mulas?\s+(?:n[ºo°.]?\s*)?\d+(?:\s*(?:,|e)\s*\d+)*\b(?!\s*(?:do|da|\/)\s*(?:STF|STJ)\b)/i.test(t);
+  if (sumulaSemTribunal) erros.push('Toda súmula deve indicar expressamente STF ou STJ. Corrija a referência antes de importar ou publicar.');
   for (const titulo of obrigatorias) if (!new RegExp('^\\s*##\\s+.*' + titulo.replace(/ /g, '.*'), 'mi').test(n)) erros.push('Falta a seção “' + titulo + '”.');
   const espelho = analisarEspelho(t);
   if (!espelho.bloco) erros.push('O espelho de correção não foi encontrado.');
