@@ -150,6 +150,13 @@ const APP_VERSION='__APP_VERSION__';
 let store={};
 function sget(k,d){try{return localStorage.getItem(k)??d}catch(e){return store[k]??d}}
 function sset(k,v){try{localStorage.setItem(k,v)}catch(e){store[k]=v}}
+function sdel(k){try{localStorage.removeItem(k)}catch(e){delete store[k]}}
+function limparRascunhosLocaisLegados(){
+  try{for(let i=localStorage.length-1;i>=0;i--){const k=localStorage.key(i)||'';if(/^peca_|^arquivo_/.test(k))localStorage.removeItem(k)}}catch(e){}
+}
+function chaveRascunhoAluno(id){return 'rascunho_aluno_'+String((AUTH&&AUTH.usuario)||'sem_usuario')+'_'+String(id)}
+function chaveArquivoAluno(id){return 'arquivo_aluno_'+String((AUTH&&AUTH.usuario)||'sem_usuario')+'_'+String(id)}
+limparRascunhosLocaisLegados();
 // A autenticação é deliberadamente limitada à aba/janela atual. Rascunhos
 // continuam no armazenamento local, mas os dados da sessão não sobrevivem ao
 // fechamento da janela e nunca incluem o token HttpOnly.
@@ -280,7 +287,11 @@ function progresso(el,etapas,dur){
 const PECAS_ESTAGIO_I=['Queixa-Crime','Resposta à Acusação','Alegações Finais por Memoriais','Pedido de Liberdade Provisória','Relaxamento de Prisão em Flagrante','Revogação de Prisão Preventiva'];
 const PECAS_ESTAGIO_II=['Apelação Criminal','Recurso em Sentido Estrito (RESE)','Contrarrazões de Apelação','Embargos de Declaração','Embargos Infringentes e de Nulidade','Agravo em Execução','Habeas Corpus','Revisão Criminal'];
 // ================= Sessão / Login =================
-function sair(msg){aset('');AUTH=null;renderLogin(msg);fetch('/api/logout',{method:'POST',credentials:'same-origin'}).catch(()=>{})}
+function limparEstadoNaoSalvo(){
+  RASCUNHO={nomePeca:'',disc:'',caso:'',gab:'',classificacao:{}};ABA_PROF='pecas';
+  window.__peca=null;window.__ent=null;window.__arquivoAluno=null;window.__textoParecerInicial=null;window.__parecerInicialPdf=null;
+}
+function sair(msg){limparEstadoNaoSalvo();limparRascunhosLocaisLegados();aset('');AUTH=null;renderLogin(msg);fetch('/api/logout',{method:'POST',credentials:'same-origin'}).catch(()=>{})}
 function barra(){
   const el=document.getElementById('progresso');if(!el)return;
   if(!AUTH){el.innerHTML='';return}
@@ -318,6 +329,7 @@ async function fazerLogin(){
     const d=await r.json();
     if(!r.ok){e.innerHTML='<p class="erro-ia">'+esc(d.erro||'Falha no login.')+'</p>';return}
     AUTH={tipo:d.tipo,usuario:d.usuario||u,nome:d.nome||'',papel:d.papel||'',admin:!!d.admin,gereProf:!!d.gereProf,gereCoord:!!d.gereCoord,turmaAtiva:d.turmaAtiva,precisaTrocarSenha:d.precisaTrocarSenha,precisaCompletarCadastro:d.precisaCompletarCadastro,precisaAceitarPrivacidade:d.precisaAceitarPrivacidade,emailVerificado:d.emailVerificado,email:d.email||'',whatsapp:d.whatsapp||''};
+    limparEstadoNaoSalvo();limparRascunhosLocaisLegados();
     if(AUTH.tipo==='professor')MODO_VISAO=modoPadraoProfessor(); else MODO_VISAO='';
     sset('modo_visao',MODO_VISAO);
     aset(JSON.stringify(AUTH));iniciar();
@@ -457,7 +469,7 @@ async function profPecas(){
     for(const p of d.pecas){
       const minha=(p.autor===AUTH.usuario)||souAdminAgora();
       h+='<tr><td><b>'+(p.publicada?(p.rodada||p.num):'—')+'</b></td><td>'+esc(p.nomePeca)+'</td><td>'+esc(p.autorNome||'—')+(minha&&p.autor===AUTH.usuario?' <span style="color:var(--dourado);font-size:.75rem">(você)</span>':'')+'</td><td>'+esc(p.disc)+'</td><td>'+(p.prazo?dataBR(p.prazo):'—')+'</td>'
-      +'<td>'+(p.revisaoObrigatoria?'⚠️ revisar gabarito':(p.publicada?'✅ publicada':'✏️ rascunho'))+'</td><td>'+p.entregas+' ('+p.validadas+' corrigidas)</td>'
+      +'<td>'+(p.revisaoObrigatoria?'⚠️ revisar gabarito':(p.publicada?(p.disponivel?'✅ publicada':'🕒 agendada para '+dataHoraBR(p.publicarEm)):'✏️ rascunho'))+'</td><td>'+p.entregas+' ('+p.validadas+' corrigidas)</td>'
       +'<td><a style="cursor:pointer;color:var(--azul)" onclick="abrirPeca(\''+p.id+'\')">abrir</a></td></tr>';
     }
     h+='</table>';document.getElementById('lp').innerHTML='<div class="card painel">'+h+'</div>';
@@ -560,6 +572,12 @@ async function acompanharCorrecaoTodas(pecaId,jobId){
 }
 function dataBR(iso){if(!iso)return '';const p=iso.split('T')[0].split('-');return p.length===3?(p[2]+'/'+p[1]+'/'+p[0]):iso;}
 function dataHoraBR(iso){if(!iso)return '';const t=iso.split('T');const dd=dataBR(t[0]);const hh=t[1]?(' às '+t[1].slice(0,5)):'';return dd+hh;}
+function agoraDatetimeLocal(){const d=new Date(),p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T'+p(d.getHours())+':'+p(d.getMinutes())}
+function datasPublicacaoValidas(publicarEm,prazo,fb){
+  if(!publicarEm||!prazo){if(fb)fb.innerHTML='<p class="erro-ia">Defina quando publicar e o prazo de entrega.</p>';return false}
+  if(new Date(publicarEm).getTime()>new Date(prazo).getTime()){if(fb)fb.innerHTML='<p class="erro-ia">A publicação não pode acontecer depois do prazo de entrega.</p>';return false}
+  return true;
+}
 async function abrirPeca(id){
   conteudo.innerHTML='<p><span class="spinner"></span>Abrindo...</p>';
   const r=await apiGet('/api/peca/get?id='+id);const d=await r.json();
@@ -573,11 +591,12 @@ async function abrirPeca(id){
   window.__peca=p;
   const liberadosCount=Object.keys(d.liberados||{}).length;
   const souAutor=(p.autor===AUTH.usuario)||podeGerirAgora();
+  const agendada=!!(p.publicada&&p.publicarEm&&new Date(p.publicarEm).getTime()>Date.now());
   conteudo.innerHTML='<div class="botoes" style="margin-bottom:10px"><button onclick="irAba(\'pecas\')">← Voltar</button>'
    +(souAutor?'<button onclick="editarPeca(\''+id+'\')">✏️ Editar peça/gabarito</button>':'')
    +(souAutor?'<button style="border-color:var(--vermelho);color:var(--vermelho)" onclick="excluirPeca(\''+id+'\')">🗑 Excluir peça</button>':'')+'</div>'
    +'<span class="badge">'+(p.publicada?('Peça '+(p.rodada||p.num)):'Rascunho')+' · '+esc(p.disc)+'</span><h2 class="titulo-peca">'+esc(p.nomePeca)+'</h2>'
-   +'<p style="color:var(--cinza);font-family:Arial,sans-serif;font-size:.85rem">Autor: '+esc((p.autor===AUTH.usuario)?'você':(p.autor||'—'))+' · Prazo: '+(p.prazo?dataHoraBR(p.prazo):'sem prazo')+' · '+(p.publicada?'publicada':'rascunho')+'</p>'
+   +'<p style="color:var(--cinza);font-family:Arial,sans-serif;font-size:.85rem">Autor: '+esc((p.autor===AUTH.usuario)?'você':(p.autor||'—'))+' · Publicação: '+(p.publicada?(agendada?dataHoraBR(p.publicarEm):'já publicada'):'rascunho')+' · Prazo: '+(p.prazo?dataHoraBR(p.prazo):'sem prazo')+'</p>'
    +(p.revisaoObrigatoria?'<p class="erro-ia">⚠️ Este gabarito é anterior às validações atuais ou está inconsistente. Revise e salve novamente antes de corrigir ou liberar aos alunos.</p>':'')
    +classificacaoHtml(p.classificacao)
    +(p.publicada
@@ -587,11 +606,11 @@ async function abrirPeca(id){
       +'<div id="pz_fb"></div></div>'
       +'<div class="card"><h3>📌 Reaproveitar em outra turma</h3>'
       +'<p style="font-size:.85rem;color:var(--cinza);font-family:Arial,sans-serif">Cria uma cópia independente desta peça (enunciado + gabarito) publicada para outra turma, com prazo próprio. As entregas de cada turma ficam separadas.</p>'
-      +'<div style="font-family:Arial,sans-serif;font-size:.9rem;display:flex;gap:8px;flex-wrap:wrap;align-items:center">Turma: <select id="vt_turma" style="padding:7px;border:1px solid #cfc9b8;border-radius:6px"></select> Prazo (dia e hora): <input type="datetime-local" id="vt_prazo" style="padding:7px;border:1px solid #cfc9b8;border-radius:6px"> <button onclick="vincularTurma()">📌 Publicar cópia para a turma</button></div><div id="vt_fb"></div></div>')
+      +'<div style="font-family:Arial,sans-serif;font-size:.9rem;display:flex;gap:8px;flex-wrap:wrap;align-items:center">Turma: <select id="vt_turma" style="padding:7px;border:1px solid #cfc9b8;border-radius:6px"></select> Publicar em: <input type="datetime-local" id="vt_publicar_em" style="padding:7px;border:1px solid #cfc9b8;border-radius:6px"> Prazo: <input type="datetime-local" id="vt_prazo" style="padding:7px;border:1px solid #cfc9b8;border-radius:6px"> <button onclick="vincularTurma()">📌 Publicar cópia para a turma</button></div><div id="vt_fb"></div></div>')
      :('<div class="card"><h3>🚀 Publicar esta peça</h3>'
       +'<p style="font-size:.85rem;color:var(--cinza);font-family:Arial,sans-serif">Esta peça ainda é um rascunho — os alunos não a veem. Escolha a turma e o prazo de entrega para publicá-la.</p>'
-      +'<div style="font-family:Arial,sans-serif;font-size:.9rem;display:flex;gap:8px;flex-wrap:wrap;align-items:center">Turma: <select id="vt_turma" style="padding:7px;border:1px solid #cfc9b8;border-radius:6px"></select> Prazo (dia e hora): <input type="datetime-local" id="vt_prazo" style="padding:7px;border:1px solid #cfc9b8;border-radius:6px"> <button class="primario" onclick="publicarRascunho(\''+id+'\')">🚀 Publicar para a turma</button></div><div id="vt_fb"></div></div>'))
-   +'<div class="card"><h3>Enunciado</h3><div class="caso">'+esc(p.caso)+'</div></div>'
+      +'<div style="font-family:Arial,sans-serif;font-size:.9rem;display:flex;gap:8px;flex-wrap:wrap;align-items:center">Turma: <select id="vt_turma" style="padding:7px;border:1px solid #cfc9b8;border-radius:6px"></select> Publicar em: <input type="datetime-local" id="vt_publicar_em" style="padding:7px;border:1px solid #cfc9b8;border-radius:6px"> Prazo: <input type="datetime-local" id="vt_prazo" style="padding:7px;border:1px solid #cfc9b8;border-radius:6px"> <button class="primario" onclick="publicarRascunho(\''+id+'\')">🚀 Publicar para a turma</button></div><div id="vt_fb"></div></div>'))
+   +'<div class="card"><h3>Enunciado</h3><div class="caso">'+linkCitacoesHtml(md2html(p.caso))+'</div></div>'
    +'<div class="card"><h3>Gabarito</h3><div class="bloco" style="background:#eef5ee;border:1px solid #cfe3cf;border-radius:8px;padding:14px">'+linkCitacoesHtml(md2html(p.gab||'(sem gabarito)'))+'</div></div>'
    +(p.publicada
      ?('<div class="card painel"><h3>Entregas dos alunos</h3>'+ent+'</div>'
@@ -602,18 +621,22 @@ async function abrirPeca(id){
       +'<div id="pz_fb2"></div></div>')
      :'');
   carregarTurmasSelect('vt_turma',p.turmaId);
+  const publicar=document.getElementById('vt_publicar_em');if(publicar)publicar.value=(!p.publicada&&p.publicarEm)||agoraDatetimeLocal();
+  const prazo=document.getElementById('vt_prazo');if(prazo&&p.prazo)prazo.value=p.prazo;
 }
 async function publicarRascunho(id){
   const p=window.__peca;if(!p)return;
   const turmaId=(document.getElementById('vt_turma')||{}).value;
   const prazo=(document.getElementById('vt_prazo')||{}).value;
+  const publicarEm=(document.getElementById('vt_publicar_em')||{}).value;
   const fb=document.getElementById('vt_fb');
   if(!turmaId){fb.innerHTML='<p class="erro-ia">Escolha a turma.</p>';return}
   if(!prazo){fb.innerHTML='<p class="erro-ia">Defina a data e o horário de entrega.</p>';return}
+  if(!datasPublicacaoValidas(publicarEm,prazo,fb))return;
   const tNome=((window.__turmas||[]).find(t=>t.id===turmaId)||{}).nome||'a turma';
-  if(!confirm('Publicar "'+p.nomePeca+'" para '+tNome+' com prazo '+dataHoraBR(prazo)+'? Os alunos da turma serão avisados por e-mail.'))return;
+  if(!confirm('Programar "'+p.nomePeca+'" para '+tNome+' em '+dataHoraBR(publicarEm)+', com prazo '+dataHoraBR(prazo)+'?'))return;
   fb.innerHTML='<p style="font-family:Arial,sans-serif;font-size:.85rem"><span class="spinner"></span>Publicando...</p>';
-  try{const r=await apiPost('/api/peca/salvar',Object.assign({id,nomePeca:p.nomePeca,turmaId,caso:p.caso,gab:p.gab,prazo,publicar:true},classificacaoPayload(p)));
+  try{const r=await apiPost('/api/peca/salvar',Object.assign({id,nomePeca:p.nomePeca,turmaId,caso:p.caso,gab:p.gab,prazo,publicarEm,publicar:true},classificacaoPayload(p)));
     const d=await r.json();
     if(!r.ok){fb.innerHTML='<p class="erro-ia">'+esc(d.erro||'Erro')+'</p>';return}
     abrirPeca(id);
@@ -623,16 +646,18 @@ async function vincularTurma(){
   const p=window.__peca;if(!p)return;
   const turmaId=(document.getElementById('vt_turma')||{}).value;
   const prazo=(document.getElementById('vt_prazo')||{}).value;
+  const publicarEm=(document.getElementById('vt_publicar_em')||{}).value;
   const fb=document.getElementById('vt_fb');
   if(!turmaId){fb.innerHTML='<p class="erro-ia">Escolha a turma.</p>';return}
   if(!prazo){fb.innerHTML='<p class="erro-ia">Defina a data e o horário de entrega.</p>';return}
+  if(!datasPublicacaoValidas(publicarEm,prazo,fb))return;
   const tNome=((window.__turmas||[]).find(t=>t.id===turmaId)||{}).nome||'a turma';
-  if(!confirm('Publicar uma cópia de "'+p.nomePeca+'" para '+tNome+' com prazo '+dataHoraBR(prazo)+'? Os alunos da turma serão avisados por e-mail.'))return;
+  if(!confirm('Programar uma cópia de "'+p.nomePeca+'" para '+tNome+' em '+dataHoraBR(publicarEm)+', com prazo '+dataHoraBR(prazo)+'?'))return;
   fb.innerHTML='<p style="font-family:Arial,sans-serif;font-size:.85rem"><span class="spinner"></span>Publicando...</p>';
-  try{const r=await apiPost('/api/peca/salvar',Object.assign({nomePeca:p.nomePeca,turmaId,caso:p.caso,gab:p.gab,prazo,publicar:true},classificacaoPayload(p)));
+  try{const r=await apiPost('/api/peca/salvar',Object.assign({nomePeca:p.nomePeca,turmaId,caso:p.caso,gab:p.gab,prazo,publicarEm,publicar:true},classificacaoPayload(p)));
     const d=await r.json();
     if(!r.ok){fb.innerHTML='<p class="erro-ia">'+esc(d.erro||'Erro')+'</p>';return}
-    fb.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif">🚀 Publicada como Peça '+d.rodada+' para '+esc(tNome)+' — prazo '+dataHoraBR(prazo)+'.</p>';
+    fb.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif">'+(d.agendada?'🕒 Agendada':'🚀 Publicada')+' como Peça '+d.rodada+' para '+esc(tNome)+' — prazo '+dataHoraBR(prazo)+'.</p>';
   }catch(e){fb.innerHTML='<p class="erro-ia">Falha: '+esc(e.message)+'</p>';}
 }
 async function renovarPrazo(id){const v=document.getElementById('pz_novo').value;if(!v){alert('Escolha o novo prazo.');return}const r=await apiPost('/api/peca/renovar-prazo',{id,prazo:v});const d=await r.json();document.getElementById('pz_fb').innerHTML=r.ok?'<p style="color:var(--verde);font-family:Arial,sans-serif;font-size:.85rem">Prazo renovado para '+esc(dataHoraBR(v))+'.</p>':'<p class="erro-ia">'+esc(d.erro||'Erro')+'</p>';}
@@ -731,7 +756,8 @@ function profNova(){
    +'<div id="np_fb"></div></div>'
    +'<div class="card"><h3>2) Enunciado da peça</h3><textarea id="np_caso" class="redacao" style="min-height:200px" oninput="atualizarBotaoGabarito()" placeholder="Enunciado do caso (gerado pela IA, extraído do PDF ou digitado por você)...">'+esc(RASCUNHO.caso)+'</textarea>'
    +'<div class="botoes" id="np_gabbtn" style="display:none"><button onclick="gerarGabarito()">⚖️ Gerar gabarito para este enunciado</button></div><div id="np_gabfb"></div></div>'
-   +'<div class="card"><h3>3) Gabarito (confira e edite)</h3><textarea id="np_gab" class="redacao" style="min-height:220px" oninput="atualizarBotaoGabarito()" placeholder="Gabarito...">'+esc(RASCUNHO.gab)+'</textarea></div>'
+   +'<div class="card"><h3>3) Gabarito (confira e edite)</h3><textarea id="np_gab" class="redacao" style="min-height:220px" oninput="atualizarBotaoGabarito()" placeholder="Gabarito...">'+esc(RASCUNHO.gab)+'</textarea>'
+   +'<div class="botoes"><label class="primario" style="padding:9px 18px;border-radius:6px;background:var(--azul);color:#fff;cursor:pointer;font-size:.85rem;font-family:Arial,sans-serif">📄 Subir gabarito em PDF<input type="file" accept="application/pdf" style="display:none" onchange="subirGabaritoPdf(this)"></label></div><div id="np_gabpdf_fb"></div></div>'
    +'<div class="card"><h3>4) Classificação processual (opcional)</h3>'
    +'<p style="font-size:.85rem;color:var(--cinza);font-family:Arial,sans-serif">Registre o código e o nome conforme as Tabelas Processuais Unificadas do CNJ. <a href="https://www.cnj.jus.br/sgt/consulta_publica_classes.php" target="_blank" rel="noopener" style="color:var(--azul)">Consultar tabelas do CNJ</a>.</p>'
    +'<div class="campo-grid"><label>Classe processual<input id="np_tpu_classe" maxlength="200" placeholder="Código e nome da classe" value="'+escAttr(rc.classe||'')+'"></label>'
@@ -740,10 +766,13 @@ function profNova(){
    +'<label>Fase processual<input id="np_fase" maxlength="200" placeholder="Ex.: conhecimento, recurso..." value="'+escAttr(rc.fase||'')+'"></label>'
    +'<label>Órgão de referência<input id="np_orgao" maxlength="200" placeholder="Ex.: Vara Criminal do TJDFT" value="'+escAttr(rc.orgao||'')+'"></label></div></div>'
    +'<div class="card"><h3>5) Publicar</h3>'
-   +'<div style="font-family:Arial,sans-serif">Prazo de entrega (dia e hora): <input type="datetime-local" id="np_prazo" style="padding:8px;border:1px solid #cfc9b8;border-radius:6px"></div>'
+   +'<div class="campo-grid" style="font-family:Arial,sans-serif"><label>Publicar em (dia e hora)<input type="datetime-local" id="np_publicar_em"></label><label>Prazo de entrega (dia e hora)<input type="datetime-local" id="np_prazo"></label></div>'
+   +'<p style="font: .82rem Arial,sans-serif;color:var(--cinza);margin:8px 0 0">A peça ficará invisível aos alunos até a data de publicação, que não pode ser posterior ao prazo de entrega.</p>'
    +'<div class="botoes" style="margin-top:12px"><button onclick="salvarPeca(false)">💾 Salvar rascunho</button>'
    +'<button class="primario" onclick="salvarPeca(true)">🚀 Publicar para a turma</button></div><div id="np_salvarfb"></div></div>';
   const s=document.getElementById('np_nome');if(s&&RASCUNHO.nomePeca)s.value=RASCUNHO.nomePeca;
+  const publicar=document.getElementById('np_publicar_em');if(publicar)publicar.value=RASCUNHO.publicarEm||agoraDatetimeLocal();
+  const prazo=document.getElementById('np_prazo');if(prazo&&RASCUNHO.prazo)prazo.value=RASCUNHO.prazo;
   carregarTurmasSelect('np_turma',RASCUNHO.turmaId);
   atualizarBotaoGabarito();
 }
@@ -769,7 +798,6 @@ async function gerarPecaIA(){
   try{const r=await apiPost('/api/peca/gerar-ia',{nomePeca:nome,disc:turmaSelecionadaNome(),nivel});const d=await r.json();prog.fim();
     if(!r.ok){let m=(d&&d.erro)||'Erro';if(m==='LIMITE_CREDITOS')m='⛔ Limite mensal de uso da IA atingido. A IA volta quando o limite for renovado ou aumentado no painel do provedor.';fb.innerHTML='<p class="erro-ia">'+esc(m)+'</p>'+((d&&d.bruto)?('<pre style="white-space:pre-wrap;font-size:.72rem;color:var(--cinza);background:#faf8f2;border:1px solid #eee4c8;border-radius:6px;padding:8px;margin-top:6px">Resposta recebida da IA: '+esc(d.bruto)+'</pre>'):'');return}
     document.getElementById('np_caso').value=d.caso;document.getElementById('np_gab').value=d.gab||'';atualizarBotaoGabarito();
-    RASCUNHO={nomePeca:nome,disc:turmaSelecionadaNome(),turmaId:(document.getElementById('np_turma')||{}).value,caso:d.caso,gab:d.gab||''};
     fb.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif;font-size:.85rem">✅ Enunciado gerado. Revise abaixo e clique em <b>“⚖️ Gerar gabarito para este enunciado”</b> (passo 2).</p>';
   }catch(e){prog.fim();fb.innerHTML='<p class="erro-ia">Falha: '+esc(e.message)+'</p>';}
 }
@@ -777,10 +805,21 @@ function subirPecaPdf(inp){
   const f=inp.files&&inp.files[0];if(!f)return;const fb=document.getElementById('np_fb');
   fb.innerHTML='<p style="font-family:Arial,sans-serif;font-size:.85rem"><span class="spinner"></span>Lendo o PDF...</p>';
   const fr=new FileReader();fr.onload=async function(){
-    try{const r=await apiPost('/api/peca/extrair-pdf',{pdf:fr.result});const d=await r.json();
+    try{const r=await apiPost('/api/peca/extrair-pdf',{pdf:fr.result,tipo:'enunciado',nomePeca:(document.getElementById('np_nome')||{}).value||''});const d=await r.json();
     if(!r.ok){fb.innerHTML='<p class="erro-ia">'+esc(d.erro||'Erro')+'</p>';return}
-    document.getElementById('np_caso').value=d.texto;atualizarBotaoGabarito();fb.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif;font-size:.85rem">Enunciado extraído do PDF. Agora clique em “Gerar gabarito” (ou escreva o seu).</p>';
+    document.getElementById('np_caso').value=d.texto;atualizarBotaoGabarito();fb.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif;font-size:.85rem">✅ A IA leu, limpou e formatou o enunciado do PDF. Confira o texto abaixo.</p>';
     }catch(e){fb.innerHTML='<p class="erro-ia">Falha: '+esc(e.message)+'</p>';}
+  };fr.readAsDataURL(f);inp.value='';
+}
+function subirGabaritoPdf(inp){
+  const f=inp.files&&inp.files[0];if(!f)return;const fb=document.getElementById('np_gabpdf_fb'),caso=(document.getElementById('np_caso')||{}).value.trim();
+  if(caso.length<300){fb.innerHTML='<p class="erro-ia">Informe primeiro o enunciado completo da peça.</p>';inp.value='';return}
+  fb.innerHTML='<p style="font-family:Arial,sans-serif;font-size:.85rem"><span class="spinner"></span>A IA está lendo, estruturando e auditando o gabarito do PDF...</p>';
+  const fr=new FileReader();fr.onload=async function(){
+    try{const r=await apiPost('/api/peca/extrair-pdf',{pdf:fr.result,tipo:'gabarito',caso,nomePeca:(document.getElementById('np_nome')||{}).value||''});const d=await r.json();
+      if(!r.ok){fb.innerHTML='<p class="erro-ia">'+esc(d.erro||'Erro')+'</p>';return}
+      document.getElementById('np_gab').value=d.gab;atualizarBotaoGabarito();fb.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif;font-size:.85rem">✅ Gabarito convertido para o formato do sistema e auditado. Confira e edite se desejar.</p>';
+    }catch(e){fb.innerHTML='<p class="erro-ia">Falha: '+esc(e.message)+'</p>'}
   };fr.readAsDataURL(f);inp.value='';
 }
 const ETAPAS_GAB=[[0,'📖 Lendo o enunciado...'],[8,'⚖️ Verificando súmulas e precedentes...'],[40,'🔗 Montando as fontes...']];
@@ -795,24 +834,25 @@ async function gerarGabarito(){
 }
 async function salvarPeca(publicar){
   const caso=document.getElementById('np_caso').value.trim();const gab=document.getElementById('np_gab').value.trim();
-  const nome=document.getElementById('np_nome').value;const prazo=document.getElementById('np_prazo').value;
+  const nome=document.getElementById('np_nome').value;const prazo=document.getElementById('np_prazo').value;const publicarEm=document.getElementById('np_publicar_em').value;
   const fb=document.getElementById('np_salvarfb');
   if(caso.length<40){fb.innerHTML='<p class="erro-ia">A peça precisa de um enunciado.</p>';return}
   if(publicar&&!gab){fb.innerHTML='<p class="erro-ia">Gere ou escreva um gabarito válido antes de publicar.</p>';return;}
+  if(publicar&&!datasPublicacaoValidas(publicarEm,prazo,fb))return;
   const turmaId=(document.getElementById('np_turma')||{}).value||null;
   const classificacao={classe:(document.getElementById('np_tpu_classe')||{}).value||'',assunto:(document.getElementById('np_tpu_assunto')||{}).value||'',documento:(document.getElementById('np_tpu_documento')||{}).value||'',fase:(document.getElementById('np_fase')||{}).value||'',orgao:(document.getElementById('np_orgao')||{}).value||''};
-  try{const r=await apiPost('/api/peca/salvar',Object.assign({id:RASCUNHO.id,nomePeca:nome,disc:turmaSelecionadaNome(),turmaId,caso,gab,prazo,publicar},classificacaoPayload({classificacao})));
+  try{const r=await apiPost('/api/peca/salvar',Object.assign({id:RASCUNHO.id,nomePeca:nome,disc:turmaSelecionadaNome(),turmaId,caso,gab,prazo,publicarEm,publicar},classificacaoPayload({classificacao})));
   const d=await r.json();if(!r.ok){fb.innerHTML='<p class="erro-ia">'+esc(d.erro||'Erro')+'</p>';return}
   RASCUNHO={nomePeca:'',disc:'',caso:'',gab:'',classificacao:{}};
-  fb.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif">'+(publicar?'🚀 Peça '+d.rodada+' publicada para a turma!':'💾 Rascunho salvo.')+'</p>';
+  fb.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif">'+(publicar?(d.agendada?'🕒 Peça '+d.rodada+' agendada para '+dataHoraBR(d.publicarEm)+'.':'🚀 Peça '+d.rodada+' publicada para a turma!'):'💾 Rascunho salvo.')+'</p>';
   setTimeout(()=>irAba('pecas'),900);
   }catch(e){}
 }
 async function editarPeca(id){
   const r=await apiGet('/api/peca/get?id='+id);const d=await r.json();const p=d.peca;
-  RASCUNHO={id:p.id,nomePeca:p.nomePeca,disc:p.disc,turmaId:p.turmaId,caso:p.caso,gab:p.gab,classificacao:p.classificacao||{}};
+  RASCUNHO={id:p.id,nomePeca:p.nomePeca,disc:p.disc,turmaId:p.turmaId,caso:p.caso,gab:p.gab,prazo:p.prazo||'',publicarEm:p.publicarEm||'',classificacao:p.classificacao||{}};
   ABA_PROF='nova';telaProfessor();
-  setTimeout(()=>{document.getElementById('np_caso').value=p.caso;document.getElementById('np_gab').value=p.gab;if(p.prazo)document.getElementById('np_prazo').value=p.prazo;const s=document.getElementById('np_nome');if(s)s.value=p.nomePeca;},50);
+  setTimeout(()=>{document.getElementById('np_caso').value=p.caso;document.getElementById('np_gab').value=p.gab;if(p.prazo)document.getElementById('np_prazo').value=p.prazo;if(p.publicarEm)document.getElementById('np_publicar_em').value=p.publicarEm;const s=document.getElementById('np_nome');if(s)s.value=p.nomePeca;},50);
 }
 // ---- Alunos ----
 async function profAlunos(dadosPrev){
@@ -1357,15 +1397,15 @@ function abrirPecaAluno(id){
   const p=(window.__pecasAluno||[]).find(x=>x.id===id);if(!p)return;
   if(p.pesquisaPendente){telaPesquisaAluno();return}
   const parecerUsado=!!p.parecerInicialUsado;
-  const rasc=sget('peca_'+id,'');
-  try{window.__arquivoAluno=JSON.parse(sget('arquivo_'+id,'null'))}catch(e){window.__arquivoAluno=null}
+  const rasc=sget(chaveRascunhoAluno(id),'');
+  try{window.__arquivoAluno=JSON.parse(sget(chaveArquivoAluno(id),'null'))}catch(e){window.__arquivoAluno=null}
   const fechado=!p.enviado&&!p.noPrazo;
   conteudo.innerHTML='<div class="botoes" style="margin-bottom:10px"><button onclick="telaAluno()">← Voltar</button></div>'
    +'<span class="badge">Peça '+p.num+' · '+esc(p.disc)+'</span><h2 class="titulo-peca">'+esc(p.nomePeca)+'</h2>'
    +'<p style="font-family:Arial,sans-serif;font-size:.85rem;color:'+(fechado?'var(--vermelho)':'var(--cinza)')+'">Prazo: '+(p.prazo?dataHoraBR(p.prazo):'sem prazo')+(fechado?' — PRAZO ENCERRADO':'')+'</p>'
    +materiaisNpjHtml(true)
    +classificacaoHtml(p.classificacao)
-   +'<div class="card"><h3>Enunciado</h3><div class="caso">'+esc(p.caso)+'</div></div>'
+   +'<div class="card"><h3>Enunciado</h3><div class="caso">'+linkCitacoesHtml(md2html(p.caso))+'</div></div>'
    +((p.gabLiberado&&p.gab)?'<div class="card"><h3>📖 Gabarito oficial</h3><p style="font-size:.82rem;color:var(--cinza);font-family:Arial,sans-serif">Liberado após o encerramento do prazo. Compare com a sua peça e confira as fontes pelos links.</p><div class="bloco" style="background:#eef5ee;border:1px solid #cfe3cf;border-radius:8px;padding:14px">'+linkCitacoesHtml(md2html(p.gab))+'</div></div>':'')
    +(fechado?'<div class="card"><p class="erro-ia">O prazo desta peça já encerrou. Não é possível enviar. Se precisar, fale com o(a) professor(a) para renovar o prazo ou liberar sua entrega.</p></div>'
      :('<div class="card"><h3>Sua peça</h3><p style="font-size:.85rem;color:var(--cinza)">Você pode escrever aqui ou enviar um arquivo pronto. Em qualquer opção, confira o texto antes de entregar. Use o papel timbrado e as regras oficiais acima. Se citar jurisprudência, inclua no final as fontes e os links.</p>'
@@ -1381,9 +1421,13 @@ function abrirPecaAluno(id){
    +'<div id="al_fb"></div><div id="al_parecer"></div></div>'));
   window.__textoParecerInicial=null;
   window.__parecerInicialPdf=null;
-  const t=document.getElementById('al_texto');if(t)t.addEventListener('input',()=>{sset('peca_'+id,t.value);if(window.__textoParecerInicial!==null&&t.value.trim()!==window.__textoParecerInicial){window.__textoParecerInicial=null;p.parecerInicialUsado=true;const pr=document.getElementById('al_parecer');if(pr)pr.innerHTML='<div class="parecer-inicial"><p><b>Você alterou a peça após a pré-correção.</b> Quando terminar a revisão, envie esta nova versão diretamente para correção.</p><div class="botoes"><button class="primario" onclick="enviarPeca(\''+id+'\',true)">📨 Enviar diretamente para correção</button></div></div>'}});
+  const t=document.getElementById('al_texto');if(t)t.addEventListener('input',()=>{if(window.__textoParecerInicial!==null&&t.value.trim()!==window.__textoParecerInicial){window.__textoParecerInicial=null;p.parecerInicialUsado=true;const pr=document.getElementById('al_parecer');if(pr)pr.innerHTML='<div class="parecer-inicial"><p><b>Você alterou a peça após a pré-correção.</b> Quando terminar a revisão, envie esta nova versão diretamente para correção.</p><div class="botoes"><button class="primario" onclick="enviarPeca(\''+id+'\',true)">📨 Enviar diretamente para correção</button></div></div>'}});
 }
-function salvarRascunhoAluno(id){sset('peca_'+id,document.getElementById('al_texto').value);document.getElementById('al_fb').innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif;font-size:.85rem">Rascunho salvo.</p>';}
+function salvarRascunhoAluno(id){
+  sset(chaveRascunhoAluno(id),document.getElementById('al_texto').value);
+  if(window.__arquivoAluno)sset(chaveArquivoAluno(id),JSON.stringify(window.__arquivoAluno));else sdel(chaveArquivoAluno(id));
+  document.getElementById('al_fb').innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif;font-size:.85rem">💾 Rascunho salvo por você.</p>';
+}
 function arquivoParaDataUrl(file){return new Promise((ok,err)=>{const fr=new FileReader();fr.onload=()=>ok(fr.result);fr.onerror=()=>err(new Error('Não foi possível ler o arquivo.'));fr.readAsDataURL(file)})}
 async function subirArquivoAluno(inp,id){
   const f=(inp.files||[])[0];inp.value='';if(!f)return;
@@ -1395,9 +1439,9 @@ async function subirArquivoAluno(inp,id){
     const arquivo=await arquivoParaDataUrl(f);
     const r=await apiPost('/api/aluno/extrair-arquivo',{nome:f.name,arquivo});const d=await r.json();
     if(!r.ok){fb.innerHTML='<p class="erro-ia">'+esc(d.erro||'Não foi possível ler o arquivo.')+'</p>';return}
-    t.value=d.texto;sset('peca_'+id,t.value);window.__arquivoAluno=d.arquivo;sset('arquivo_'+id,JSON.stringify(d.arquivo));
+    t.value=d.texto;window.__arquivoAluno=d.arquivo;
     const avisos=(d.avisos||[]).map(a=>'<li>'+esc(a)+'</li>').join('');
-    fb.innerHTML='<p style="color:var(--verde);font: .85rem Arial,sans-serif">✅ <b>'+esc(d.arquivo.nome)+'</b> importado. Confira especialmente nomes, números e o final do documento antes de enviar.</p>'+auditoriaFormatacaoHtml(d.arquivo.formatacao)+(avisos?'<ul class="erro-ia" style="margin-left:20px">'+avisos+'</ul>':'');
+    fb.innerHTML='<p style="color:var(--verde);font: .85rem Arial,sans-serif">✅ <b>'+esc(d.arquivo.nome)+'</b> importado. Confira o texto e clique em <b>Salvar rascunho</b> se quiser mantê-lo para outro acesso.</p>'+auditoriaFormatacaoHtml(d.arquivo.formatacao)+(avisos?'<ul class="erro-ia" style="margin-left:20px">'+avisos+'</ul>':'');
     t.scrollIntoView({behavior:'smooth',block:'center'});t.focus();
   }catch(e){fb.innerHTML='<p class="erro-ia">Falha ao importar: '+esc(e.message)+'</p>'}
 }
@@ -1421,7 +1465,7 @@ function refazerPecaAluno(id){
   const fb=document.getElementById('al_parecer'),t=document.getElementById('al_texto');
   const p=(window.__pecasAluno||[]).find(x=>x.id===id);if(p)p.parecerInicialUsado=true;
   fb.innerHTML='<div class="parecer-inicial"><p><b>Nada foi enviado.</b> Revise a peça no editor. A pré-correção já foi utilizada e, quando terminar, a nova versão será enviada diretamente para correção.</p><div class="botoes"><button class="primario" onclick="enviarPeca(\''+id+'\',true)">📨 Enviar diretamente para correção</button></div></div>';
-  sset('peca_'+id,t.value);t.focus();t.scrollIntoView({behavior:'smooth',block:'center'});
+  t.focus();t.scrollIntoView({behavior:'smooth',block:'center'});
 }
 // Reduz a foto no navegador (fotos de celular são grandes demais para enviar inteiras)
 function redimensionarFoto(file){return new Promise((ok,err)=>{const img=new Image();const url=URL.createObjectURL(file);
@@ -1437,7 +1481,6 @@ async function transcreverFotos(inp,id){
     if(!r.ok){let m=d.erro||'Erro';if(m==='LIMITE_CREDITOS')m='⛔ Limite mensal de uso da IA atingido. Avise o professor.';fb.innerHTML='<p class="erro-ia">'+esc(m)+'</p>';return}
     const t=document.getElementById('al_texto');
     t.value=(t.value.trim()?t.value.trim()+'\n\n':'')+d.texto;
-    sset('peca_'+id,t.value);
     fb.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif;font-size:.85rem">✅ Transcrição pronta! <b>Confira o texto abaixo e corrija o que precisar</b> — trechos que a IA não conseguiu ler estão marcados como [ilegível]. Só envie depois de revisar.</p>';
     t.scrollIntoView({behavior:'smooth',block:'center'});
   }catch(e){fb.innerHTML='<p class="erro-ia">Falha ao processar as fotos: '+esc(e.message)+'</p>';}
@@ -1449,7 +1492,7 @@ async function enviarPeca(id,semParecer){
   if(!confirm('Enviar sua peça ao professor? Após o prazo pode não ser possível reenviar.'))return;
   try{const r=await apiPost('/api/entregar',{id,texto,arquivo:window.__arquivoAluno||null});const d=await r.json();
   if(!r.ok){let m=(d.mensagem||d.erro||'Erro');if(d.erro==='PRAZO')m='⏰ O prazo desta peça encerrou ('+dataHoraBR(d.prazo)+'). Fale com o(a) professor(a) para renovar ou liberar sua entrega.';fb.innerHTML='<p class="erro-ia">'+esc(m)+'</p>';return}
-  sset('peca_'+id,'');sset('arquivo_'+id,'');
+  sdel(chaveRascunhoAluno(id));sdel(chaveArquivoAluno(id));
   const p=(window.__pecasAluno||[]).find(x=>x.id===id);if(p)p.enviado=true;
   if(d.pesquisaPosPeca2Disponivel){telaPesquisaPosPeca2Aluno();return}
   fb.innerHTML='<div style="background:#eef5ee;border:1px solid #cfe3cf;border-radius:8px;padding:12px 14px;margin-top:12px;color:var(--verde);font-family:Arial,sans-serif">📨 <b>Peça enviada com sucesso.</b> O professor foi avisado. A revisão final ficará disponível em <b>Peças entregues</b> e também será enviada por e-mail.<div class="botoes"><button onclick="telaEntreguesAluno()">Ver peças entregues</button></div></div>';
