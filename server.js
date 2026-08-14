@@ -1982,7 +1982,7 @@ const SISTEMA_AUDITOR_RIGOROSO = SISTEMA_AUDITOR + ' Verifique também se a peç
 // Professor: gerar gabarito para um enunciado que ele mesmo escreveu/subiu
 async function validarEAuditarGabarito(sess, caso, nomePeca, gab, contexto) {
   gab = garantirLinksFontes(limparGabaritoIA(gab), false);
-  let estrutura = validarGabarito(gab, nomePeca);
+  let estrutura = validarGabarito(gab, nomePeca, { exigirTribunalSumula: true });
   for (let tentativa = 0; !estrutura.ok && tentativa < 2; tentativa++) {
     const apenasEspelho = estrutura.erros.every(e => /espelho|soma dos itens|linha Total/i.test(e));
     const instrucao = apenasEspelho
@@ -1991,11 +1991,11 @@ async function validarEAuditarGabarito(sess, caso, nomePeca, gab, contexto) {
     const reparo = await iaTexto(apenasEspelho ? SISTEMA_REPARO_ESPELHO : SISTEMA_GABPECA_ESTAGIO, contexto + '\n<gabarito_rejeitado>\n' + gab.slice(0, 24000) + '\n</gabarito_rejeitado>\n' + instrucao + estrutura.erros.join(' '), 12000, false, sess);
     if (!reparo.ok) return { ok: false, status: reparo.status, erro: reparo.erro || 'Não foi possível reparar o gabarito.' };
     gab = garantirLinksFontes(limparGabaritoIA(reparo.texto), false);
-    estrutura = validarGabarito(gab, nomePeca);
+    estrutura = validarGabarito(gab, nomePeca, { exigirTribunalSumula: true });
   }
   if (!estrutura.ok) {
     gab = normalizarEspelhoCinco(gab);
-    estrutura = validarGabarito(gab, nomePeca);
+    estrutura = validarGabarito(gab, nomePeca, { exigirTribunalSumula: true });
   }
   if (!estrutura.ok) return { ok: false, status: 502, erro: 'O gabarito foi bloqueado por inconsistência: ' + estrutura.erros.join(' ') };
 
@@ -2005,7 +2005,7 @@ async function validarEAuditarGabarito(sess, caso, nomePeca, gab, contexto) {
   const audit = limparGabaritoIA(ra.texto);
   if (!/##\s+Verifica[cç][aã]o de cita[cç][oõ]es/i.test(audit)) return { ok: false, status: 502, erro: 'A auditoria jurídica retornou sem o relatório obrigatório; o gabarito foi bloqueado.' };
   gab = normalizarEspelhoCinco(normalizarGabaritoPenal(garantirLinksFontes(audit, true)));
-  estrutura = validarGabarito(gab, nomePeca);
+  estrutura = validarGabarito(gab, nomePeca, { exigirTribunalSumula: true });
   if (!estrutura.ok) return { ok: false, status: 502, erro: 'A auditoria alterou indevidamente a estrutura do gabarito: ' + estrutura.erros.join(' ') };
   if (tinhaJurisprudencia && !/(CONFIRMADA|REMOVIDA)/i.test(audit)) return { ok: false, status: 502, erro: 'As referências jurisprudenciais não foram individualmente verificadas; o gabarito foi bloqueado.' };
   return { ok: true, gab };
@@ -2121,7 +2121,7 @@ async function pecaSalvar(req, res) {
   if (vaiPublicar && (!prazo || Number.isNaN(prazoMs(prazo)))) return json(res, 400, { erro: 'Defina uma data e um horário de entrega válidos antes de publicar.' });
   if (vaiPublicar && publicarEm && Number.isNaN(prazoMs(publicarEm))) return json(res, 400, { erro: 'Defina uma data e um horário de publicação válidos.' });
   if (vaiPublicar && publicarEm && prazoMs(publicarEm) > prazoMs(prazo)) return json(res, 400, { erro: 'A publicação não pode acontecer depois do prazo de entrega.' });
-  const validacaoGab = gab ? validarGabarito(gab, nomePeca) : { ok: false, erros: ['Gabarito ausente.'] };
+  const validacaoGab = gab ? validarGabarito(gab, nomePeca, { exigirTribunalSumula: true }) : { ok: false, erros: ['Gabarito ausente.'] };
   if (vaiPublicar && !validacaoGab.ok) return json(res, 400, { erro: 'Gabarito inválido: ' + validacaoGab.erros.join(' ') });
   let id = d.id && db.pecas[d.id] ? d.id : null;
   const rodada = id && rodadaValida(db.pecas[id].rodada) ? Number(db.pecas[id].rodada) : (vaiPublicar ? proximaRodadaDaTurma(turmaId, disc, id) : null);

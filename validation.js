@@ -328,7 +328,7 @@ function similaridadeNarrativa(a, b) {
   return Math.round((palavras * 0.7 + sequencia * 0.3) * 1000) / 1000;
 }
 
-function validarGabarito(texto, nomePeca) {
+function validarGabarito(texto, nomePeca, opcoes) {
   const t = String(texto || '').trim();
   const erros = [];
   const obrigatorias = ['peca cabivel', 'enderecamento', 'prazo', 'teses', 'pedidos', 'estrutura da peca', 'espelho de correcao', 'erros frequentes', 'fontes'];
@@ -337,8 +337,8 @@ function validarGabarito(texto, nomePeca) {
   if (/\bdias úteis\b/i.test(t)) erros.push('Prazos processuais penais não devem ser apresentados como dias úteis.');
   if (/cont[ií]nuo,\s*e\s*n[aã]o\s*em\s*dias\s*corridos/i.test(t)) erros.push('A descrição do prazo penal está contraditória.');
   if (/art\.\s*564,\s*IV\s*e\s*V/i.test(t)) erros.push('O gabarito cita inciso inexistente do art. 564 do CPP.');
-  const sumulaSemTribunal = /\bS[úu]mulas?\s+(?:n[ºo°.]?\s*)?\d+(?:\s*(?:,|e)\s*\d+)*\b(?!\s*(?:do|da|\/)\s*(?:STF|STJ)\b)/i.test(t);
-  if (sumulaSemTribunal) erros.push('Toda súmula deve indicar expressamente STF ou STJ. Corrija a referência antes de importar ou publicar.');
+  const sumulaSemTribunal = /\bS[úu]mulas?\s+(?:n[ºo°.]?\s*)?\d+(?:\s*(?:,|e|\/)\s*\d+)*\b(?!\s*(?:do|da|\/)\s*(?:STF|STJ)\b)/i.test(t);
+  if (opcoes && opcoes.exigirTribunalSumula && sumulaSemTribunal) erros.push('Toda súmula deve indicar expressamente STF ou STJ. Corrija a referência antes de importar ou publicar.');
   for (const titulo of obrigatorias) if (!new RegExp('^\\s*##\\s+.*' + titulo.replace(/ /g, '.*'), 'mi').test(n)) erros.push('Falta a seção “' + titulo + '”.');
   const espelho = analisarEspelho(t);
   if (!espelho.bloco) erros.push('O espelho de correção não foi encontrado.');
