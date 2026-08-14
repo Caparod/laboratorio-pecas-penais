@@ -23,6 +23,9 @@ for (const arquivo of [path.join(__dirname, '..', 'index.html'), path.join(__dir
     assert.match(html, /id="btn_previa_correcao"/, 'prévia deve ter controle próprio de disponibilidade');
     assert.match(html, /function atualizarDisponibilidadePrevia\(/, 'prévia deve ser liberada somente após relatório e nota');
     assert.match(html, /function telaPesquisaAluno\(/, 'área do aluno deve incluir a pesquisa pedagógica');
+    assert.match(html, /function telaPesquisaPosPeca2Aluno\(/, 'área do aluno deve incluir a pesquisa posterior à Peça 2');
+    assert.match(html, /Pesquisa pós-Peça 2/, 'menu deve manter acessível a nova pesquisa');
+    assert.match(html, /15\/08\/2026/, 'interface deve informar a aplicação prevista no próximo sábado');
     assert.match(html, /function profPesquisa\(/, 'área do professor deve incluir resultados agregados da pesquisa');
     assert.match(html, /pelo menos três respostas/, 'interface deve explicar o limite mínimo de anonimato');
     assert.match(html, /Responder pesquisa para liberar a Peça 2/, 'Peça 2 deve orientar o aluno para a pesquisa obrigatória');
@@ -31,6 +34,16 @@ for (const arquivo of [path.join(__dirname, '..', 'index.html'), path.join(__dir
     assert.match(html, /\/materiais\/regras-formatacao-npj\.pdf/, 'aluno deve poder baixar as regras de formatação');
     assert.match(html, /Falhas formais comprovadas reduzem a nota final/, 'pré-correção deve alertar sobre a consequência acadêmica');
     assert.match(html, /parecer-inicial',\{id,texto,arquivo:window\.__arquivoAluno\|\|null\}/, 'auditoria autenticada do arquivo deve acompanhar a pré-correção');
+    assert.match(html, /id="np_publicar_em"/, 'formulário deve permitir escolher quando a peça será publicada');
+    assert.match(html, /A publicação não pode acontecer depois do prazo de entrega/, 'interface deve validar a ordem entre publicação e entrega');
+    assert.match(html, /function subirGabaritoPdf\(/, 'professor deve poder importar o gabarito em PDF');
+    assert.match(html, /tipo:'gabarito'/, 'upload do gabarito deve solicitar a transformação específica do PDF');
+    assert.match(html, /linkCitacoesHtml\(md2html\(p\.caso\)\)/, 'enunciado transformado deve ser exibido com a formatação produzida');
+    assert.match(html, /function limparEstadoNaoSalvo\(/, 'logout deve apagar todo conteúdo que não foi explicitamente salvo');
+    assert.match(html, /function chaveRascunhoAluno\(/, 'rascunho salvo deve ser isolado por usuário');
+    assert.match(html, /sset\(chaveRascunhoAluno\(id\)/, 'rascunho do aluno só deve persistir no clique de salvar');
+    assert.doesNotMatch(html, /sset\('peca_'\+id/, 'digitação e importação não podem ser gravadas silenciosamente');
+    assert.doesNotMatch(html, /sset\('arquivo_'\+id/, 'arquivo importado não pode ser gravado silenciosamente');
     assert.doesNotMatch(html, /notaInicial\)\.replace\('\.',','\)/, 'nota numérica não pode ser preenchida com vírgula no valor interno');
   }
   if (arquivo.endsWith(path.join('render-app', 'index.html'))) {
