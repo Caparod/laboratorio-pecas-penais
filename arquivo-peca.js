@@ -340,6 +340,9 @@ function validarParecerInicial(texto) {
   }
   if (/\b(?:gabarito|espelho de correção|resposta-modelo|peça correta)\b/i.test(t)) erros.push('conteúdo reservado mencionado');
   if (/\bnota\b|pontua(?:ç|c)[aã]o|\b\d+(?:[,.]\d+)?\s*\/\s*(?:5|10|100)\b/i.test(t)) erros.push('nota ou pontuação mencionada');
+  const nomePeca = /\b(?:resposta\s+[àa]\s+acusa(?:ç|c)[aã]o|alega(?:ç|c)[oõ]es\s+finais(?:\s+por\s+memoriais)?|pedido\s+de\s+liberdade\s+provis[oó]ria|relaxamento\s+de\s+pris[aã]o\s+em\s+flagrante|revoga(?:ç|c)[aã]o\s+de\s+pris[aã]o\s+preventiva|apela(?:ç|c)[aã]o\s+criminal|recurso\s+em\s+sentido\s+estrito|contrarraz[oõ]es\s+de\s+apela(?:ç|c)[aã]o|embargos\s+de\s+declara(?:ç|c)[aã]o|embargos\s+infringentes(?:\s+e\s+de\s+nulidade)?|agravo\s+em\s+execu(?:ç|c)[aã]o|habeas\s+corpus|revis[aã]o\s+criminal|queixa[-\s]crime)\b/i;
+  if (nomePeca.test(t)) erros.push('espécie de peça processual revelada');
+  if (/(?:\ba\s+(?:medida|peça)\s+(?:processual\s+)?(?:cabível|adequada|correta)\s+(?:é|seria|consiste)|\b(?:use|utilize|invoque)\s+(?:o\s+)?art(?:igo)?\.?\s*\d+|\b(?:inclua|apresente|desenvolva)\s+(?:a|uma)\s+tese\s+de\s+|\b(?:peça|requeira|postule)\s+(?:o|a|os|as)?\s*(?:provimento|absolvi(?:ç|c)[aã]o|anula(?:ç|c)[aã]o|desclassifica(?:ç|c)[aã]o|revoga(?:ç|c)[aã]o))/i.test(t)) erros.push('solução ou redação prescritiva revelada');
   return { ok: !erros.length, erros };
 }
 

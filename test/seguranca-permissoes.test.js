@@ -67,6 +67,12 @@ async function executar() {
   r = await requisitar('/api/admin', coord2.token, {});
   assert.equal(r.status, 401, 'troca de senha deve invalidar as outras sessões');
   const coordenador = coord1.token;
+  r = await requisitar('/api/entrega/corrigir-todas', coordenador, {});
+  assert.equal(r.status, 403, 'correção em lote por IA deve exigir aceite de privacidade');
+  assert.equal(r.body.erro, 'ACEITAR_PRIVACIDADE');
+  r = await requisitar('/api/recurso/analisar-ia', coordenador, {});
+  assert.equal(r.status, 403, 'análise de recurso por IA deve exigir aceite de privacidade');
+  assert.equal(r.body.erro, 'ACEITAR_PRIVACIDADE');
 
   const adminInicial = await loginBruto(adminLogin, adminLogin);
   await trocarSenha(adminInicial.token, 'Admin-Segura-2026');

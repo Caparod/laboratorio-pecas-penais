@@ -364,17 +364,39 @@ function irInicio(){
   if(AUTH.tipo==='professor'){if(MODO_VISAO==='aluno')telaAluno();else{ABA_PROF='pecas';telaProfessor();}}
   else telaAluno();
 }
-function renderLogin(msg){
+function renderLogin(msg,ok){
   menu.innerHTML='';document.getElementById('progresso').innerHTML='';
   conteudo.innerHTML='<div class="loginwrap"><h2>⚖️ Laboratório de Peças Penais</h2>'
   +'<p>Entre com seu login. Aluno(a): use a matrícula e a senha temporária fornecida pelo(a) professor(a).</p>'
   +'<p style="font-size:.78rem;color:var(--cinza)">Os recursos de IA processam enunciados, trabalhos e imagens em provedor externo. Não envie dados pessoais desnecessários.</p>'
   +'<p style="font-size:.78rem"><a href="/privacidade" target="_blank" rel="noopener" style="color:var(--azul)">Ler aviso de privacidade</a></p>'
-  +'<input id="lg_user" placeholder="Login / Matrícula" autocomplete="username">'
-  +'<input id="lg_pass" type="password" placeholder="Senha" autocomplete="current-password">'
+  +'<label for="lg_user" style="display:block;text-align:left;font:700 .82rem Arial,sans-serif;margin-top:10px">Login / Matrícula</label><input id="lg_user" placeholder="Login / Matrícula" autocomplete="username">'
+  +'<label for="lg_pass" style="display:block;text-align:left;font:700 .82rem Arial,sans-serif;margin-top:10px">Senha</label><input id="lg_pass" type="password" placeholder="Senha" autocomplete="current-password">'
   +'<button onclick="fazerLogin()">Entrar</button>'
-  +(msg?'<p class="erro-ia">'+esc(msg)+'</p>':'')+'<div id="lg_erro"></div></div>';
+  +'<p style="font-size:.82rem;margin-top:10px"><a href="#" style="color:var(--azul)" onclick="renderSolicitarRecuperacao();return false">Esqueci minha senha</a></p>'
+  +(msg?'<p class="'+(ok?'':'erro-ia')+'" style="'+(ok?'color:var(--verde)':'')+'">'+esc(msg)+'</p>':'')+'<div id="lg_erro"></div></div>';
   const p=document.getElementById('lg_pass');if(p)p.addEventListener('keydown',e=>{if(e.key==='Enter')fazerLogin()});
+}
+function limparHashRecuperacao(){if(/^#redefinir-senha=/.test(location.hash)){try{history.replaceState(null,'',location.pathname+location.search)}catch(e){location.hash=''}}}
+function renderSolicitarRecuperacao(){
+  limparHashRecuperacao();menu.innerHTML='';document.getElementById('progresso').innerHTML='';
+  conteudo.innerHTML='<div class="loginwrap"><h2>Recuperar senha</h2><p>Informe sua matrícula. Se houver um e-mail confirmado no cadastro, enviaremos um link de uso único.</p><label for="rs_user" style="display:block;text-align:left;font:700 .82rem Arial,sans-serif">Matrícula</label><input id="rs_user" autocomplete="username" inputmode="numeric" placeholder="Matrícula"><button onclick="solicitarRecuperacao()">Enviar link</button><p style="font-size:.82rem;margin-top:10px"><a href="#" style="color:var(--azul)" onclick="renderLogin();return false">Voltar ao login</a></p><div id="rs_erro" aria-live="polite"></div></div>';
+  const u=document.getElementById('rs_user');u.addEventListener('keydown',e=>{if(e.key==='Enter')solicitarRecuperacao()});u.focus();
+}
+async function solicitarRecuperacao(){
+  const u=document.getElementById('rs_user').value.trim(),fb=document.getElementById('rs_erro');
+  if(!u){fb.innerHTML='<p class="erro-ia">Informe sua matrícula.</p>';return}
+  try{const r=await apiPost('/api/esqueci-senha',{usuario:u}),d=await r.json();if(!r.ok){fb.innerHTML='<p class="erro-ia">'+esc(d.erro||'Não foi possível solicitar agora.')+'</p>';return}fb.innerHTML='<p style="color:var(--verde)">'+esc(d.mensagem)+'</p>'}catch(e){fb.innerHTML='<p class="erro-ia">Falha de conexão. Tente novamente.</p>'}
+}
+function renderRedefinirSenha(token){
+  AUTH=null;aset('');menu.innerHTML='';document.getElementById('progresso').innerHTML='';
+  conteudo.innerHTML='<div class="loginwrap"><h2>Criar nova senha</h2><p>Use de 8 a 128 caracteres e não repita sua matrícula.</p><label for="rn_1" style="display:block;text-align:left;font:700 .82rem Arial,sans-serif">Nova senha</label><input id="rn_1" type="password" autocomplete="new-password"><label for="rn_2" style="display:block;text-align:left;font:700 .82rem Arial,sans-serif;margin-top:10px">Repita a nova senha</label><input id="rn_2" type="password" autocomplete="new-password"><button onclick="confirmarRedefinicao()">Redefinir senha</button><div id="rn_erro" aria-live="polite"></div></div>';
+  window.__tokenRecuperacao=String(token||'');document.getElementById('rn_1').focus();
+}
+async function confirmarRedefinicao(){
+  const a=document.getElementById('rn_1').value,b=document.getElementById('rn_2').value,fb=document.getElementById('rn_erro');
+  if(a!==b){fb.innerHTML='<p class="erro-ia">As senhas não conferem.</p>';return}if(a.length<8||a.length>128){fb.innerHTML='<p class="erro-ia">A senha deve ter entre 8 e 128 caracteres.</p>';return}
+  try{const r=await apiPost('/api/redefinir-senha',{token:window.__tokenRecuperacao,novaSenha:a}),d=await r.json();if(!r.ok){fb.innerHTML='<p class="erro-ia">'+esc(d.erro||'Não foi possível redefinir.')+'</p>';return}window.__tokenRecuperacao='';limparHashRecuperacao();renderLogin('Senha redefinida. Entre com a nova senha.',true)}catch(e){fb.innerHTML='<p class="erro-ia">Falha de conexão. Tente novamente.</p>'}
 }
 async function fazerLogin(){
   const u=document.getElementById('lg_user').value.trim(),p=document.getElementById('lg_pass').value;
@@ -1596,7 +1618,8 @@ async function restaurarSessao(){
   }catch(e){renderLogin('Não foi possível validar a sessão. Tente novamente.');}
   finally{proc.fim()}
 }
-restaurarSessao();
+let tokenRecuperacaoInicial='';try{const m=location.hash.match(/^#redefinir-senha=([^&]+)$/);if(m)tokenRecuperacaoInicial=decodeURIComponent(m[1])}catch(e){}
+if(tokenRecuperacaoInicial)renderRedefinirSenha(tokenRecuperacaoInicial);else restaurarSessao();
 </script>
 </body>
 </html>
