@@ -2792,14 +2792,26 @@ async function recursoAnalisarIA(req, res) {
   if (!r.ok) return erroIA(res, r);
   let texto = garantirLinksFontes(String(r.texto || '').trim(), true);
   let partes = texto.split(/^##\s+Espelho revisado proposto\s*$/mi);
+  if (partes.length < 2) {
+    r = await iaTexto(sistema, usuario + '\n\nA resposta anterior não respeitou o contrato porque faltou o marcador ## Espelho revisado proposto. Refaça integralmente, preserve a análise do mérito e inclua o marcador seguido do espelho OAB/FGV completo.', 12000, true, sess);
+    if (!r.ok) return erroIA(res, r);
+    texto = garantirLinksFontes(String(r.texto || '').trim(), true);
+    partes = texto.split(/^##\s+Espelho revisado proposto\s*$/mi);
+  }
   let relatorio = normalizarPenalidadesCorrecao(partes.slice(1).join('\n').trim());
   let vr = validarCorrecao(relatorio, e.texto);
-  if (partes.length < 2 || !vr.ok) {
-    r = await iaTexto(sistema, usuario + '\n\nA resposta anterior não respeitou o contrato. Refaça integralmente e garanta um espelho OAB/FGV válido. Problemas: ' + (partes.length < 2 ? 'faltou o marcador ## Espelho revisado proposto. ' : '') + vr.erros.join(' '), 12000, true, sess);
+  if (partes.length >= 2 && !vr.ok) {
+    console.warn('[RECURSO IA] Espelho proposto inválido; iniciando reparo estrutural: ' + vr.erros.join(' '));
+    const reparo = '<relatorio_revisado_alta_capacidade>\n' + documentoIA(relatorio, 30000) + '\n</relatorio_revisado_alta_capacidade>\n<falhas_estruturais>\n' + documentoIA(vr.erros.join(' '), 4000) + '\n</falhas_estruturais>\nReorganize sem alterar o mérito do recurso, os pontos concedidos em cada critério nem os fundamentos jurídicos.';
+    r = await iaTexto(SISTEMA_REPARO_CORRECAO, reparo, 8000, false, sess, { model: MODELO_REPARO });
     if (!r.ok) return erroIA(res, r);
-    texto = garantirLinksFontes(String(r.texto || '').trim(), true); partes = texto.split(/^##\s+Espelho revisado proposto\s*$/mi); relatorio = normalizarPenalidadesCorrecao(partes.slice(1).join('\n').trim()); vr = validarCorrecao(relatorio, e.texto);
+    relatorio = normalizarPenalidadesCorrecao(limparCorrecaoIA(garantirLinksFontes(String(r.texto || '').trim(), true)));
+    vr = validarCorrecao(relatorio, e.texto);
   }
-  if (partes.length < 2 || !vr.ok) return json(res, 502, { erro: 'A análise foi bloqueada porque o espelho revisado ficou inconsistente. Tente novamente.' });
+  if (partes.length < 2 || !vr.ok) {
+    console.error('[RECURSO IA] Espelho permaneceu inválido após reparo: ' + vr.erros.join(' '));
+    return json(res, 502, { erro: 'A análise foi bloqueada porque o espelho revisado ficou inconsistente. Tente novamente.' });
+  }
   const analise = partes[0].trim();
   const achouResultado = analise.match(/RESULTADO\s+RECOMENDADO\s*:\s*(DEFERIDO\s+PARCIALMENTE|DEFERIDO|INDEFERIDO)/i);
   const mapaResultado = { 'DEFERIDO': 'Deferido', 'DEFERIDO PARCIALMENTE': 'Deferido parcialmente', 'INDEFERIDO': 'Indeferido' };
