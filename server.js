@@ -55,7 +55,8 @@ function dbPadrao() {
     professores: {},
     pecas: {},
     proximoNum: 1,
-    entregas: {}
+    entregas: {},
+    avisosProfessores: []
   };
 }
 function migrarDb() {
@@ -64,6 +65,7 @@ function migrarDb() {
   if (!db.pecas) db.pecas = {};
   if (typeof db.proximoNum !== 'number') db.proximoNum = 1 + Object.keys(db.pecas).length;
   if (!db.entregas) db.entregas = {};
+  if (!Array.isArray(db.avisosProfessores)) db.avisosProfessores = [];
   if (!db.pesquisaPedagogica || typeof db.pesquisaPedagogica !== 'object') db.pesquisaPedagogica = { respostas: {} };
   if (!db.pesquisaPedagogica.respostas || typeof db.pesquisaPedagogica.respostas !== 'object') db.pesquisaPedagogica.respostas = {};
   if (!db.pesquisaPosPeca2 || typeof db.pesquisaPosPeca2 !== 'object') db.pesquisaPosPeca2 = { respostas: {} };
@@ -2308,7 +2310,7 @@ async function pecaExcluir(req, res) {
   if (p) {
     if (!podeAcessarPeca(sess.usuario, p)) return json(res, 403, { erro: 'Sem acesso a esta peça.' });
     if (!podeGerirProfessores(sess.usuario) && p.autor !== sess.usuario) return json(res, 403, { erro: 'Só quem criou a peça ou a coordenação pode excluí-la.' });
-    delete db.pecas[id]; delete db.entregas[id]; salvarDb();
+    delete db.pecas[id]; delete db.entregas[id]; db.avisosProfessores = (db.avisosProfessores || []).filter(a => a.pecaId !== id); salvarDb();
   }
   json(res, 200, { ok: true });
 }
@@ -2503,6 +2505,44 @@ async function enviarEspelhoAluno(p, e, matricula) {
   const html = '<p>Olá, ' + escHtml(a.nome || '') + '!</p><p>Sua correção está disponível no sistema e o espelho detalhado segue anexado em PDF.</p>' + relatorioParaHtml(dados);
   return enviarEmail(a.email, 'Correção da Peça ' + rodadaDaPeca(p) + ' — Nota ' + e.nota.toString().replace('.', ','), html, [{ filename: nomeArquivoEspelho(p), content: pdf, contentType: 'application/pdf' }]);
 }
+async function enviarDecisaoRecursoAluno(p, e, matricula) {
+  const a = db.alunos[String(matricula)];
+  if (!a || !a.email || !a.emailVerificado) return { ok: false, motivo: 'sem-email-verificado' };
+  const recurso = e.recurso || {};
+  const notaAnterior = Number(recurso.notaAnterior != null ? recurso.notaAnterior : recurso.notaRecorrida);
+  const html = '<p>Olá, ' + escHtml(a.nome || '') + '!</p>'
+    + '<p>O professor analisou seu recurso da <b>Peça ' + rodadaDaPeca(p) + ' — ' + escHtml(p.nomePeca || '') + '</b>.</p>'
+    + '<p><b>Resultado:</b> ' + escHtml(recurso.resultado || '') + '</p>'
+    + '<p><b>Justificativa:</b><br>' + escHtml(recurso.decisao || '').replace(/\n/g, '<br>') + '</p>'
+    + (Number.isFinite(notaAnterior) ? '<p><b>Nota anterior:</b> ' + notaAnterior.toFixed(2).replace('.', ',') + '/5<br>' : '<p>')
+    + '<b>Nova nota:</b> ' + Number(e.nota || 0).toFixed(2).replace('.', ',') + '/5</p>'
+    + '<p>A decisão também está disponível no sistema. O espelho original da correção foi preservado.</p>';
+  return enviarEmail(a.email, 'Resultado do recurso — Peça ' + rodadaDaPeca(p) + ' — Nota ' + Number(e.nota || 0).toFixed(2).replace('.', ','), html);
+}
+async function persistirEEnviarDecisaoRecurso(p, e, matricula) {
+  await salvarDbCritico();
+  let email;
+  for (let tentativa = 1; tentativa <= 2; tentativa++) {
+    try { email = await enviarDecisaoRecursoAluno(p, e, matricula); }
+    catch (err) { email = { ok: false, motivo: String(err.message || err || 'falha-no-envio').slice(0, 300) }; }
+    if (email && (email.ok || email.motivo === 'sem-email-verificado')) break;
+    if (tentativa < 2) await new Promise(resolve => setTimeout(resolve, 500));
+  }
+  email = email || { ok: false, motivo: 'falha-no-envio' };
+  e.recurso.emailEnviado = !!email.ok;
+  e.recurso.emailTentadoEm = Date.now();
+  if (email.ok) {
+    e.recurso.emailEnviadoEm = e.recurso.emailTentadoEm;
+    e.recurso.emailMensagemId = String(email.mensagemId || '').slice(0, 300);
+    delete e.recurso.emailErro;
+  } else {
+    delete e.recurso.emailEnviadoEm;
+    delete e.recurso.emailMensagemId;
+    e.recurso.emailErro = String(email.motivo || 'falha-no-envio').slice(0, 300);
+  }
+  try { await salvarDbCritico(); } catch { salvarDb(); email.estadoPersistenciaPendente = true; }
+  return email;
+}
 async function validarEEnviarCorrecao(sess, p, e, matricula, automatico, aoPersistir) {
   e.validado = true; e.validadoEm = Date.now(); e.validadoPor = sess.usuario;
   if (automatico) {
@@ -2599,7 +2639,8 @@ async function entregaValidar(req, res) {
   if (!podeAcessarPeca(sess.usuario, p)) return json(res, 403, { erro: 'Sem acesso a esta peça.' });
   const estadoInicial = capturarEstadoCorrecao(e);
   const falharSemResiduos = (status, mensagem) => { limparEstadoTentativa(e, estadoInicial); return json(res, status, { erro: mensagem }); };
-  e.relatorio = String(d.relatorio || '').trim();
+  const recursoPendente = !!(d.validar && e.recurso && e.recurso.status === 'pendente');
+  e.relatorio = recursoPendente ? String((estadoInicial.relatorio && estadoInicial.relatorio.existe ? estadoInicial.relatorio.valor : '') || e.recurso.relatorioRecorrido || '').trim() : String(d.relatorio || '').trim();
   if (e.relatorio.length < 100) return falharSemResiduos(400, 'O relatório de correção está incompleto.');
   const notaNum = parseFloat(String(d.nota).replace(',', '.'));
   if (isNaN(notaNum) || notaNum < 0 || notaNum > 5) return falharSemResiduos(400, 'Nota inválida (0 a 5).');
@@ -2607,22 +2648,31 @@ async function entregaValidar(req, res) {
   e.nota = Math.round(notaNum * 100) / 100;
   let emailResultado = null;
   if (d.validar) {
-    const vr = validarCorrecao(e.relatorio, e.texto);
-    if (!vr.ok) return falharSemResiduos(400, 'O espelho OAB/FGV está inconsistente: ' + vr.erros.join(' '));
-    if (Math.abs(Number(vr.detalhes.nota) - e.nota) > 0.01) return falharSemResiduos(400, 'A nota informada deve ser igual à NOTA SUGERIDA e à soma do espelho (' + String(vr.detalhes.nota).replace('.', ',') + '/5).');
-    if (e.recurso && e.recurso.status === 'pendente') {
+    if (!recursoPendente) {
+      const vr = validarCorrecao(e.relatorio, e.texto);
+      if (!vr.ok) return falharSemResiduos(400, 'O espelho OAB/FGV está inconsistente: ' + vr.erros.join(' '));
+      if (Math.abs(Number(vr.detalhes.nota) - e.nota) > 0.01) return falharSemResiduos(400, 'A nota informada deve ser igual à NOTA SUGERIDA e à soma do espelho (' + String(vr.detalhes.nota).replace('.', ',') + '/5).');
+    }
+    if (recursoPendente) {
       const resultado = String(d.resultadoRecurso || '').trim();
       const decisao = String(d.decisaoRecurso || '').trim();
-      if (!['Deferido', 'Deferido parcialmente', 'Indeferido'].includes(resultado) || decisao.length < 30) return falharSemResiduos(400, 'Para concluir a recorreção, informe o resultado do recurso e uma decisão fundamentada com ao menos 30 caracteres.');
-      e.recurso.status = 'decidido'; e.recurso.resultado = resultado; e.recurso.decisao = decisao; e.recurso.decididoEm = Date.now(); e.recurso.decididoPor = sess.usuario; e.recurso.notaAnterior = notaAnterior == null ? null : notaAnterior; e.recurso.notaAposRecurso = e.nota;
+      const resultadosValidos = ['Aceito', 'Aceito parcialmente', 'Não aceito', 'Deferido', 'Deferido parcialmente', 'Indeferido'];
+      if (!resultadosValidos.includes(resultado) || decisao.length < 30) return falharSemResiduos(400, 'Para concluir o recurso, informe se foi aceito e uma justificativa com ao menos 30 caracteres.');
+      const resultadoAluno = { 'Deferido': 'Aceito', 'Deferido parcialmente': 'Aceito parcialmente', 'Indeferido': 'Não aceito' }[resultado] || resultado;
+      const notaRecorrida = Number(e.recurso.notaRecorrida != null ? e.recurso.notaRecorrida : notaAnterior);
+      if (Number.isFinite(notaRecorrida) && e.nota + 0.001 < notaRecorrida) return falharSemResiduos(400, 'A nota após o recurso não pode ser menor que a nota recorrida.');
+      if (resultadoAluno === 'Não aceito' && Number.isFinite(notaRecorrida) && Math.abs(e.nota - notaRecorrida) > 0.01) return falharSemResiduos(400, 'Quando o recurso não é aceito, a nota deve permanecer igual à nota recorrida (' + String(notaRecorrida).replace('.', ',') + '/5).');
+      e.recurso.status = 'decidido'; e.recurso.resultado = resultadoAluno; e.recurso.decisao = decisao; e.recurso.decididoEm = Date.now(); e.recurso.decididoPor = sess.usuario; e.recurso.confirmadoPeloProfessor = true; e.recurso.notaAnterior = notaRecorrida == null ? null : notaRecorrida; e.recurso.notaAposRecurso = e.nota;
     }
     let correcaoConfirmada = false;
     try {
-      const email = await validarEEnviarCorrecao(sess, p, e, String(d.matricula), false);
+      const email = recursoPendente ? await persistirEEnviarDecisaoRecurso(p, e, String(d.matricula)) : await validarEEnviarCorrecao(sess, p, e, String(d.matricula), false);
       emailResultado = email;
       correcaoConfirmada = true;
-      e.revisaoHumana.notaAnterior = notaAnterior == null ? null : notaAnterior;
-      e.emailCorrecaoEnviado = !!(email && email.ok);
+      if (!recursoPendente) {
+        e.revisaoHumana.notaAnterior = notaAnterior == null ? null : notaAnterior;
+        e.emailCorrecaoEnviado = !!(email && email.ok);
+      }
       await salvarDbCritico();
     } catch (err) {
       if (!correcaoConfirmada) return falharSemResiduos(503, err.message || 'A validação não pôde ser confirmada na persistência remota. Tente novamente.');
@@ -2634,7 +2684,7 @@ async function entregaValidar(req, res) {
   }
   const motivoEmail = emailResultado && !emailResultado.ok ? String(emailResultado.motivo || '') : '';
   const avisoEmail = motivoEmail === 'sem-email-verificado' ? 'O aluno não possui e-mail verificado. O PDF está disponível no sistema.' : (motivoEmail ? 'A correção foi salva, mas o e-mail com o PDF não foi enviado.' : '');
-  json(res, 200, { ok: true, validado: !!e.validado, emailEnviado: !!(emailResultado && emailResultado.ok), pdfAnexado: !!(emailResultado && emailResultado.ok), avisoEmail });
+  json(res, 200, { ok: true, validado: !!e.validado, recursoDecidido: recursoPendente, emailEnviado: !!(emailResultado && emailResultado.ok), pdfAnexado: !recursoPendente && !!(emailResultado && emailResultado.ok), avisoEmail });
 }
 
 async function entregaPreviaPdf(req, res) {
@@ -2753,6 +2803,43 @@ async function entregaCorrigirTodasStatus(req, res, id) {
   json(res, 200, { ok: true, job });
 }
 
+function professoresResponsaveisPeca(p) {
+  return Object.keys(db.professores || {}).filter(login => podeAcessarPeca(login, p));
+}
+async function avisosProfessorListar(req, res) {
+  const sess = sessaoDe(req); if (!sess) return json(res, 401, { erro: 'SESSAO' }); if (sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
+  const avisos = (db.avisosProfessores || []).filter(a => Array.isArray(a.professores) && a.professores.includes(sess.usuario) && !(a.lidosPor || []).includes(sess.usuario)).sort((a, b) => Number(b.criadoEm) - Number(a.criadoEm)).slice(0, 50).map(a => ({ id: a.id, tipo: a.tipo, titulo: a.titulo, mensagem: a.mensagem, pecaId: a.pecaId, matricula: a.matricula, criadoEm: a.criadoEm }));
+  json(res, 200, { ok: true, avisos });
+}
+async function avisoProfessorMarcarLido(req, res) {
+  const sess = sessaoDe(req); if (!sess) return json(res, 401, { erro: 'SESSAO' }); if (sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
+  let d; try { d = await lerJson(req, 5000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
+  const aviso = (db.avisosProfessores || []).find(a => a.id === String(d.id || '') && Array.isArray(a.professores) && a.professores.includes(sess.usuario));
+  if (!aviso) return json(res, 404, { erro: 'Aviso não encontrado.' });
+  aviso.lidosPor = Array.from(new Set([...(aviso.lidosPor || []), sess.usuario]));
+  try { await salvarDbCritico(); } catch { return json(res, 503, { erro: 'Não foi possível marcar o aviso como lido.' }); }
+  json(res, 200, { ok: true });
+}
+async function notificarProfessoresRecurso(p, e, matricula, aviso) {
+  const aluno = db.alunos[String(matricula)] || {};
+  const turma = (db.turmas || {})[p.turmaId] || {};
+  const destinatarios = aviso.professores.map(login => ({ login, professor: professorDe(login) })).filter(x => x.professor && x.professor.emailAviso);
+  const assunto = 'Novo recurso apresentado — Peça ' + rodadaDaPeca(p) + ' — ' + (aluno.nome || matricula);
+  const html = '<p>Um novo recurso foi apresentado no Laboratório de Peças Penais.</p>'
+    + '<p><b>Aluno:</b> ' + escHtml(aluno.nome || '') + ' (' + escHtml(matricula) + ')<br>'
+    + '<b>Turma:</b> ' + escHtml(turma.nome || p.disc || '-') + '<br>'
+    + '<b>Peça:</b> ' + rodadaDaPeca(p) + ' — ' + escHtml(p.nomePeca || '') + '<br>'
+    + '<b>Nota recorrida:</b> ' + Number(e.recurso.notaRecorrida || 0).toFixed(2).replace('.', ',') + '/5</p>'
+    + '<p>Acesse <b>Peças propostas → Recursos pendentes</b> para analisar. O aviso também permanecerá no painel até ser marcado como lido.</p>';
+  const resultados = await Promise.all(destinatarios.map(async x => {
+    const envio = await enviarEmail(x.professor.emailAviso, assunto, html);
+    return { professor: x.login, ok: !!envio.ok, motivo: envio.ok ? '' : String(envio.motivo || 'falha-no-envio').slice(0, 200), enviadoEm: Date.now() };
+  }));
+  aviso.emails = resultados;
+  aviso.emailConfiguradoPara = destinatarios.length;
+  aviso.emailEnviadoPara = resultados.filter(x => x.ok).length;
+  try { await salvarDbCritico(); } catch { salvarDb(); }
+}
 async function recursoAluno(req, res) {
   const sess = sessaoDe(req); if (!sess) return json(res, 401, { erro: 'SESSAO' });
   const ctx = alunoDaSessao(sess); if (!ctx || ctx.virtual) return json(res, 403, { erro: 'Somente alunos podem apresentar recurso.' });
@@ -2763,8 +2850,12 @@ async function recursoAluno(req, res) {
   const motivo = String(d.motivo || '').trim();
   if (motivo.length < 80 || motivo.length > 4000) return json(res, 400, { erro: 'Explique objetivamente os pontos contestados e os motivos do recurso em 80 a 4.000 caracteres.' });
   e.recurso = { status: 'pendente', motivo, criadoEm: Date.now(), notaRecorrida: e.nota, relatorioRecorrido: e.relatorio };
-  try { await salvarDbCritico(); } catch (err) { delete e.recurso; return json(res, 503, { erro: 'O recurso não pôde ser registrado. Tente novamente.' }); }
-  json(res, 200, { ok: true, recurso: { status: 'pendente', criadoEm: e.recurso.criadoEm } });
+  const aviso = { id: crypto.randomUUID(), tipo: 'recurso', titulo: 'Novo recurso apresentado', mensagem: (ctx.aluno.nome || ctx.id) + ' apresentou recurso da Peça ' + rodadaDaPeca(p) + ' — ' + p.nomePeca + '.', pecaId: p.id, matricula: ctx.id, criadoEm: e.recurso.criadoEm, professores: professoresResponsaveisPeca(p), lidosPor: [] };
+  db.avisosProfessores.unshift(aviso);
+  if (db.avisosProfessores.length > 500) db.avisosProfessores.length = 500;
+  try { await salvarDbCritico(); } catch (err) { delete e.recurso; db.avisosProfessores = db.avisosProfessores.filter(a => a.id !== aviso.id); return json(res, 503, { erro: 'O recurso não pôde ser registrado. Tente novamente.' }); }
+  await notificarProfessoresRecurso(p, e, ctx.id, aviso);
+  json(res, 200, { ok: true, recurso: { status: 'pendente', criadoEm: e.recurso.criadoEm }, professoresAvisados: aviso.professores.length, emailsEnviados: aviso.emailEnviadoPara || 0 });
 }
 async function recursosListar(req, res) {
   const sess = sessaoDe(req); if (!sess) return json(res, 401, { erro: 'SESSAO' }); if (sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
@@ -2786,41 +2877,34 @@ async function recursoAnalisarIA(req, res) {
   if (!podeAcessarPeca(sess.usuario, p)) return json(res, 403, { erro: 'Sem acesso a esta peça.' });
   const original = e.snapshotPeca || fotografiaPeca(p, { legado: true });
   const base = Object.assign({}, original, { nomePeca: p.nomePeca || original.nomePeca, disc: p.disc || original.disc, gab: p.gab, versaoGabarito: p.versao || 1 });
-  const sistema = 'Você auxilia um professor de prática penal na análise de recurso acadêmico contra correção de peça. Sua análise é estritamente consultiva e não substitui a decisão humana. Confronte cada razão do aluno com o texto efetivamente entregue, o gabarito e o espelho original. Não presuma fatos nem redija peça para o aluno. Entregue dados completos para que o professor apenas revise e valide, sem precisar redigir. Responda em português do Brasil EXATAMENTE nesta ordem: ## Síntese objetiva do recurso; ## Análise de cada ponto contestado; ## Conferência do espelho e da pontuação; RESULTADO RECOMENDADO: DEFERIDO, DEFERIDO PARCIALMENTE ou INDEFERIDO; ## Impacto sugerido na nota; ## Fundamentação sugerida ao professor (texto pronto, objetivo e individualizado da decisão acadêmica); ## Fontes oficiais consultadas; ## Espelho revisado proposto; depois deste último título, reproduza integralmente o relatório final no formato OAB/FGV exigido para as correções, com todas as seções, tabela item a item, soma e NOTA SUGERIDA coerentes. Se o recurso for indeferido, preserve o espelho e a nota original. Se recomendar mudança, altere exatamente os itens afetados e recalcule a nota. Verifique citações jurídicas em fontes oficiais quando necessário.';
+  const sistema = 'Você auxilia um professor de prática penal na análise de recurso acadêmico contra correção de peça. Sua análise é estritamente consultiva e não substitui a decisão humana. Confronte cada razão do aluno com o texto efetivamente entregue, o gabarito e o espelho original. Não presuma fatos, não redija a peça para o aluno e não produza um novo espelho de correção. Analise somente os pontos contestados. Responda em português do Brasil EXATAMENTE nesta ordem: RESULTADO RECOMENDADO: ACEITO, ACEITO PARCIALMENTE ou NÃO ACEITO; NOVA NOTA: X,XX/5; JUSTIFICATIVA AO ALUNO: texto pronto, objetivo, individualizado e respeitoso, explicando por que o recurso foi aceito ou não; ## Análise técnica para o professor; ## Fontes oficiais consultadas. Se o recurso não for aceito, mantenha exatamente a nota recorrida. Se for aceito total ou parcialmente, recalcule apenas o impacto dos pontos contestados. Um recurso nunca pode reduzir a nota anterior. Verifique citações jurídicas em fontes oficiais quando necessário.';
   const usuario = '<gabarito_atual_corrigido versao="' + (base.versaoGabarito || 1) + '">\n' + documentoIA(base.gab, 30000) + '\n</gabarito_atual_corrigido>\n<peca_entregue>\n' + documentoIA(e.texto, 60000) + '\n</peca_entregue>\n<espelho_original>\n' + documentoIA(e.recurso.relatorioRecorrido || e.relatorio, 30000) + '\n</espelho_original>\n<nota_recorrida>' + documentoIA(String(e.recurso.notaRecorrida), 20) + '</nota_recorrida>\n<razoes_do_recurso>\n' + documentoIA(e.recurso.motivo, 5000) + '\n</razoes_do_recurso>\nAnalise apenas os pontos contestados usando obrigatoriamente o gabarito ATUAL corrigido pelo professor e apresente recomendação consultiva detalhada.';
-  let r = await iaTexto(sistema, usuario, 12000, true, sess);
+  let r = await iaTexto(sistema, usuario, 8000, true, sess);
   if (!r.ok) return erroIA(res, r);
-  let texto = garantirLinksFontes(String(r.texto || '').trim(), true);
-  let partes = texto.split(/^##\s+Espelho revisado proposto\s*$/mi);
-  if (partes.length < 2) {
-    r = await iaTexto(sistema, usuario + '\n\nA resposta anterior não respeitou o contrato porque faltou o marcador ## Espelho revisado proposto. Refaça integralmente, preserve a análise do mérito e inclua o marcador seguido do espelho OAB/FGV completo.', 12000, true, sess);
+  let analise = garantirLinksFontes(String(r.texto || '').trim(), true);
+  const extrairCampos = texto => {
+    const resultadoMatch = texto.match(/RESULTADO\s+RECOMENDADO\s*:\s*(ACEITO\s+PARCIALMENTE|N[AÃ]O\s+ACEITO|ACEITO)/i);
+    const notaMatch = texto.match(/NOVA\s+NOTA\s*:\s*(\d+(?:[.,]\d+)?)\s*\/\s*5/i);
+    const justificativaMatch = texto.match(/JUSTIFICATIVA\s+AO\s+ALUNO\s*:\s*([\s\S]*?)(?=^##\s+|\s*$)/mi);
+    return { resultado: String(resultadoMatch && resultadoMatch[1] || '').toUpperCase(), nota: notaMatch ? parseFloat(notaMatch[1].replace(',', '.')) : null, justificativa: String(justificativaMatch && justificativaMatch[1] || '').replace(/^[-*]\s*/gm, '').trim() };
+  };
+  let campos = extrairCampos(analise);
+  if (!campos.resultado || campos.nota == null || campos.nota < 0 || campos.nota > 5 || campos.justificativa.length < 30) {
+    const reparo = '<analise_recurso>\n' + documentoIA(analise, 20000) + '\n</analise_recurso>\nReorganize sem alterar o mérito. Retorne somente: RESULTADO RECOMENDADO: ACEITO, ACEITO PARCIALMENTE ou NÃO ACEITO; NOVA NOTA: X,XX/5; JUSTIFICATIVA AO ALUNO: texto completo; ## Análise técnica para o professor; ## Fontes oficiais consultadas.';
+    r = await iaTexto('Você apenas reorganiza uma análise de recurso já concluída. Não altere o resultado, a nota, os fatos nem os fundamentos.', reparo, 8000, false, sess, { model: MODELO_REPARO });
     if (!r.ok) return erroIA(res, r);
-    texto = garantirLinksFontes(String(r.texto || '').trim(), true);
-    partes = texto.split(/^##\s+Espelho revisado proposto\s*$/mi);
+    analise = garantirLinksFontes(String(r.texto || '').trim(), true);
+    campos = extrairCampos(analise);
   }
-  let relatorio = normalizarPenalidadesCorrecao(partes.slice(1).join('\n').trim());
-  let vr = validarCorrecao(relatorio, e.texto);
-  if (partes.length >= 2 && !vr.ok) {
-    console.warn('[RECURSO IA] Espelho proposto inválido; iniciando reparo estrutural: ' + vr.erros.join(' '));
-    const reparo = '<relatorio_revisado_alta_capacidade>\n' + documentoIA(relatorio, 30000) + '\n</relatorio_revisado_alta_capacidade>\n<falhas_estruturais>\n' + documentoIA(vr.erros.join(' '), 4000) + '\n</falhas_estruturais>\nReorganize sem alterar o mérito do recurso, os pontos concedidos em cada critério nem os fundamentos jurídicos.';
-    r = await iaTexto(SISTEMA_REPARO_CORRECAO, reparo, 8000, false, sess, { model: MODELO_REPARO });
-    if (!r.ok) return erroIA(res, r);
-    relatorio = normalizarPenalidadesCorrecao(limparCorrecaoIA(garantirLinksFontes(String(r.texto || '').trim(), true)));
-    vr = validarCorrecao(relatorio, e.texto);
-  }
-  if (partes.length < 2 || !vr.ok) {
-    console.error('[RECURSO IA] Espelho permaneceu inválido após reparo: ' + vr.erros.join(' '));
-    return json(res, 502, { erro: 'A análise foi bloqueada porque o espelho revisado ficou inconsistente. Tente novamente.' });
-  }
-  const analise = partes[0].trim();
-  const achouResultado = analise.match(/RESULTADO\s+RECOMENDADO\s*:\s*(DEFERIDO\s+PARCIALMENTE|DEFERIDO|INDEFERIDO)/i);
-  const mapaResultado = { 'DEFERIDO': 'Deferido', 'DEFERIDO PARCIALMENTE': 'Deferido parcialmente', 'INDEFERIDO': 'Indeferido' };
-  const resultadoSugerido = mapaResultado[String(achouResultado && achouResultado[1] || '').toUpperCase()] || 'Indeferido';
-  const trechoDecisao = (analise.match(/^##\s+Fundamentação sugerida ao professor[^\n]*\n([\s\S]*?)(?=^##\s+|\s*$)/mi) || [null, ''])[1].trim();
-  const decisaoSugerida = trechoDecisao.replace(/^[-*]\s*/gm, '').trim() || 'As razões do recurso foram confrontadas com a peça entregue, o gabarito e o espelho de correção, conforme a análise consultiva acima.';
-  e.recurso.sugestaoIA = { resultado: resultadoSugerido, decisao: decisaoSugerida, nota: vr.detalhes.nota, relatorio, analise, geradaEm: Date.now(), modelo: MODELO_POTENTE };
+  if (!campos.resultado || campos.nota == null || campos.nota < 0 || campos.nota > 5 || campos.justificativa.length < 30) return json(res, 502, { erro: 'A análise do recurso veio incompleta. Tente novamente.' });
+  const mapaResultado = { 'ACEITO': 'Aceito', 'ACEITO PARCIALMENTE': 'Aceito parcialmente', 'NÃO ACEITO': 'Não aceito', 'NAO ACEITO': 'Não aceito' };
+  const resultadoSugerido = mapaResultado[campos.resultado] || 'Não aceito';
+  const notaRecorrida = Math.max(0, Math.min(5, Number(e.recurso.notaRecorrida != null ? e.recurso.notaRecorrida : e.nota) || 0));
+  const notaSugerida = resultadoSugerido === 'Não aceito' ? notaRecorrida : Math.max(notaRecorrida, Math.round(campos.nota * 100) / 100);
+  const decisaoSugerida = campos.justificativa;
+  e.recurso.sugestaoIA = { resultado: resultadoSugerido, decisao: decisaoSugerida, nota: notaSugerida, analise, geradaEm: Date.now(), modelo: MODELO_POTENTE };
   try { await salvarDbCritico(); } catch (err) { return json(res, 503, { erro: 'A análise foi gerada, mas não pôde ser salva. Tente novamente.' }); }
-  json(res, 200, { ok: true, analise, resultadoSugerido, decisaoSugerida, notaSugerida: vr.detalhes.nota, relatorio, aviso: 'Análise consultiva; a decisão final é do professor.' });
+  json(res, 200, { ok: true, analise, resultadoSugerido, decisaoSugerida, notaSugerida, aviso: 'Análise consultiva; a decisão final é do professor. O espelho original será preservado.' });
 }
 // Professor: renovar prazo de uma peça
 async function pecaRenovarPrazo(req, res) {
@@ -3159,6 +3243,7 @@ function removerAlunosCompletamente(matriculas) {
     for (const mat of mats) if (entregas && Object.prototype.hasOwnProperty.call(entregas, mat)) { delete entregas[mat]; entregasApagadas++; }
   }
   for (const peca of Object.values(db.pecas || {})) for (const mat of mats) if (peca.liberados) delete peca.liberados[mat];
+  db.avisosProfessores = (db.avisosProfessores || []).filter(a => !mats.has(String(a.matricula || '')));
   const sessoesEncerradas = invalidarSessoesDosAlunos(mats);
   return { alunosApagados, entregasApagadas, sessoesEncerradas };
 }
@@ -3180,6 +3265,7 @@ function zerarDadosDaTurma(turmaId) {
   let entregasApagadas = 0;
   for (const [pecaId, entregas] of Object.entries(db.entregas || {})) if (pecasDaTurma.has(pecaId)) { entregasApagadas += Object.keys(entregas || {}).length; delete db.entregas[pecaId]; }
   for (const pecaId of pecasDaTurma) delete db.pecas[pecaId];
+  db.avisosProfessores = (db.avisosProfessores || []).filter(a => !pecasDaTurma.has(a.pecaId));
   let alunosApagados = 0, sessoesEncerradas = 0;
   for (const matricula of matriculas) {
     const r = removerAlunoDaTurma(matricula, turmaId);
@@ -3216,7 +3302,7 @@ async function zerarSistema(req, res) {
   for (const sessao of sessoes.values()) if (sessao.tipo === 'aluno') matriculas.add(sessao.usuario);
   const resultado = { alunosApagados: totalAlunos, pecasApagadas: Object.keys(db.pecas || {}).length, entregasApagadas: Object.values(db.entregas || {}).reduce((n, entregas) => n + Object.keys(entregas || {}).length, 0) };
   resultado.sessoesEncerradas = invalidarSessoesDosAlunos(matriculas);
-  db.alunos = {}; db.pecas = {}; db.entregas = {}; db.pesquisaPedagogica = { respostas: {} }; db.pesquisaPosPeca2 = { respostas: {} }; db.gabCache = {}; db.proximoNum = 1; salvarDb();
+  db.alunos = {}; db.pecas = {}; db.entregas = {}; db.avisosProfessores = []; db.pesquisaPedagogica = { respostas: {} }; db.pesquisaPosPeca2 = { respostas: {} }; db.gabCache = {}; db.proximoNum = 1; salvarDb();
   json(res, 200, Object.assign({ ok: true, escopo: 'sistema' }, resultado));
 }
 
@@ -3261,6 +3347,8 @@ const server = http.createServer((req, res) => {
   if (req.method === 'POST' && req.url === '/api/admin') return apiAdmin(req, res);
   if (req.method === 'GET' && req.url === '/api/gastos') return gastosListar(req, res);
   if (req.method === 'GET' && req.url === '/api/turmas') return turmasListar(req, res);
+  if (req.method === 'GET' && req.url === '/api/avisos-professor') return avisosProfessorListar(req, res);
+  if (req.method === 'POST' && req.url === '/api/avisos-professor/lido') return avisoProfessorMarcarLido(req, res);
   if (req.method === 'POST' && req.url === '/api/turmas/salvar') return turmaSalvar(req, res);
   if (req.method === 'POST' && req.url === '/api/turmas/excluir') return turmaExcluir(req, res);
   if (req.method === 'POST' && req.url === '/api/aluno/turma') return alunoTurma(req, res);
