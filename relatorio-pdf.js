@@ -98,6 +98,7 @@ function quebrarTexto(texto, largura, tamanho) {
 }
 
 function gerarPdfEspelho(dados) {
+  const parecerInicial = dados.tipoDocumento === 'parecer-inicial';
   const paginas = [[]];
   let pagina = 0, y = 96;
   const corAzul = [0.075, 0.188, 0.337], corDourada = [0.78, 0.59, 0.22], corCinza = [0.35, 0.38, 0.42];
@@ -109,8 +110,8 @@ function gerarPdfEspelho(dados) {
   }
   function cabecalho() {
     retangulo(0, 0, LARGURA, 58, corAzul);
-    cmd(`BT /F2 14 Tf 1 1 1 rg ${MARGEM} ${ALTURA - 27} Td (${escPdf('ESPELHO DE CORREÇÃO DO ESTÁGIO')}) Tj ET`);
-    cmd(`BT /F1 8.5 Tf 1 1 1 rg ${MARGEM} ${ALTURA - 43} Td (${escPdf('Formato OAB/FGV adaptado - escala da disciplina: 0 a 5')}) Tj ET`);
+    cmd(`BT /F2 14 Tf 1 1 1 rg ${MARGEM} ${ALTURA - 27} Td (${escPdf(parecerInicial ? 'PARECER DE PRÉ-CORREÇÃO' : 'ESPELHO DE CORREÇÃO DO ESTÁGIO')}) Tj ET`);
+    cmd(`BT /F1 8.5 Tf 1 1 1 rg ${MARGEM} ${ALTURA - 43} Td (${escPdf(parecerInicial ? 'Triagem pedagógica automática - sem nota ou solução-modelo' : 'Formato OAB/FGV adaptado - escala da disciplina: 0 a 5')}) Tj ET`);
     retangulo(MARGEM, 63, LARGURA - 2 * MARGEM, 2, corDourada);
   }
   function novaPagina() { pagina++; paginas.push([]); y = 82; cabecalho(); }
@@ -172,10 +173,10 @@ function gerarPdfEspelho(dados) {
     y += 7;
   }
   cabecalho();
-  linhaTexto('Identificação da avaliação', { negrito: true, tamanho: 12, cor: corAzul, depois: 4 });
+  linhaTexto(parecerInicial ? 'Identificação do parecer' : 'Identificação da avaliação', { negrito: true, tamanho: 12, cor: corAzul, depois: 4 });
   const campos = [
     ['Aluno(a)', dados.aluno || '-'], ['Matrícula', dados.matricula || '-'], ['Turma', dados.turma || '-'],
-    ['Rodada', 'Peça ' + (dados.rodada || '-')], ['Peça processual', dados.nomePeca || '-'], ['Data da correção', dados.data || '-']
+    ['Rodada', 'Peça ' + (dados.rodada || '-')], ['Peça processual', dados.nomePeca || '-'], [parecerInicial ? 'Data da pré-correção' : 'Data da correção', dados.data || '-']
   ];
   for (let i = 0; i < campos.length; i += 2) {
     espaco(35);
@@ -188,8 +189,14 @@ function gerarPdfEspelho(dados) {
     y += 36;
   }
   espaco(58); retangulo(MARGEM, y, LARGURA - 2 * MARGEM, 48, corAzul);
-  cmd(`BT /F1 9 Tf 1 1 1 rg ${MARGEM + 14} ${ALTURA - y - 18} Td (${escPdf('NOTA FINAL')}) Tj ET`);
-  cmd(`BT /F2 22 Tf 1 1 1 rg ${MARGEM + 14} ${ALTURA - y - 40} Td (${escPdf(numeroPt(dados.nota) + ' / 5')}) Tj ET`); y += 58;
+  if (parecerInicial) {
+    cmd(`BT /F2 11 Tf 1 1 1 rg ${MARGEM + 14} ${ALTURA - y - 19} Td (${escPdf('TRIAGEM PEDAGÓGICA - SEM NOTA')}) Tj ET`);
+    cmd(`BT /F1 8.5 Tf 1 1 1 rg ${MARGEM + 14} ${ALTURA - y - 36} Td (${escPdf('Use os apontamentos para revisar sua peça antes de decidir o envio ao professor.')}) Tj ET`);
+  } else {
+    cmd(`BT /F1 9 Tf 1 1 1 rg ${MARGEM + 14} ${ALTURA - y - 18} Td (${escPdf('NOTA FINAL')}) Tj ET`);
+    cmd(`BT /F2 22 Tf 1 1 1 rg ${MARGEM + 14} ${ALTURA - y - 40} Td (${escPdf(numeroPt(dados.nota) + ' / 5')}) Tj ET`);
+  }
+  y += 58;
 
   if (dados.recurso) {
     tituloSecao('Resultado do recurso - ' + (dados.recurso.resultado || 'Decidido'));
@@ -234,11 +241,21 @@ function gerarPdfEspelho(dados) {
   }
 
   for (let i = 0; i < paginas.length; i++) {
-    const rodape = `Laboratório de Peças Penais - Espelho de correção | Página ${i + 1} de ${paginas.length}`;
+    const rodape = parecerInicial
+      ? `Laboratório de Peças Penais - Parecer de pré-correção | Página ${i + 1} de ${paginas.length}`
+      : `Laboratório de Peças Penais - Espelho de correção | Página ${i + 1} de ${paginas.length}`;
     paginas[i].push(`0.72 0.73 0.75 RG 0.5 w ${MARGEM} 38 m ${LARGURA - MARGEM} 38 l S`);
     paginas[i].push(`BT /F1 7.5 Tf 0.4 0.42 0.45 rg ${MARGEM} 24 Td (${escPdf(rodape)}) Tj ET`);
   }
   return montarPdf(paginas);
+}
+
+function gerarPdfParecerInicial(dados) {
+  return gerarPdfEspelho(Object.assign({}, dados, {
+    tipoDocumento: 'parecer-inicial',
+    relatorio: dados.parecer || dados.relatorio || '',
+    nota: null
+  }));
 }
 
 function montarPdf(paginas) {
@@ -304,4 +321,4 @@ function relatorioParaHtml(dados) {
   return '<div style="font-family:Arial,sans-serif;color:#242a32;line-height:1.5"><div style="background:#133056;color:#fff;padding:18px 22px;border-bottom:5px solid #c89a38"><h1 style="font-size:20px;margin:0">Espelho de correção do Estágio</h1><p style="margin:5px 0 0">Formato OAB/FGV adaptado · escala da disciplina: 0 a 5 · Peça ' + escHtml(dados.rodada) + ' - ' + escHtml(dados.nomePeca) + '</p></div><div style="padding:18px 22px"><p><b>Aluno(a):</b> ' + escHtml(dados.aluno) + ' &nbsp; <b>Matrícula:</b> ' + escHtml(dados.matricula) + '<br><b>Turma:</b> ' + escHtml(dados.turma) + '</p><div style="display:inline-block;background:#133056;color:#fff;padding:10px 18px;border-radius:5px;font-size:18px"><b>Nota final: ' + escHtml(numeroPt(dados.nota)) + '/5</b></div>' + recurso + corpo + '</div></div>';
 }
 
-module.exports = { gerarPdfEspelho, relatorioParaHtml, linhasEspelho, secoesRelatorio, extrairTabelaMarkdown };
+module.exports = { gerarPdfEspelho, gerarPdfParecerInicial, relatorioParaHtml, linhasEspelho, secoesRelatorio, extrairTabelaMarkdown };

@@ -1,7 +1,7 @@
 'use strict';
 const assert = require('assert');
 const fs = require('fs');
-const { gerarPdfEspelho, relatorioParaHtml, linhasEspelho, extrairTabelaMarkdown } = require('../relatorio-pdf');
+const { gerarPdfEspelho, gerarPdfParecerInicial, relatorioParaHtml, linhasEspelho, extrairTabelaMarkdown } = require('../relatorio-pdf');
 
 const relatorio = `## Acertos
 - O cabimento, o endereçamento e a tese principal foram apresentados de acordo com o padrão de resposta.
@@ -50,5 +50,13 @@ assert.match(html, /formato OAB\/FGV/i);
 assert.match(html, /Resultado do recurso/i);
 assert.match(html, /<th[^>]*>Falha identificada<\/th>/i, 'rastreabilidade deve aparecer como tabela real no relatório HTML');
 assert.doesNotMatch(html, /\|\s*Falha identificada\s*\|/, 'marcadores markdown da tabela não podem aparecer para o aluno');
+const pdfParecer = gerarPdfParecerInicial({ aluno: 'Maria da Silva', matricula: '20260001', turma: 'Estágio II - Turma A', rodada: 1, nomePeca: 'Apelação Criminal', data: '11/08/2026 10:00:00', parecer: '## Visão geral\n- Confira a coerência entre os fatos narrados e os fundamentos apresentados.\n## Próximo passo\n- Revise os pontos indicados antes de decidir o envio.' });
+const parecerLatin1 = pdfParecer.toString('latin1');
+assert.equal(pdfParecer.subarray(0, 8).toString('ascii'), '%PDF-1.4');
+assert.ok(pdfParecer.length > 1500, 'PDF deve conter o parecer de pré-correção');
+assert.match(parecerLatin1, /PARECER DE PRÉ-CORREÇÃO/i, 'parecer precisa ter título próprio');
+assert.match(parecerLatin1, /TRIAGEM PEDAGÓGICA - SEM NOTA/i, 'parecer precisa declarar que não atribui nota');
+assert.doesNotMatch(parecerLatin1, /NOTA FINAL/i, 'pré-correção não pode exibir nota final');
 if (process.env.PDF_AMOSTRA) fs.writeFileSync(process.env.PDF_AMOSTRA, pdf);
+if (process.env.PDF_PARECER_AMOSTRA) fs.writeFileSync(process.env.PDF_PARECER_AMOSTRA, pdfParecer);
 console.log('OK: espelho OAB/FGV em PDF e HTML validado.');

@@ -79,5 +79,13 @@ Faça uma leitura final em voz alta e confira, item por item, se cada afirmaçã
 assert.deepStrictEqual(validarParecerInicial(parecerValido), { ok: true, erros: [] });
 assert.strictEqual(validarParecerInicial(parecerValido + '\nNota: 9/10').ok, false);
 assert.strictEqual(validarParecerInicial(parecerValido + '\nO gabarito correto é outro.').ok, false);
+assert.strictEqual(validarParecerInicial(parecerValido.replace(
+  'Revise a coerência entre os fatos narrados, a fase processual e cada fundamento utilizado, sem completar a resposta automaticamente.',
+  'A medida processual adequada é Apelação Criminal. Use o art. 593 do CPP e peça o provimento para absolvição.'
+)).ok, false, 'a pré-correção não pode revelar a peça, o fundamento nem o pedido prontos');
+assert.strictEqual(validarParecerInicial(parecerValido.replace(
+  'Revise a coerência entre os fatos narrados, a fase processual e cada fundamento utilizado, sem completar a resposta automaticamente.',
+  'Confira se a medida escolhida corresponde à fase processual e se cada fundamento possui apoio no enunciado.'
+)).ok, true, 'pergunta de autocorreção sem solução deve permanecer permitida');
 
 console.log('✓ importação de arquivo e limites do parecer inicial validados');

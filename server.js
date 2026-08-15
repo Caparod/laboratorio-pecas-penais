@@ -15,6 +15,7 @@ const { cabecalhosSupabase } = require('./supabase-auth');
 const MODELO_POTENTE = process.env.MODELO_POTENTE || 'claude-opus-4-8';
 // Usado somente para reorganizar respostas já produzidas pelo modelo principal.
 const MODELO_REPARO = process.env.MODELO_REPARO || 'claude-sonnet-5';
+const ANTHROPIC_API_URL = process.env.ANTHROPIC_API_URL || 'https://api.anthropic.com/v1/messages';
 
 const OWNER_LOGIN = process.env.PROF_LOGIN || '500686';
 const CONTAS_DEMO_ATIVAS = process.env.CRIAR_CONTAS_DEMO === 'true';
@@ -653,6 +654,8 @@ async function verificarServicoEmail() {
 function codigo6() { return String(crypto.randomInt(100000, 1000000)); }
 function senhaTemporaria() { return crypto.randomBytes(12).toString('base64url') + 'aA1!'; }
 function escHtml(t) { return String(t || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+const RECUPERACAO_SENHA_MS = Math.max(10, Math.min(60, parseInt(process.env.RECUPERACAO_SENHA_MINUTOS || '30', 10) || 30)) * 60000;
+const RESPOSTA_RECUPERACAO = Object.freeze({ ok: true, mensagem: 'Se a matrícula tiver um e-mail confirmado, enviaremos um link de recuperação. Confira também o spam. Se não chegar em alguns minutos, peça ao professor para redefinir seu acesso.' });
 
 const PUBLIC = __dirname; // index.html na raiz do repositório
 const INDEX_PATH = path.join(PUBLIC, 'index.html');
@@ -867,7 +870,7 @@ async function corrigir(req, res) {
     const APRESSAR = 'Encerre imediatamente as buscas e produza AGORA a correção final completa, na estrutura exigida, com o que já foi verificado.';
     for (let volta = 0; volta < 20; volta++) {
       const estourou = (Date.now() - inicioLoop) > 110000;
-      r = await fetchComTimeout('https://api.anthropic.com/v1/messages', {
+      r = await fetchComTimeout(ANTHROPIC_API_URL, {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-api-key': chaveUso, 'anthropic-version': '2023-06-01' },
         body: JSON.stringify({ model: MODELO_POTENTE, max_tokens: 10000, thinking: { type: 'disabled' }, system: SISTEMA_CORRECAO, tools, messages: mensagens })
@@ -903,7 +906,7 @@ async function corrigir(req, res) {
     if (r && r.ok && !textos.join('').trim()) {
       // Rede de segurança: uma última chamada SEM ferramentas, que sempre produz texto
       try {
-        const rf = await fetchComTimeout('https://api.anthropic.com/v1/messages', {
+        const rf = await fetchComTimeout(ANTHROPIC_API_URL, {
           method: 'POST',
           headers: { 'content-type': 'application/json', 'x-api-key': chaveUso, 'anthropic-version': '2023-06-01' },
           body: JSON.stringify({ model: MODELO_POTENTE, max_tokens: 10000, thinking: { type: 'disabled' }, system: SISTEMA_CORRECAO + ' ATENÇÃO: a busca na web está indisponível nesta correção; na seção de verificação de citações, classifique como SUSPEITA (sem zerar) o que não puder confirmar de memória, e recomende conferência pelo professor.', messages: [{ role: 'user', content: usuario }] })
@@ -958,7 +961,7 @@ async function gerarCaso(req, res) {
   const f2 = peca.ficha || {};
   const usuario = 'PEÇA-ALVO: ' + peca.nome + ' (' + (peca.disc || '') + ')\nFicha da peça — cabimento: ' + (f2.cabimento || '') + ' | prazo: ' + (f2.prazo || '') + ' | endereçamento: ' + (f2.end || '') + '\nNÍVEL DE DIFICULDADE: ' + (nivel || 'INTERMEDIÁRIO') + (ultimaNota != null ? ('\nDesempenho anterior do aluno nesta peça (nota do Estágio, 0 a 5): ' + ultimaNota + ' — calibre a dificuldade: nota baixa, reforce os elementos que induzem à tese correta; nota alta, aumente a complexidade.') : '') + '\nData atual: ' + new Date().toLocaleDateString('pt-BR') + '\nGere um caso INÉDITO agora.';
   try {
-    const r = await fetchComTimeout('https://api.anthropic.com/v1/messages', {
+    const r = await fetchComTimeout(ANTHROPIC_API_URL, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
       body: JSON.stringify({ model: MODELO_POTENTE, max_tokens: 3500, system: SISTEMA_CASO_ESTAGIO, messages: [{ role: 'user', content: usuario }] })
@@ -992,14 +995,72 @@ async function apiLogin(req, res) {
     if (!confereSenha(senha, prof.senha)) { registrarFalhaLogin(chave); return json(res, 401, { erro: 'Login ou senha incorretos.' }); }
     tentativasLogin.delete(chave);
     const token = novaSessao(usuario, 'professor'); definirCookieSessao(req, res, token);
-    return json(res, 200, Object.assign({ token }, dadosSessao({ usuario, tipo: 'professor' })));
+    const resposta = dadosSessao({ usuario, tipo: 'professor' });
+    if (CONTAS_DEMO_ATIVAS || process.env.PERMITIR_TOKEN_BEARER === 'true') resposta.token = token;
+    return json(res, 200, resposta);
   }
   const a = db.alunos[usuario];
   if (!a) { hashSenha(senha, '0000000000000000'); registrarFalhaLogin(chave); return json(res, 401, { erro: 'Login ou senha incorretos.' }); }
   if (!confereSenha(senha, a.senha)) { registrarFalhaLogin(chave); return json(res, 401, { erro: 'Login ou senha incorretos.' }); }
   tentativasLogin.delete(chave);
   const token = novaSessao(usuario, 'aluno'); definirCookieSessao(req, res, token);
-  return json(res, 200, Object.assign({ token }, dadosSessao({ usuario, tipo: 'aluno' })));
+  const resposta = dadosSessao({ usuario, tipo: 'aluno' });
+  if (CONTAS_DEMO_ATIVAS || process.env.PERMITIR_TOKEN_BEARER === 'true') resposta.token = token;
+  return json(res, 200, resposta);
+}
+async function apiEsqueciSenha(req, res) {
+  let d; try { d = await lerJson(req, 5000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
+  const usuario = String(d.usuario || '').trim();
+  const chave = 'recuperar:' + chaveLogin(req, usuario);
+  // A resposta é deliberadamente idêntica para matrículas existentes e inexistentes.
+  if (!usuario || usuario.length > 100 || limitado(chave)) return json(res, 200, RESPOSTA_RECUPERACAO);
+  const a = db.alunos[usuario];
+  const emailValido = a && a.emailVerificado && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(a.email || ''));
+  if (!emailValido || (a.recuperacaoSenhaSolicitadaEm && Date.now() - a.recuperacaoSenhaSolicitadaEm < 60000)) return json(res, 200, RESPOSTA_RECUPERACAO);
+
+  const token = crypto.randomBytes(32).toString('base64url');
+  const tokenHash = hashToken(token);
+  a.recuperacaoSenhaHash = tokenHash;
+  a.recuperacaoSenhaExpiraEm = Date.now() + RECUPERACAO_SENHA_MS;
+  a.recuperacaoSenhaSolicitadaEm = Date.now();
+  salvarDb();
+
+  const link = APP_URL.replace(/\/+$/, '') + '/#redefinir-senha=' + encodeURIComponent(token);
+  // O envio ocorre fora da resposta HTTP para evitar que o tempo revele se a matrícula existe.
+  Promise.resolve(enviarEmail(a.email, 'Recuperação de senha — Laboratório de Peças Penais',
+    '<p>Olá, ' + escHtml(a.nome || '') + '!</p><p>Recebemos uma solicitação para redefinir sua senha.</p><p><a href="' + escHtml(link).replace(/"/g, '&quot;') + '">Criar uma nova senha</a></p><p>O link expira em ' + Math.round(RECUPERACAO_SENHA_MS / 60000) + ' minutos e pode ser usado uma única vez. Se você não fez o pedido, ignore este e-mail.</p>'))
+    .then(resultado => {
+      if (resultado && resultado.ok) return;
+      if (a.recuperacaoSenhaHash === tokenHash) {
+        delete a.recuperacaoSenhaHash; delete a.recuperacaoSenhaExpiraEm;
+        salvarDb();
+      }
+    }).catch(() => {});
+  return json(res, 200, RESPOSTA_RECUPERACAO);
+}
+async function apiRedefinirSenha(req, res) {
+  let d; try { d = await lerJson(req, 5000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
+  const token = String(d.token || '').trim();
+  const nova = String(d.novaSenha || '');
+  if (!/^[A-Za-z0-9_-]{40,100}$/.test(token)) return json(res, 400, { erro: 'Link inválido ou expirado. Solicite uma nova recuperação.' });
+  const tokenHash = hashToken(token);
+  const agora = Date.now();
+  let matricula = '', aluno = null;
+  for (const [mat, a] of Object.entries(db.alunos || {})) {
+    if (a && a.recuperacaoSenhaHash === tokenHash && Number(a.recuperacaoSenhaExpiraEm || 0) >= agora) { matricula = mat; aluno = a; break; }
+  }
+  if (!aluno) return json(res, 400, { erro: 'Link inválido ou expirado. Solicite uma nova recuperação.' });
+  if (nova.length < 8 || nova.length > 128 || nova === matricula) return json(res, 400, { erro: nova === matricula ? 'A nova senha não pode ser igual à matrícula.' : 'A nova senha deve ter entre 8 e 128 caracteres.' });
+  if (confereSenha(nova, aluno.senha)) return json(res, 400, { erro: 'Escolha uma senha diferente da atual.' });
+
+  aluno.senha = hashSenha(nova);
+  aluno.mudouSenha = true;
+  aluno.senhaRedefinidaEm = agora;
+  delete aluno.recuperacaoSenhaHash; delete aluno.recuperacaoSenhaExpiraEm; delete aluno.recuperacaoSenhaSolicitadaEm;
+  invalidarSessoesUsuario(matricula, 'aluno');
+  try { await salvarDbCritico(); }
+  catch (e) { return erroInterno(res, 'REDEFINIR_SENHA', e); }
+  return json(res, 200, { ok: true });
 }
 function dadosSessao(sess) {
   if (!sess) return null;
@@ -1186,7 +1247,7 @@ async function alunoTranscrever(req, res) {
   content.push({ type: 'text', text: 'Transcreva fielmente o manuscrito destas ' + imgs.length + ' foto(s), na ordem.' });
   const model = process.env.MODELO_OCR || 'claude-sonnet-5';
   try {
-    const r = await fetchComTimeout('https://api.anthropic.com/v1/messages', {
+    const r = await fetchComTimeout(ANTHROPIC_API_URL, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
       body: JSON.stringify({ model, max_tokens: 8000, system: SISTEMA_OCR, messages: [{ role: 'user', content }] })
@@ -1305,16 +1366,46 @@ Responda SOMENTE em markdown, com estas seções exatas e nesta ordem:
 ## Pontos de atenção
 ## Próximo passo`;
 
+function respostaParecerInicial(p, ctx, registro, reutilizado) {
+  const complementos = Array.isArray(registro.complementos) ? registro.complementos : [];
+  const parecerCompleto = [registro.parecer].concat(complementos).filter(Boolean).join('\n\n');
+  const turma = (db.turmas && db.turmas[p.turmaId]) || {};
+  const nomeArquivo = 'parecer-pre-correcao-peca-' + rodadaDaPeca(p) + '.pdf';
+  const pdf = gerarPdfParecerInicial({
+    aluno: ctx.aluno.nome || 'Aluno(a)',
+    matricula: ctx.virtual ? 'Modo aluno' : ctx.id,
+    turma: turma.nome || p.disc || '-',
+    rodada: rodadaDaPeca(p),
+    nomePeca: p.nomePeca,
+    data: new Date(registro.geradoEm || Date.now()).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
+    parecer: parecerCompleto
+  });
+  return {
+    ok: true,
+    parecer: registro.parecer,
+    sinaisPrompt: registro.sinaisPrompt || [],
+    robotizacao: registro.robotizacao || null,
+    pdfBase64: pdf.toString('base64'),
+    nomeArquivo,
+    modelo: registro.modelo || MODELO_POTENTE,
+    reutilizado: !!reutilizado,
+    aviso: reutilizado
+      ? 'Parecer já gerado e recuperado com segurança. A revisão final é do professor.'
+      : 'Triagem automática sem solução-modelo e sem avaliação quantitativa. A revisão final é do professor.'
+  };
+}
+
 async function alunoParecerInicial(req, res) {
   const sess = sessaoDe(req);
   if (!sess) return json(res, 401, { erro: 'SESSAO' });
   const ctx = alunoDaSessao(sess);
   if (!ctx) return json(res, 400, { erro: 'TURMA_ATUACAO_INVALIDA', mensagem: 'Selecione uma turma válida para a visão de aluno.' });
-  if (limitado('parecer:' + sess.tipo + ':' + sess.usuario)) return json(res, 429, { erro: 'Aguarde um minuto antes de pedir outro parecer.' });
   let d; try { d = await lerJson(req, 100000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
   const p = db.pecas[String(d.id || '')];
   if (!p || !p.publicada || !alunoPodeAcessarPeca(ctx.aluno, p)) return json(res, 404, { erro: 'Peça não encontrada.' });
   if (pesquisaObrigatoriaPendente(ctx, p)) return json(res, 403, { erro: 'PESQUISA_OBRIGATORIA', mensagem: 'Responda à pesquisa pedagógica antes de iniciar a Peça 2.' });
+  const parecerAnterior = p.parecerInicialResultados && p.parecerInicialResultados[ctx.id];
+  if (parecerAnterior && parecerAnterior.parecer) return json(res, 200, respostaParecerInicial(p, ctx, parecerAnterior, true));
   if (p.parecerInicialPorAluno && p.parecerInicialPorAluno[ctx.id]) {
     return json(res, 409, { erro: 'PARECER_JA_UTILIZADO', mensagem: 'A pré-correção desta peça já foi utilizada. Revise o texto e envie a nova versão diretamente para correção.' });
   }
@@ -1342,22 +1433,13 @@ async function alunoParecerInicial(req, res) {
   const complementos = [];
   if (sinaisPrompt.length) complementos.push('## Alertas técnicos complementares\n- O arquivo contém possível ' + sinaisPrompt.join(', ') + '. Revise e remova qualquer instrução que não faça parte da peça.');
   if (robotizacao && robotizacao.nivel !== 'baixo') complementos.push('## Indícios de robotização para revisar\n- ' + (robotizacao.sinais || []).join('; ') + '. Esses padrões formais não provam autoria por IA; servem para conferir se o texto tem sua voz e demonstra domínio do conteúdo.');
-  const parecerCompleto = [parecer].concat(complementos).filter(Boolean).join('\n\n');
-  const turma = (db.turmas && db.turmas[p.turmaId]) || {};
-  const nomeArquivo = 'parecer-pre-correcao-peca-' + rodadaDaPeca(p) + '.pdf';
-  const pdf = gerarPdfParecerInicial({
-    aluno: ctx.aluno.nome || 'Aluno(a)',
-    matricula: ctx.virtual ? 'Modo aluno' : ctx.id,
-    turma: turma.nome || p.disc || '-',
-    rodada: rodadaDaPeca(p),
-    nomePeca: p.nomePeca,
-    data: new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
-    parecer: parecerCompleto
-  });
+  const registroParecer = { parecer, complementos, sinaisPrompt, robotizacao, geradoEm: Date.now(), modelo: MODELO_POTENTE, textoSha256: crypto.createHash('sha256').update(texto).digest('hex') };
+  p.parecerInicialResultados = p.parecerInicialResultados || {};
+  p.parecerInicialResultados[ctx.id] = registroParecer;
   p.parecerInicialPorAluno = p.parecerInicialPorAluno || {};
-  p.parecerInicialPorAluno[ctx.id] = Date.now();
+  p.parecerInicialPorAluno[ctx.id] = registroParecer.geradoEm;
   try { await salvarDbCritico(); } catch (e) { return json(res, 503, { erro: 'A pré-correção foi concluída, mas não pôde ser registrada. Tente novamente antes de enviar.' }); }
-  json(res, 200, { ok: true, parecer, sinaisPrompt, robotizacao, pdfBase64: pdf.toString('base64'), nomeArquivo, modelo: MODELO_POTENTE, aviso: 'Triagem automática sem solução-modelo e sem avaliação quantitativa. A revisão final é do professor.' });
+  json(res, 200, respostaParecerInicial(p, ctx, registroParecer, false));
 }
 // ===== Gastos: consulta mês a mês (Administrador e Coordenação) =====
 async function gastosListar(req, res) {
@@ -1639,7 +1721,7 @@ async function extrairPdf(req, res) {
     const sistemaExtrai = 'Você recebe o texto bruto de uma lista de alunos (diário de classe, lista de frequência, planilha etc.) e extrai APENAS os pares nome + matrícula de CADA aluno. A matrícula é o número de identificação do aluno (geralmente 7 a 15 dígitos); NÃO confunda com CPF, telefone, datas, notas, frequência, faltas, sala ou totais. Ignore cabeçalhos, rodapés, nome do professor, disciplina e qualquer texto que não seja um aluno. Descarte anotações após o nome como "- Aprovado", "- Cancelado", "- Trancado", "- Rep Nota". Responda SOMENTE com um JSON válido, sem texto antes ou depois, no formato: {"alunos":[{"matricula":"...","nome":"..."}]}. Se não houver alunos, responda {"alunos":[]}.';
     let rIA;
     try {
-      rIA = await fetchComTimeout('https://api.anthropic.com/v1/messages', {
+      rIA = await fetchComTimeout(ANTHROPIC_API_URL, {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
         body: JSON.stringify({ model: process.env.MODELO_CASO || 'claude-haiku-4-5-20251001', max_tokens: 8000, system: sistemaExtrai, messages: [{ role: 'user', content: 'Texto do arquivo:\n\n' + textoPdf }] })
@@ -1710,7 +1792,7 @@ async function gabaritoIA(req, res) {
   try {
     for (let volta = 0; volta < 15; volta++) {
       const estourou = (Date.now() - inicioLoop) > 140000;
-      r = await fetchComTimeout('https://api.anthropic.com/v1/messages', {
+      r = await fetchComTimeout(ANTHROPIC_API_URL, {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
         body: JSON.stringify({ model: MODELO_POTENTE, max_tokens: 6000, system: SISTEMA_GAB, tools, messages: mensagens })
@@ -1737,7 +1819,7 @@ async function gabaritoIA(req, res) {
     const temFontes = /https?:\/\//.test(texto) && /fontes e links/i.test(texto);
     if (!temFontes) {
       try {
-        const rr = await fetchComTimeout('https://api.anthropic.com/v1/messages', {
+        const rr = await fetchComTimeout(ANTHROPIC_API_URL, {
           method: 'POST',
           headers: { 'content-type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
           body: JSON.stringify({ model: MODELO_POTENTE, max_tokens: 6000, system: SISTEMA_GAB,
@@ -1766,7 +1848,7 @@ const TOOL_TJDFT = { name: 'consultar_tjdft', description: 'Pesquisa acórdãos 
 async function chamarAnthropic(body) {
   let ultimo = null;
   for (let tentativa = 0; tentativa < 3; tentativa++) {
-    const r = await fetchComTimeout('https://api.anthropic.com/v1/messages', {
+    const r = await fetchComTimeout(ANTHROPIC_API_URL, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
       body: JSON.stringify(body)
@@ -1993,6 +2075,7 @@ async function validarEAuditarGabarito(sess, caso, nomePeca, gab, contexto) {
     gab = garantirLinksFontes(limparGabaritoIA(reparo.texto), false);
     estrutura = validarGabarito(gab, nomePeca, { exigirTribunalSumula: true });
   }
+  if (limitado('parecer:' + sess.tipo + ':' + sess.usuario)) return json(res, 429, { erro: 'Aguarde um minuto antes de pedir outro parecer.' });
   if (!estrutura.ok) {
     gab = normalizarEspelhoCinco(gab);
     estrutura = validarGabarito(gab, nomePeca, { exigirTribunalSumula: true });
@@ -3087,7 +3170,7 @@ async function zerarSistema(req, res) {
   json(res, 200, Object.assign({ ok: true, escopo: 'sistema' }, resultado));
 }
 
-const ROTAS_COM_PROCESSAMENTO_IA = new Set(['/api/aluno/transcrever', '/api/aluno/parecer-inicial', '/api/extrair-pdf', '/api/gabarito', '/api/corrigir', '/api/peca/gerar-ia', '/api/peca/gerar-gabarito', '/api/peca/extrair-pdf', '/api/entrega/corrigir', '/api/gerar-caso']);
+const ROTAS_COM_PROCESSAMENTO_IA = new Set(['/api/aluno/transcrever', '/api/aluno/parecer-inicial', '/api/extrair-pdf', '/api/gabarito', '/api/corrigir', '/api/peca/gerar-ia', '/api/peca/gerar-gabarito', '/api/peca/extrair-pdf', '/api/entrega/corrigir', '/api/entrega/corrigir-todas', '/api/recurso/analisar-ia', '/api/gerar-caso']);
 const server = http.createServer((req, res) => {
   aplicarCabecalhosSeguranca(res);
   const rota = req.url.split('?')[0];
@@ -3111,7 +3194,7 @@ const server = http.createServer((req, res) => {
     });
   }
   if (req.method === 'GET' && rota === '/api/versao') return json(res, 200, { ok: true, versao: APP_VERSION });
-  if (rota.startsWith('/api/') && !['/api/login', '/api/sessao', '/api/trocar-senha', '/api/verificar-email', '/api/reenviar-codigo', '/api/logout'].includes(rota)) {
+  if (rota.startsWith('/api/') && !['/api/login', '/api/esqueci-senha', '/api/redefinir-senha', '/api/sessao', '/api/trocar-senha', '/api/verificar-email', '/api/reenviar-codigo', '/api/logout'].includes(rota)) {
     const sess = sessaoDe(req);
     if (sess && senhaInicialPendente(sess)) return json(res, 403, { erro: 'TROCAR_SENHA', mensagem: 'Troque a senha inicial antes de continuar.' });
     if (sess && cadastroAlunoPendente(sess)) return json(res, 403, { erro: 'COMPLETAR_CADASTRO', mensagem: 'Cadastre seu e-mail e WhatsApp antes de continuar.' });
@@ -3119,6 +3202,8 @@ const server = http.createServer((req, res) => {
     if (sess && ROTAS_COM_PROCESSAMENTO_IA.has(rota) && !privacidadeAceita(sess)) return json(res, 403, { erro: 'ACEITAR_PRIVACIDADE', mensagem: 'Leia e aceite o aviso de privacidade antes de usar recursos de IA.' });
   }
   if (req.method === 'POST' && req.url === '/api/login') return apiLogin(req, res);
+  if (req.method === 'POST' && req.url === '/api/esqueci-senha') return apiEsqueciSenha(req, res);
+  if (req.method === 'POST' && req.url === '/api/redefinir-senha') return apiRedefinirSenha(req, res);
   if (req.method === 'GET' && req.url === '/api/sessao') return apiSessao(req, res);
   if (req.method === 'POST' && req.url === '/api/trocar-senha') return apiTrocarSenha(req, res);
   if (req.method === 'POST' && req.url === '/api/aceitar-privacidade') return apiAceitarPrivacidade(req, res);
