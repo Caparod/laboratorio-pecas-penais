@@ -677,6 +677,7 @@ async function abrirPeca(id){
   const agendada=!!(p.publicada&&p.publicarEm&&new Date(p.publicarEm).getTime()>Date.now());
   conteudo.innerHTML='<div class="botoes" style="margin-bottom:10px"><button onclick="irAba(\'pecas\')">← Voltar</button>'
    +(souAutor?'<button onclick="editarPeca(\''+id+'\')">✏️ Editar peça/gabarito</button>':'')
+   +(souAutor?'<button onclick="abrirAlterarTipoPeca(\''+id+'\','+d.entregas.length+')">🔁 Alterar tipo</button>':'')
    +(souAutor?'<button style="border-color:var(--vermelho);color:var(--vermelho)" onclick="excluirPeca(\''+id+'\')">🗑 Excluir peça</button>':'')+'</div>'
    +'<span class="badge">'+(p.publicada?('Peça '+(p.rodada||p.num)):'Rascunho')+' · '+esc(p.disc)+'</span><h2 class="titulo-peca">'+esc(p.nomePeca)+'</h2>'
    +'<p style="color:var(--cinza);font-family:Arial,sans-serif;font-size:.85rem">Autor: '+esc((p.autor===AUTH.usuario)?'você':(p.autor||'—'))+' · Publicação: '+(p.publicada?(agendada?dataHoraBR(p.publicarEm):'já publicada'):'rascunho')+' · Prazo: '+(p.prazo?dataHoraBR(p.prazo):'sem prazo')+'</p>'
@@ -706,6 +707,19 @@ async function abrirPeca(id){
   carregarTurmasSelect('vt_turma',p.turmaId);
   const publicar=document.getElementById('vt_publicar_em');if(publicar)publicar.value=(!p.publicada&&p.publicarEm)||agoraDatetimeLocal();
   const prazo=document.getElementById('vt_prazo');if(prazo&&p.prazo)prazo.value=p.prazo;
+}
+function abrirAlterarTipoPeca(id,totalEntregas){
+  const p=window.__peca;if(!p||p.id!==id)return;
+  const anterior=document.getElementById('tipo_peca_modal');if(anterior)anterior.remove();
+  const overlay=document.createElement('div');overlay.id='tipo_peca_modal';overlay.className='senha-overlay';overlay.setAttribute('role','dialog');overlay.setAttribute('aria-modal','true');
+  const modal=document.createElement('div');modal.className='senha-modal';
+  const opcoes=PECAS_ESTAGIO_I.concat(PECAS_ESTAGIO_II).map(x=>'<option value="'+escAttr(x)+'"'+(x===p.nomePeca?' selected':'')+'>'+esc(x)+'</option>').join('');
+  modal.innerHTML='<h3>Alterar tipo da Peça '+esc(p.rodada||p.num)+'</h3><p>Somente o tipo será alterado. O enunciado, o gabarito, o prazo e as entregas serão preservados.</p><label for="tipo_peca_novo" style="display:block;font:700 .82rem Arial,sans-serif;margin-bottom:5px">Novo tipo</label><select id="tipo_peca_novo">'+opcoes+'</select>'
+   +(totalEntregas?'<label style="display:flex;gap:8px;align-items:flex-start;margin-top:12px;font: .82rem Arial,sans-serif"><input id="tipo_peca_historico" type="checkbox" style="width:auto;margin-top:2px">Corrigir também o tipo exibido nas '+totalEntregas+' entrega(s) já realizada(s). Use esta opção somente para corrigir um erro de cadastro.</label>':'')
+   +'<div id="tipo_peca_fb" class="status" aria-live="polite"></div><div class="acoes"><button class="primario" id="tipo_peca_salvar">Salvar tipo</button><button id="tipo_peca_cancelar">Cancelar</button></div>';
+  const fechar=()=>overlay.remove();modal.querySelector('#tipo_peca_cancelar').onclick=fechar;overlay.onclick=e=>{if(e.target===overlay)fechar()};
+  modal.querySelector('#tipo_peca_salvar').onclick=async()=>{const nomePeca=modal.querySelector('#tipo_peca_novo').value,aplicarAoHistorico=!!(modal.querySelector('#tipo_peca_historico')||{}).checked,fb=modal.querySelector('#tipo_peca_fb');if(nomePeca===p.nomePeca){fb.textContent='Selecione um tipo diferente.';return}if(!confirm('Alterar o tipo de “'+p.nomePeca+'” para “'+nomePeca+'”? O enunciado e o gabarito serão mantidos.'))return;const r=await apiPost('/api/peca/tipo',{id,nomePeca,aplicarAoHistorico}),d=await r.json();if(!r.ok){fb.textContent=d.erro||'Não foi possível alterar.';return}fechar();await abrirPeca(id);if(d.revisaoObrigatoria)alert('Tipo alterado. Confira o gabarito: a validação encontrou uma possível inconsistência com o novo tipo.');};
+  overlay.append(modal);document.body.append(overlay);modal.querySelector('#tipo_peca_novo').focus();
 }
 async function publicarRascunho(id){
   const p=window.__peca;if(!p)return;
@@ -829,7 +843,8 @@ let RASCUNHO={nomePeca:'',disc:'',caso:'',gab:''};
 function profNova(){
   const opts=PECAS_ESTAGIO_I.concat(PECAS_ESTAGIO_II).map(x=>'<option>'+x+'</option>').join('');
   const rc=RASCUNHO.classificacao||{};
-  conteudo.innerHTML='<h2 class="titulo-peca">Nova peça</h2>'
+  const editando=!!RASCUNHO.id;
+  conteudo.innerHTML='<h2 class="titulo-peca">'+(editando?'Editar peça':'Nova peça')+'</h2>'
    +'<div class="card"><h3>1) Crie o enunciado</h3>'
    +'<p style="font-size:.88rem;color:var(--cinza)">Gere por IA, suba um PDF ou escreva/cole você mesmo.</p>'
    +'<div style="font-family:Arial,sans-serif;margin:8px 0">Turma: <select id="np_turma"><option value="">Carregando...</option></select> · Tipo de peça: <select id="np_nome">'+opts+'</select> '
@@ -851,8 +866,7 @@ function profNova(){
    +'<div class="card"><h3>5) Publicar</h3>'
    +'<div class="campo-grid" style="font-family:Arial,sans-serif"><label>Publicar em (dia e hora)<input type="datetime-local" id="np_publicar_em"></label><label>Prazo de entrega (dia e hora)<input type="datetime-local" id="np_prazo"></label></div>'
    +'<p style="font: .82rem Arial,sans-serif;color:var(--cinza);margin:8px 0 0">A peça ficará invisível aos alunos até a data de publicação, que não pode ser posterior ao prazo de entrega.</p>'
-   +'<div class="botoes" style="margin-top:12px"><button onclick="salvarPeca(false)">💾 Salvar rascunho</button>'
-   +'<button class="primario" onclick="salvarPeca(true)">🚀 Publicar para a turma</button></div><div id="np_salvarfb"></div></div>';
+   +'<div class="botoes" style="margin-top:12px">'+(editando&&RASCUNHO.publicada?'<button class="primario" onclick="salvarPeca(true)">💾 Salvar alterações mantendo publicada</button>':'<button onclick="salvarPeca(false)">💾 Salvar rascunho</button><button class="primario" onclick="salvarPeca(true)">🚀 Publicar para a turma</button>')+'</div><div id="np_salvarfb"></div></div>';
   const s=document.getElementById('np_nome');if(s&&RASCUNHO.nomePeca)s.value=RASCUNHO.nomePeca;
   const publicar=document.getElementById('np_publicar_em');if(publicar)publicar.value=RASCUNHO.publicarEm||agoraDatetimeLocal();
   const prazo=document.getElementById('np_prazo');if(prazo&&RASCUNHO.prazo)prazo.value=RASCUNHO.prazo;
@@ -933,7 +947,7 @@ async function salvarPeca(publicar){
 }
 async function editarPeca(id){
   const r=await apiGet('/api/peca/get?id='+id);const d=await r.json();const p=d.peca;
-  RASCUNHO={id:p.id,nomePeca:p.nomePeca,disc:p.disc,turmaId:p.turmaId,caso:p.caso,gab:p.gab,prazo:p.prazo||'',publicarEm:p.publicarEm||'',classificacao:p.classificacao||{}};
+  RASCUNHO={id:p.id,nomePeca:p.nomePeca,disc:p.disc,turmaId:p.turmaId,caso:p.caso,gab:p.gab,prazo:p.prazo||'',publicarEm:p.publicarEm||'',publicada:!!p.publicada,classificacao:p.classificacao||{}};
   ABA_PROF='nova';telaProfessor();
   setTimeout(()=>{document.getElementById('np_caso').value=p.caso;document.getElementById('np_gab').value=p.gab;if(p.prazo)document.getElementById('np_prazo').value=p.prazo;if(p.publicarEm)document.getElementById('np_publicar_em').value=p.publicarEm;const s=document.getElementById('np_nome');if(s)s.value=p.nomePeca;},50);
 }

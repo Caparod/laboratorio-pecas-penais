@@ -37,6 +37,9 @@ for (const arquivo of [path.join(__dirname, '..', 'index.html'), path.join(__dir
     assert.match(html, /id="np_publicar_em"/, 'formulário deve permitir escolher quando a peça será publicada');
     assert.match(html, /A publicação não pode acontecer depois do prazo de entrega/, 'interface deve validar a ordem entre publicação e entrega');
     assert.match(html, /function subirGabaritoPdf\(/, 'professor deve poder importar o gabarito em PDF');
+    assert.match(html, /function abrirAlterarTipoPeca\(/, 'professor deve ter uma ação específica para alterar somente o tipo da peça');
+    assert.match(html, /O enunciado, o gabarito, o prazo e as entregas serão preservados/, 'interface deve deixar explícito o escopo seguro da troca de tipo');
+    assert.match(html, /Salvar alterações mantendo publicada/, 'edição de peça publicada não pode oferecer despublicação acidental');
     assert.match(html, /tipo:'gabarito'/, 'upload do gabarito deve solicitar a transformação específica do PDF');
     assert.match(html, /linkCitacoesHtml\(md2html\(p\.caso\)\)/, 'enunciado transformado deve ser exibido com a formatação produzida');
     assert.match(html, /function limparEstadoNaoSalvo\(/, 'logout deve apagar todo conteúdo que não foi explicitamente salvo');

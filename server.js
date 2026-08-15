@@ -2237,6 +2237,44 @@ async function pecaSalvar(req, res) {
   }
   json(res, 200, { ok: true, id, num: db.pecas[id].num, rodada: rodadaValida(db.pecas[id].rodada) ? Number(db.pecas[id].rodada) : null, versao: db.pecas[id].versao, avisados: !!pp.avisadoAlunos, agendada: !!(pp.publicada && !pecaDisponivelAgora(pp)), publicarEm: pp.publicarEm || '' });
 }
+async function pecaAlterarTipo(req, res) {
+  const sess = sessaoDe(req);
+  if (!sess) return json(res, 401, { erro: 'SESSAO' });
+  if (sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
+  let d; try { d = await lerJson(req, 5000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
+  const id = String(d.id || '').trim();
+  const nomePeca = String(d.nomePeca || '').trim();
+  const p = db.pecas[id];
+  if (!p) return json(res, 404, { erro: 'Peça não encontrada.' });
+  if (!podeEditarPeca(sess.usuario, p)) return json(res, 403, { erro: 'Sem acesso para editar esta peça.' });
+  if (!PECAS_IA_PERMITIDAS.has(nomePeca)) return json(res, 400, { erro: 'Selecione um tipo de peça válido.' });
+  if (p.nomePeca === nomePeca) return json(res, 200, { ok: true, id, nomePeca, alterada: false, entregasAtualizadas: 0 });
+
+  const anterior = p.nomePeca;
+  p.historico = Array.isArray(p.historico) ? p.historico : [];
+  p.historico.push(fotografiaPeca(p, { encerradaEm: Date.now(), encerradaPor: sess.usuario, motivo: 'alteracao-de-tipo' }));
+  if (p.historico.length > 50) p.historico = p.historico.slice(-50);
+  p.nomePeca = nomePeca;
+  p.versao = (p.versao || 1) + 1;
+  p.atualizadoEm = Date.now(); p.atualizadoPor = sess.usuario;
+  p.auditoriaTipo = Array.isArray(p.auditoriaTipo) ? p.auditoriaTipo : [];
+  p.auditoriaTipo.push({ de: anterior, para: nomePeca, alteradoEm: Date.now(), alteradoPor: sess.usuario, aplicadoAoHistorico: d.aplicarAoHistorico === true });
+  if (p.auditoriaTipo.length > 50) p.auditoriaTipo = p.auditoriaTipo.slice(-50);
+
+  let entregasAtualizadas = 0;
+  if (d.aplicarAoHistorico === true) {
+    for (const h of p.historico) if (h && h.nomePeca === anterior) h.nomePeca = nomePeca;
+    for (const e of Object.values((db.entregas || {})[id] || {})) {
+      if (e && e.snapshotPeca && e.snapshotPeca.nomePeca === anterior) { e.snapshotPeca.nomePeca = nomePeca; entregasAtualizadas++; }
+    }
+  }
+  const validacaoGab = p.gab ? validarGabarito(p.gab, nomePeca, { exigirTribunalSumula: true }) : { ok: false, erros: ['Gabarito ausente.'] };
+  if (validacaoGab.ok) delete p.revisaoObrigatoria;
+  else p.revisaoObrigatoria = { detectadaEm: Date.now(), erros: validacaoGab.erros };
+  try { await salvarDbCritico(); }
+  catch (e) { return json(res, 503, { erro: 'O tipo foi alterado localmente, mas a persistência remota falhou. Tente novamente.' }); }
+  return json(res, 200, { ok: true, id, nomePeca, tipoAnterior: anterior, alterada: true, entregasAtualizadas, revisaoObrigatoria: p.revisaoObrigatoria || null });
+}
 function resumoPeca(p) {
   const ents = db.entregas[p.id] || {};
   const registros = Object.keys(ents).filter(mat => entregaPertenceTurma(mat, ents[mat], p)).map(mat => ({
@@ -3231,6 +3269,7 @@ const server = http.createServer((req, res) => {
   if (req.method === 'POST' && req.url === '/api/peca/gerar-gabarito') return pecaGerarGabarito(req, res);
   if (req.method === 'POST' && req.url === '/api/peca/extrair-pdf') return pecaExtrairPdf(req, res);
   if (req.method === 'POST' && req.url === '/api/peca/salvar') return pecaSalvar(req, res);
+  if (req.method === 'POST' && req.url === '/api/peca/tipo') return pecaAlterarTipo(req, res);
   if (req.method === 'POST' && req.url === '/api/peca/excluir') return pecaExcluir(req, res);
   if (req.method === 'GET' && req.url === '/api/pecas') return pecasListar(req, res);
   if (req.method === 'GET' && req.url.startsWith('/api/peca/get?')) { const id = new URLSearchParams(req.url.split('?')[1]).get('id'); return pecaGet(req, res, id); }
