@@ -535,9 +535,21 @@ function telaProfessor(){
   else if(ABA_PROF==='professores')profProfessores();
   else if(ABA_PROF==='gastos')profGastos();
   else if(ABA_PROF==='config')profConfig();
+  carregarAvisosProfessor();
 }
 function botaoMenu(id,txt){return '<button class="item'+(ABA_PROF===id?' ativo':'')+'" onclick="irAba(\''+id+'\')">'+txt+'</button>'}
 function irAba(id){if(id==='nova')RASCUNHO={nomePeca:'',disc:'',caso:'',gab:'',classificacao:{}};ABA_PROF=id;telaProfessor();}
+async function carregarAvisosProfessor(){
+  const seq=(window.__avisosProfessorSeq||0)+1;window.__avisosProfessorSeq=seq;
+  try{const r=await apiGet('/api/avisos-professor'),d=await r.json();if(seq!==window.__avisosProfessorSeq||!r.ok||!AUTH||AUTH.tipo!=='professor'||MODO_VISAO==='aluno')return;
+    const anterior=document.getElementById('avisos_professor');if(anterior)anterior.remove();const avisos=d.avisos||[];if(!avisos.length)return;
+    const caixa=document.createElement('div');caixa.id='avisos_professor';caixa.className='card';caixa.style.cssText='border:2px solid #d9bd64;background:#fff8e8;margin-bottom:14px';
+    caixa.innerHTML='<h3 style="margin-top:0;color:#8a6415">🔔 '+avisos.length+' aviso'+(avisos.length===1?'':'s')+' de recurso</h3>'+avisos.map(a=>'<div style="padding:10px 0;border-top:1px solid #ead7a4"><b>'+esc(a.titulo)+'</b><p style="margin:5px 0;font: .84rem Arial,sans-serif">'+esc(a.mensagem)+'</p><p style="margin:4px 0;color:var(--cinza);font: .76rem Arial,sans-serif">'+esc(dataHora(a.criadoEm))+'</p><div class="botoes"><button class="primario" onclick="abrirAvisoRecurso(\''+escAttr(a.id)+'\',\''+escAttr(a.pecaId)+'\',\''+escAttr(a.matricula)+'\')">Abrir recurso</button><button onclick="marcarAvisoProfessor(\''+escAttr(a.id)+'\')">Marcar como lido</button></div></div>').join('');
+    conteudo.insertAdjacentElement('afterbegin',caixa);
+  }catch(e){}
+}
+async function marcarAvisoProfessor(id){const r=await apiPost('/api/avisos-professor/lido',{id});if(r.ok)carregarAvisosProfessor()}
+async function abrirAvisoRecurso(id,pecaId,matricula){await apiPost('/api/avisos-professor/lido',{id});abrirEntrega(pecaId,matricula)}
 
 // ---- Lista de peças + entregas ----
 async function profPecas(){
@@ -771,7 +783,7 @@ async function abrirEntrega(id,mat){
   window.__ent={id,mat,recurso:d.recurso||null};
   const recursoPendente=d.recurso&&d.recurso.status==='pendente';
   const sugestaoRecurso=recursoPendente&&d.recurso.sugestaoIA?d.recurso.sugestaoIA:null;
-  const relatorioInicial=sugestaoRecurso&&sugestaoRecurso.relatorio?sugestaoRecurso.relatorio:d.relatorio;
+  const relatorioInicial=d.relatorio;
   const notaInicial=sugestaoRecurso&&sugestaoRecurso.nota!=null?sugestaoRecurso.nota:(d.nota!==''&&d.nota!=null?d.nota:(d.notaSugerida!=null?d.notaSugerida:''));
   const recursoHtml=recursoPendente?'<div class="card" style="border-color:#d9bd64;background:#fffaf0"><span class="badge">Recurso pendente</span><h3>Razões apresentadas pelo aluno</h3><div class="caso">'+esc(d.recurso.motivo)+'</div><p style="font: .82rem Arial,sans-serif;color:var(--cinza);margin-top:10px">Nota recorrida: '+esc(String(d.recurso.notaRecorrida).replace('.',','))+'/5 · apresentado em '+esc(dataHora(d.recurso.criadoEm))+'</p><div class="botoes"><button class="primario" onclick="analisarRecursoIA()">🤖 Analisar recurso com IA</button></div><div id="recurso_ia_fb"></div></div>':'';
   conteudo.innerHTML='<div class="botoes" style="margin-bottom:10px"><button onclick="abrirPeca(\''+id+'\')">← Voltar</button></div>'
@@ -780,14 +792,14 @@ async function abrirEntrega(id,mat){
    +'<div class="card"><h3>Peça enviada pelo aluno</h3>'
    +(d.arquivo?'<p style="font: .8rem Arial,sans-serif;color:var(--cinza);margin-bottom:10px">📎 Texto importado de <b>'+esc(d.arquivo.nome)+'</b> · '+esc(d.arquivo.tipo.toUpperCase())+' · '+Math.max(1,Math.round(d.arquivo.tamanho/1024))+' KB</p>':'')
    +'<div class="caso" style="max-height:340px;overflow:auto">'+esc(d.texto)+'</div></div>'
-   +'<div class="card"><h3>Relatório de correção</h3>'
-   +'<div class="botoes"><button class="primario" onclick="corrigirEntregaIA()">🤖 Corrigir com IA</button></div>'
+   +'<div class="card"><h3>'+(recursoPendente?'Espelho original da correção — preservado':'Relatório de correção')+'</h3>'
+   +(recursoPendente?'<p class="aviso">O recurso não gera um novo espelho. O professor confirma apenas o resultado, a justificativa e a nova nota.</p>':'<div class="botoes"><button class="primario" onclick="corrigirEntregaIA()">🤖 Corrigir com IA</button></div>')
    +'<div id="corrfb"></div>'
-   +'<textarea id="relatorio" class="redacao" style="min-height:280px" placeholder="Relatório de correção gerado pela IA — revise e altere apenas se desejar.">'+esc(relatorioInicial)+'</textarea>'
-   +'<div style="font-family:Arial,sans-serif;margin-top:10px">Nota do Estágio (0 a 5): <input id="nota" type="number" min="0" max="5" step="0.01" style="width:90px;padding:8px;border:1px solid #cfc9b8;border-radius:6px" value="'+(notaInicial!==''?String(notaInicial):'')+'"></div>'
-   +(recursoPendente?'<div class="campo-grid" style="margin-top:14px"><label>Resultado do recurso<select id="resultado_recurso" style="display:block;width:100%;margin-top:4px;padding:9px;border:1px solid #cfc9b8;border-radius:6px"><option value="">Selecione</option><option '+(sugestaoRecurso&&sugestaoRecurso.resultado==='Deferido'?'selected':'')+'>Deferido</option><option '+(sugestaoRecurso&&sugestaoRecurso.resultado==='Deferido parcialmente'?'selected':'')+'>Deferido parcialmente</option><option '+(sugestaoRecurso&&sugestaoRecurso.resultado==='Indeferido'?'selected':'')+'>Indeferido</option></select></label><label style="grid-column:1/-1">Decisão fundamentada<textarea id="decisao_recurso" class="redacao" style="min-height:110px;margin-top:4px" placeholder="A IA preencherá este campo; revise e altere apenas se desejar.">'+esc(sugestaoRecurso?sugestaoRecurso.decisao:'')+'</textarea></label></div>':'')
-   +'<div class="botoes" style="margin-top:12px"><button onclick="salvarEntrega(false)">💾 Salvar rascunho</button><button id="btn_previa_correcao" onclick="visualizarPreviaCorrecao()">👁 Visualizar prévia</button>'
-   +'<button class="primario" onclick="salvarEntrega(true)">'+(recursoPendente?'✅ Concluir recorreção e enviar decisão':'✅ Validar e enviar ao aluno por e-mail')+'</button></div>'
+   +'<textarea id="relatorio" class="redacao" style="min-height:280px" '+(recursoPendente?'readonly aria-readonly="true"':'')+' placeholder="Relatório de correção gerado pela IA — revise e altere apenas se desejar.">'+esc(relatorioInicial)+'</textarea>'
+   +'<div style="font-family:Arial,sans-serif;margin-top:10px">'+(recursoPendente?'Nova nota após o recurso (0 a 5): ':'Nota do Estágio (0 a 5): ')+'<input id="nota" type="number" min="0" max="5" step="0.01" style="width:90px;padding:8px;border:1px solid #cfc9b8;border-radius:6px" value="'+(notaInicial!==''?String(notaInicial):'')+'"></div>'
+   +(recursoPendente?'<div class="campo-grid" style="margin-top:14px"><label>Resultado do recurso<select id="resultado_recurso" style="display:block;width:100%;margin-top:4px;padding:9px;border:1px solid #cfc9b8;border-radius:6px"><option value="">Selecione</option><option '+(sugestaoRecurso&&['Aceito','Deferido'].includes(sugestaoRecurso.resultado)?'selected':'')+'>Aceito</option><option '+(sugestaoRecurso&&['Aceito parcialmente','Deferido parcialmente'].includes(sugestaoRecurso.resultado)?'selected':'')+'>Aceito parcialmente</option><option '+(sugestaoRecurso&&['Não aceito','Indeferido'].includes(sugestaoRecurso.resultado)?'selected':'')+'>Não aceito</option></select></label><label style="grid-column:1/-1">Justificativa ao aluno<textarea id="decisao_recurso" class="redacao" style="min-height:110px;margin-top:4px" placeholder="A IA preencherá este campo. Revise antes de confirmar o envio.">'+esc(sugestaoRecurso?sugestaoRecurso.decisao:'')+'</textarea></label></div>':'')
+   +'<div class="botoes" style="margin-top:12px">'+(recursoPendente?'':'<button onclick="salvarEntrega(false)">💾 Salvar rascunho</button><button id="btn_previa_correcao" onclick="visualizarPreviaCorrecao()">👁 Visualizar prévia</button>')
+   +'<button class="primario" onclick="salvarEntrega(true)">'+(recursoPendente?'✅ Revisar, confirmar e enviar ao aluno':'✅ Validar e enviar ao aluno por e-mail')+'</button></div>'
    +(d.validado?'<p class="aviso">Esta entrega já foi validada — validar de novo reenvia o e-mail ao aluno.</p>':'')
    +'<div id="valfb"></div></div>';
   const rel=document.getElementById('relatorio'),nota=document.getElementById('nota');
@@ -828,13 +840,13 @@ async function salvarEntrega(validar){
   const rel=document.getElementById('relatorio').value.trim();const nota=document.getElementById('nota').value.trim();
   const fb=document.getElementById('valfb');
   if(!nota){fb.innerHTML='<p class="erro-ia">Informe a nota.</p>';return}
-  if(validar&&!confirm('Validar e enviar o relatório e a nota '+nota+' ao e-mail do aluno?'))return;
+  if(validar){const recursoPendente=window.__ent.recurso&&window.__ent.recurso.status==='pendente';const resultado=recursoPendente?((document.getElementById('resultado_recurso')||{}).value||''):'';const decisao=recursoPendente?((document.getElementById('decisao_recurso')||{}).value||'').trim():'';if(recursoPendente&&(!resultado||decisao.length<30)){fb.innerHTML='<p class="erro-ia">Revise o resultado e escreva uma justificativa com ao menos 30 caracteres antes de confirmar.</p>';return}const pergunta=recursoPendente?'Confirma o envio desta decisão ao aluno?\n\nResultado: '+resultado+'\nNova nota: '+nota+'/5\n\nJustificativa:\n'+decisao:'Validar e enviar o relatório e a nota '+nota+' ao e-mail do aluno?';if(!confirm(pergunta))return}
   const payload={id:window.__ent.id,matricula:window.__ent.mat,relatorio:rel,nota:nota,validar:!!validar};
   if(validar&&window.__ent.recurso&&window.__ent.recurso.status==='pendente'){payload.resultadoRecurso=((document.getElementById('resultado_recurso')||{}).value||'');payload.decisaoRecurso=((document.getElementById('decisao_recurso')||{}).value||'').trim()}
   try{const r=await apiPost('/api/entrega/validar',payload);
   const d=await r.json();if(!r.ok){fb.innerHTML='<p class="erro-ia">'+esc(d.erro||'Erro')+'</p>';return}
-  if(validar&&d.emailEnviado)fb.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif">'+(window.__ent.recurso?'✅ Recurso decidido, correção atualizada e PDF enviado ao aluno por e-mail.':'✅ Correção validada e PDF enviado ao aluno por e-mail.')+'</p>';
-  else if(validar)fb.innerHTML='<p class="erro-ia">⚠️ Correção validada e disponível no sistema, mas o e-mail não foi enviado. '+esc(d.avisoEmail||'Confira o e-mail do aluno e a configuração de envio.')+'</p>';
+  if(validar&&d.emailEnviado)fb.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif">'+(d.recursoDecidido?'✅ Decisão do recurso confirmada pelo professor e enviada ao aluno por e-mail.':'✅ Correção validada e PDF enviado ao aluno por e-mail.')+'</p>';
+  else if(validar)fb.innerHTML='<p class="erro-ia">⚠️ '+(d.recursoDecidido?'Decisão confirmada e disponível no sistema, mas o e-mail ao aluno não foi enviado. ':'Correção validada e disponível no sistema, mas o e-mail não foi enviado. ')+esc(d.avisoEmail||'Confira o e-mail do aluno e a configuração de envio.')+'</p>';
   else fb.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif">💾 Rascunho salvo.</p>';
   }catch(e){}
 }
@@ -1300,7 +1312,7 @@ async function telaAluno(){
 }
 async function analisarRecursoIA(){
   const fb=document.getElementById('recurso_ia_fb');if(!fb)return;const prog=progresso(fb,[[0,'📖 Lendo as razões do recurso...'],[25,'⚖️ Confrontando com o gabarito e a peça...'],[60,'🧮 Conferindo os itens e a nota...'],[82,'📝 Preparando recomendação consultiva...']],90);
-  try{const r=await apiPost('/api/recurso/analisar-ia',{id:window.__ent.id,matricula:window.__ent.mat}),d=await r.json();prog.fim();if(!r.ok){fb.innerHTML='<p class="erro-ia">'+esc(d.erro||'Não foi possível analisar o recurso.')+'</p>';return}document.getElementById('relatorio').value=d.relatorio||document.getElementById('relatorio').value;document.getElementById('nota').value=String(d.notaSugerida);document.getElementById('resultado_recurso').value=d.resultadoSugerido||'';document.getElementById('decisao_recurso').value=d.decisaoSugerida||'';atualizarDisponibilidadePrevia();fb.innerHTML='<div class="parecer-inicial"><p style="font:700 .8rem Arial,sans-serif;color:#8a6415">Dados preenchidos pela IA para revisão — a decisão final é do professor</p>'+linkCitacoesHtml(md2html(d.analise))+'</div>'}catch(e){prog.fim();fb.innerHTML='<p class="erro-ia">Falha ao analisar o recurso.</p>'}
+  try{const r=await apiPost('/api/recurso/analisar-ia',{id:window.__ent.id,matricula:window.__ent.mat}),d=await r.json();prog.fim();if(!r.ok){fb.innerHTML='<p class="erro-ia">'+esc(d.erro||'Não foi possível analisar o recurso.')+'</p>';return}document.getElementById('nota').value=String(d.notaSugerida);document.getElementById('resultado_recurso').value=d.resultadoSugerido||'';document.getElementById('decisao_recurso').value=d.decisaoSugerida||'';fb.innerHTML='<div class="parecer-inicial"><p style="font:700 .8rem Arial,sans-serif;color:#8a6415">Sugestão preenchida pela IA. O professor deve revisar e confirmar antes do envio ao aluno.</p>'+linkCitacoesHtml(md2html(d.analise))+'</div>'}catch(e){prog.fim();fb.innerHTML='<p class="erro-ia">Falha ao analisar o recurso.</p>'}
 }
 async function visualizarPreviaCorrecao(){
   const rel=document.getElementById('relatorio').value.trim(),nota=document.getElementById('nota').value.trim(),fb=document.getElementById('valfb');

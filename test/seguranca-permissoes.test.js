@@ -316,14 +316,14 @@ NOTA SUGERIDA: 4,25/5
   assert.equal(r.status, 200);
   assert.equal(r.body.recursos.length, 1, 'professor deve ver recurso pendente');
   assert.equal(r.body.recursos[0].motivo, motivoRecurso);
-  r = await requisitar('/api/entrega/validar', professor, { id: pecaId, matricula: '9100001', relatorio: relatorioValidado, nota: '4,25', validar: true, resultadoRecurso: 'Indeferido', decisaoRecurso: 'O tópico indicado foi novamente examinado, mas não contém a correlação exigida pelo espelho de resposta.' });
+  r = await requisitar('/api/entrega/validar', professor, { id: pecaId, matricula: '9100001', relatorio: relatorioValidado, nota: '4,25', validar: true, resultadoRecurso: 'Não aceito', decisaoRecurso: 'O tópico indicado foi novamente examinado, mas não contém a correlação exigida pelo espelho de resposta.' });
   assert.equal(r.status, 200, JSON.stringify(r.body));
   r = await requisitar('/api/recursos', professor);
   assert.equal(r.body.recursos.length, 0, 'recurso decidido deve sair da aba de pendências');
   r = await requisitar('/api/pecas-aluno', alunoInicial.token);
   const entregaComRecurso = r.body.entregues.find(e => e.id === pecaId);
   assert.equal(entregaComRecurso.recurso.status, 'decidido');
-  assert.equal(entregaComRecurso.recurso.resultado, 'Indeferido');
+  assert.equal(entregaComRecurso.recurso.resultado, 'Não aceito');
   const casoOriginal = casoTeste();
   r = await requisitar('/api/peca/salvar', professor, { id: pecaId, nomePeca: 'Peça auditada', caso: casoOriginal + ' Versão posterior publicada pelo professor.', gab: gabaritoTeste('Peça auditada'), turmaId: turmaA, prazo: '2000-01-01T00:00', publicar: true });
   assert.equal(r.status, 200, JSON.stringify(r.body));
