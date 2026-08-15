@@ -2598,7 +2598,7 @@ async function gerarRelatorioCorrecao(sess, p, e) {
   let relatorio = normalizarPenalidadesCorrecao(limparCorrecaoIA(garantirLinksFontes((r.texto || '').trim(), true)), auditoriaFormatacao);
   let vr = validarCorrecao(relatorio, e.texto);
   if (!vr.ok) {
-    const reparo = '<relatorio_alta_capacidade>\n' + documentoIA(relatorio, 30000) + '\n</relatorio_alta_capacidade>\n<falhas_estruturais>\n' + documentoIA(vr.erros.join(' '), 4000) + '\n</falhas_estruturais>\nReorganize sem alterar o mérito jurídico.';
+    const reparo = '<resposta_original_apenas_para_comparacao>\n' + documentoIA(e.texto, 60000) + '\n</resposta_original_apenas_para_comparacao>\n<relatorio_alta_capacidade>\n' + documentoIA(relatorio, 30000) + '\n</relatorio_alta_capacidade>\n<falhas_estruturais>\n' + documentoIA(vr.erros.join(' '), 4000) + '\n</falhas_estruturais>\nCorrija TODAS as falhas indicadas sem alterar o mérito jurídico. A resposta original serve somente para detectar cópia: não reproduza dela nenhuma sequência de 12 ou mais palavras. Substitua transcrições por sínteses avaliativas curtas, preserve a tabela, os cálculos, a nota, as fontes e todas as seções obrigatórias.';
     r = await iaTexto(SISTEMA_REPARO_CORRECAO, reparo, 12000, false, sess, { model: MODELO_REPARO });
     if (!r.ok) return { ok: false, erroIA: r, erro: r.erro || 'Falha na correção por IA.' };
     relatorio = normalizarPenalidadesCorrecao(limparCorrecaoIA(garantirLinksFontes((r.texto || '').trim(), true)), auditoriaFormatacao);
@@ -2716,8 +2716,16 @@ async function entregaCorrigirIA(req, res) {
   if (correcoesIndividuais.size > 80) for (const [chave, antigo] of correcoesIndividuais) if (antigo.status !== 'processando') { correcoesIndividuais.delete(chave); if (correcoesIndividuais.size <= 60) break; }
   setImmediate(async () => {
     try {
-      const resultado = await gerarRelatorioCorrecao(Object.assign({}, sess), p, e);
-      if (!resultado.ok) throw new Error(resultado.erro || 'A IA não concluiu a correção.');
+      let resultado = null;
+      for (let tentativa = 1; tentativa <= 2; tentativa++) {
+        resultado = await gerarRelatorioCorrecao(Object.assign({}, sess), p, e);
+        job.tentativas = tentativa;
+        if (resultado.ok) break;
+        const mensagem = String(resultado.erro || 'A IA não concluiu a correção.');
+        const naoRetriavel = /gabarito|sem chave|limite mensal|acesso restrito|HTTP 401|HTTP 403/i.test(mensagem);
+        if (tentativa >= 2 || naoRetriavel) throw new Error(mensagem);
+      }
+      if (!resultado || !resultado.ok) throw new Error((resultado && resultado.erro) || 'A IA não concluiu a correção.');
       if (job.cancelado) { limparEstadoTentativa(e, estadoInicial); return; }
       aplicarResultadoCorrecao(e, resultado, sess.usuario);
       await salvarDbCritico();

@@ -26,5 +26,7 @@ assert.match(servidor, /processarLoteCorrecao[\s\S]*catch \(err\) \{[\s\S]*if \(
 assert.match(servidor, /relatorioIAInvalido[\s\S]*correcao-incompleta-ou-invalida/, 'reinício do servidor deve remover resíduos antigos de IA');
 assert.match(servidor, /d\.stop_reason === 'max_tokens'[\s\S]*Continue exatamente do ponto em que parou[\s\S]*partesTruncadas\.concat/, 'resposta truncada deve ser continuada e reunida automaticamente');
 assert.match(servidor, /SISTEMA_CORRECAO_CRITERIOSO, usuario, 14000/, 'correção definitiva deve ter margem de saída suficiente');
+assert.match(servidor, /resposta_original_apenas_para_comparacao[\s\S]*não reproduza dela nenhuma sequência de 12 ou mais palavras/, 'o reparo deve receber a resposta original e remover transcrições extensas de forma explícita');
+assert.match(servidor, /entregaCorrigirIA[\s\S]*for \(let tentativa = 1; tentativa <= 2; tentativa\+\+\)[\s\S]*if \(resultado\.ok\) break/, 'a correção individual deve repetir automaticamente uma geração inconsistente, como o lote');
 
 console.log('OK: correções interrompidas são transacionais e não deixam resíduos.');
