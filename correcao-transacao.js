@@ -1,7 +1,7 @@
 'use strict';
 
 const CAMPOS_CORRECAO = [
-  'relatorio', 'robotizacao', 'notaSugerida', 'corrigidoEm', 'corrigidoPor',
+  'relatorio', 'robotizacao', 'densidadeArgumentativa', 'notaSugerida', 'corrigidoEm', 'corrigidoPor',
   'modeloCorrecao', 'versaoPromptCorrecao', 'versaoGabaritoCorrecao', 'nota',
   'validado', 'validadoEm', 'validadoPor', 'validacaoAutomatica', 'revisaoHumana',
   'emailCorrecaoEnviado', 'recurso'
@@ -31,6 +31,7 @@ function restaurarEstadoCorrecao(entrega, estado) {
 function aplicarResultadoCorrecao(entrega, resultado, professor) {
   entrega.relatorio = resultado.relatorio;
   entrega.robotizacao = resultado.robotizacao;
+  entrega.densidadeArgumentativa = resultado.densidadeArgumentativa;
   entrega.notaSugerida = resultado.notaSugerida;
   entrega.corrigidoEm = Date.now();
   entrega.corrigidoPor = professor;

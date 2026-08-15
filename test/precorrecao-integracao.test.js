@@ -10,6 +10,8 @@ const { spawn } = require('child_process');
 const { casoTeste, gabaritoTeste } = require('./fixture-peca');
 
 const appDir = path.resolve(__dirname, '..');
+const servidorFonte = fs.readFileSync(path.join(appDir, 'server.js'), 'utf8');
+assert.match(servidorFonte, /## Profundidade argumentativa[\s\S]*fato relevante, fundamento jurídico, aplicação ao caso e consequência ou pedido/, 'a pré-correção deve alertar deterministicamente sobre tópicos defensivos superficiais');
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'laboratorio-precorrecao-'));
 const appPort = 39200 + Math.floor(Math.random() * 500);
 const base = `http://127.0.0.1:${appPort}`;

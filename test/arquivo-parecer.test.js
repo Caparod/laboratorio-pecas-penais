@@ -4,6 +4,7 @@ const {
   tipoArquivo,
   detectarSinaisPrompt,
   analisarRobotizacao,
+  analisarDensidadeArgumentativa,
   auditarFormatacaoDocx,
   auditarFormatacaoPdf,
   auditarFormatacaoNaoVerificavel,
@@ -63,6 +64,19 @@ const analiseRobot = analisarRobotizacao(robotizado);
 assert.notStrictEqual(analiseRobot.nivel, 'baixo');
 assert.ok(analiseRobot.sinais.some(s => /enumerações/.test(s)));
 assert.match(analiseRobot.ressalva, /não comprovam autoria/);
+
+const teseRasa = `III.3 — SUBSIDIARIAMENTE: DO REDIMENSIONAMENTO DA PENA
+A pena-base foi fixada no mínimo legal de quatro anos de reclusão, considerando-se favoráveis as circunstâncias judiciais do art. 59 do Código Penal. Afastada a causa de aumento referente ao concurso de pessoas, impõe-se o redimensionamento da pena para o patamar mínimo legal.`;
+const densidadeRasa = analisarDensidadeArgumentativa(teseRasa);
+assert.equal(densidadeRasa.topicosSuperficiais.length, 1, 'tópico com um único parágrafo curto deve gerar alerta de densidade');
+assert.match(densidadeRasa.topicosSuperficiais[0].sinais.join(' '), /apenas um parágrafo/);
+const teseDensa = `III.3 — SUBSIDIARIAMENTE: DO REDIMENSIONAMENTO DA PENA
+O fato relevante para a dosimetria é que a decisão elevou a sanção com base em uma circunstância específica narrada nos autos. O art. 59 do Código Penal exige fundamentação concreta e individualizada para a valoração das circunstâncias judiciais, de modo que a simples referência abstrata não basta.
+
+No caso, a sentença associou a elevação exclusivamente ao elemento já considerado na tipificação, sem indicar consequência concreta adicional. Essa fundamentação deve ser confrontada com os dados do processo e com a vedação de dupla valoração.
+
+Dessa forma, se afastado o fundamento indevido, a consequência jurídica é o recálculo da pena-base no patamar correspondente às circunstâncias efetivamente reconhecidas, com reflexo no pedido subsidiário formulado ao Tribunal.`;
+assert.equal(analisarDensidadeArgumentativa(teseDensa).topicosSuperficiais.length, 0, 'tópico desenvolvido com fato, fundamento, aplicação e consequência não deve ser penalizado');
 
 const parecerValido = `## Leitura inicial
 - Esta é uma leitura diagnóstica cuidadosa do texto apresentado pelo estudante, com indicação dos pontos que precisam de conferência antes do envio definitivo.

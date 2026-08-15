@@ -335,6 +335,46 @@ function textoComparavelParecer(v) {
   return String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
+function analisarDensidadeArgumentativa(texto) {
+  const linhas = String(texto || '').replace(/\r/g, '').split(/\n+/).map(x => x.trim()).filter(Boolean);
+  const topicos = [];
+  let atual = null;
+  for (const linha of linhas) {
+    const letras = linha.replace(/[^A-Za-zÀ-ÿ]/g, '');
+    const maiusculas = letras.replace(/[^A-ZÀ-Ý]/g, '').length;
+    const cabecalho = linha.length <= 180 && (/^(?:\d+(?:\.\d+)*|[IVXLCDM]+(?:\.\d+)*)[.)\s:–—-]+/i.test(linha) || /^(?:DOS?|DAS?|DA|DO)\s+[A-ZÀ-Ý]/.test(linha) || (letras.length >= 5 && maiusculas / letras.length > 0.82));
+    if (cabecalho) {
+      atual = { titulo: linha.slice(0, 180), paragrafos: [] };
+      topicos.push(atual);
+    } else if (atual && linha.length >= 20) atual.paragrafos.push(linha);
+  }
+  const normalizar = v => String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const estruturais = /(?:^|\s)(?:sintese(?:\s+dos\s+fatos)?|dos?\s+fatos|pedidos|requerimentos|qualifica[cç][aã]o|endere[cç]amento|interposi[cç][aã]o|razoes\s+recursais|fechamento|fontes|anexo)(?:\s|$)/i;
+  const pais = /^(?:do\s+direito|merito|preliminares?|fundamenta[cç][aã]o|teses)$/i;
+  const analisados = topicos.filter(t => t.paragrafos.length && !estruturais.test(normalizar(t.titulo).replace(/[^a-z0-9çãõáéíóúâêô\s]/g, ' ')) && !pais.test(normalizar(t.titulo).replace(/[^a-z0-9\s]/g, ' ').trim())).map(t => {
+    const corpo = t.paragrafos.join(' ');
+    const palavras = (corpo.match(/[A-Za-zÀ-ÿ0-9]+/g) || []).length;
+    const temFundamento = /\b(?:art(?:igo)?\.?\s*\d+|s[uú]mula\s*\d+|lei\s*n?[º°]?\s*[\d.]|c[oó]digo|\bCF\b|\bCPP\b|\bCP\b|precedente|jurisprud[eê]ncia)/i.test(corpo);
+    const temAplicacao = /\b(?:no caso|na hip[oó]tese|concretamente|dos autos|segundo o enunciado|a senten[cç]a|o laudo|a prova|o r[eé]u|o acusado|o apelante|o paciente|a decis[aã]o|foi condenado|foi fixad[ao])/i.test(corpo);
+    const temConsequencia = /\b(?:portanto|assim|dessa forma|diante disso|por isso|consequentemente|imp[oõ]e-se|deve(?:-se)?|requer-se|raz[aã]o pela qual)/i.test(corpo);
+    const sinais = [];
+    if (t.paragrafos.length === 1) sinais.push('apenas um parágrafo no tópico');
+    if (palavras < 120) sinais.push('desenvolvimento curto (' + palavras + ' palavras)');
+    if (!temFundamento) sinais.push('sem fundamento jurídico identificável');
+    if (!temAplicacao) sinais.push('sem aplicação concreta identificável');
+    if (!temConsequencia) sinais.push('sem consequência jurídica identificável');
+    const elosAusentes = [temFundamento, temAplicacao, temConsequencia].filter(x => !x).length;
+    const superficial = t.paragrafos.length === 1 && (palavras < 140 || elosAusentes >= 1);
+    return { titulo: t.titulo, paragrafos: t.paragrafos.length, palavras, temFundamento, temAplicacao, temConsequencia, sinais, superficial, nivel: palavras < 70 || elosAusentes >= 2 ? 'alto' : 'atenção' };
+  });
+  return {
+    topicosDetectados: topicos.length,
+    topicosAnalisados: analisados.length,
+    topicosSuperficiais: analisados.filter(t => t.superficial).slice(0, 12),
+    criterio: 'Cada tese defensiva substantiva deve articular fato relevante, fundamento jurídico, aplicação ao caso e consequência ou pedido. Um único parágrafo só é suficiente quando desenvolver claramente todos esses elementos.'
+  };
+}
+
 function validarParecerInicial(texto, respostaAluno) {
   const t = String(texto || '').trim();
   const erros = [];
@@ -368,5 +408,6 @@ module.exports = {
   penalidadeFormatacao,
   detectarSinaisPrompt,
   analisarRobotizacao,
+  analisarDensidadeArgumentativa,
   validarParecerInicial
 };
