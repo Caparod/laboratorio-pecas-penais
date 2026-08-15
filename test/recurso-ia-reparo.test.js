@@ -101,6 +101,7 @@ A entrega confirma o ponto factual indicado pelo aluno; os demais critérios per
     assert.equal(analise.body.resultadoSugerido, 'Aceito parcialmente'); assert.equal(analise.body.notaSugerida, 3.5);
     assert.ok(!Object.prototype.hasOwnProperty.call(analise.body, 'relatorio'), 'o recurso não deve gerar novo espelho');
     assert.equal(requisicoesIA.length, 1, 'rótulos em negrito não podem provocar falsa resposta incompleta nem nova cobrança');
+    assert.match(JSON.stringify(requisicoesIA[0].messages), /<enunciado_original>/, 'a análise do recurso deve receber o enunciado original para conferir fatos contestados');
 
     const confirmacao = await post('/api/entrega/validar', { id: 'p2', matricula: '9900001', validar: true, relatorio: 'tentativa de substituir o espelho', nota: 3.5, resultadoRecurso: 'Aceito parcialmente', decisaoRecurso: analise.body.decisaoSugerida }, loginProfessor.cookie);
     assert.equal(confirmacao.status, 200, JSON.stringify(confirmacao.body)); assert.equal(confirmacao.body.recursoDecidido, true); assert.equal(confirmacao.body.pdfAnexado, false);
