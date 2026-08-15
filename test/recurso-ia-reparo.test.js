@@ -53,9 +53,10 @@ NOTA SUGERIDA: 4,00/5
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'recurso-decisao-'));
   const senhaProfessor = 'Professor-Recurso-2026';
   const professor = { login: 'admin', senha: hashSenha(senhaProfessor, 'sal-prof'), mudouSenha: true, nome: 'Professor', papel: 'Administrador', emailAviso: 'professor@example.test', aceitePrivacidadeEm: Date.now(), versaoPrivacidade: '2026-08' };
-  const caso = casoTeste(); const gab = gabaritoTeste('Apelação Criminal');
+  const caso = casoTeste() + '\nDurante o trajeto, na Via Hélio Prates, ocorreu o fato narrado.'; const gab = gabaritoTeste('Apelação Criminal');
+  const casoSnapshotDesatualizado = casoTeste() + '\nDurante o trajeto, na via L2 Norte, ocorreu o fato narrado.';
   const textoAluno = 'A defesa apresentou a síntese dos fatos e registrou expressamente a localização correta na Via Hélio Prates, além de desenvolver fundamentos, pedidos e fechamento em texto acadêmico próprio, suficientemente extenso para a avaliação individualizada.';
-  const entrega = (nome, nota) => ({ nome, texto: textoAluno, enviadoEm: Date.now(), validado: true, nota, relatorio: relatorioValido, snapshotPeca: { versao: 1, nomePeca: 'Apelação Criminal', disc: 'Turma 1', caso, gab } });
+  const entrega = (nome, nota) => ({ nome, texto: textoAluno, enviadoEm: Date.now(), validado: true, nota, relatorio: relatorioValido, snapshotPeca: { versao: 1, nomePeca: 'Apelação Criminal', disc: 'Turma 1', caso: casoSnapshotDesatualizado, gab } });
   const primeira = entrega('Aluno Recurso', 3.15);
   primeira.recurso = { status: 'pendente', motivo: 'O espelho afirma que indiquei local incorreto, mas a peça registra claramente a Via Hélio Prates. Solicito a conferência desse item e da pontuação correspondente.', criadoEm: Date.now(), notaRecorrida: 3.15, relatorioRecorrido: relatorioValido };
   const db = {
@@ -77,6 +78,7 @@ NOTA SUGERIDA: 4,00/5
       const texto = `**RESULTADO RECOMENDADO:** ACEITO PARCIALMENTE
 **NOVA NOTA:** 3,50/5
 **JUSTIFICATIVA AO ALUNO:** O recurso foi aceito parcialmente porque a informação sobre a Via Hélio Prates consta expressamente da peça entregue, afastando o desconto factual contestado.
+**TRECHO DO ENUNCIADO:** Durante o trajeto, na Via Hélio Prates, ocorreu o fato narrado.
 ## Análise técnica para o professor
 A entrega confirma o ponto factual indicado pelo aluno; os demais critérios permanecem inalterados.
 ## Fontes oficiais consultadas
@@ -101,7 +103,10 @@ A entrega confirma o ponto factual indicado pelo aluno; os demais critérios per
     assert.equal(analise.body.resultadoSugerido, 'Aceito parcialmente'); assert.equal(analise.body.notaSugerida, 3.5);
     assert.ok(!Object.prototype.hasOwnProperty.call(analise.body, 'relatorio'), 'o recurso não deve gerar novo espelho');
     assert.equal(requisicoesIA.length, 1, 'rótulos em negrito não podem provocar falsa resposta incompleta nem nova cobrança');
-    assert.match(JSON.stringify(requisicoesIA[0].messages), /<enunciado_original>/, 'a análise do recurso deve receber o enunciado original para conferir fatos contestados');
+    const contextoIA = JSON.stringify(requisicoesIA[0].messages);
+    assert.match(contextoIA, /<enunciado_atual_autoritativo>/, 'a análise do recurso deve identificar o enunciado atual como fonte autoritativa');
+    assert.match(contextoIA, /Via Hélio Prates/, 'a análise deve receber o enunciado atual publicado');
+    assert.doesNotMatch(contextoIA, /via L2 Norte/, 'um snapshot desatualizado não pode substituir o enunciado atual publicado');
 
     const confirmacao = await post('/api/entrega/validar', { id: 'p2', matricula: '9900001', validar: true, relatorio: 'tentativa de substituir o espelho', nota: 3.5, resultadoRecurso: 'Aceito parcialmente', decisaoRecurso: analise.body.decisaoSugerida }, loginProfessor.cookie);
     assert.equal(confirmacao.status, 200, JSON.stringify(confirmacao.body)); assert.equal(confirmacao.body.recursoDecidido, true); assert.equal(confirmacao.body.pdfAnexado, false);

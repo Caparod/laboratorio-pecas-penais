@@ -2922,10 +2922,23 @@ function extrairCamposAnaliseRecurso(texto) {
   const notaMatchNumero = notaTexto.match(/\d+(?:[.,]\d+)?/);
   const nota = notaMatchNumero ? parseFloat(notaMatchNumero[0].replace(',', '.')) : null;
   const justificativa = String(valorJustificativa || (justificativaMatch && justificativaMatch[1]) || '').replace(/^[-*]\s*/gm, '').trim();
-  return { resultado, nota, justificativa };
+  const evidenciaMatch = limpo.match(/(?:EVID[EÊ]NCIA|TRECHO)\s+(?:DO\s+)?ENUNCIADO\s*(?::|[-–—])\s*([^\n]+)/i);
+  const evidenciaEnunciado = String((objeto && (objeto.evidenciaEnunciado || objeto.evidencia_enunciado || objeto.trechoEnunciado)) || (evidenciaMatch && evidenciaMatch[1]) || '').replace(/^[-*]\s*/gm, '').trim();
+  return { resultado, nota, justificativa, evidenciaEnunciado };
 }
-function camposAnaliseRecursoValidos(campos) {
-  return !!(campos && campos.resultado && campos.nota != null && campos.nota >= 0 && campos.nota <= 5 && campos.justificativa.length >= 30);
+function textoComparavel(v) {
+  return String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+function recursoContestaFato(motivo) {
+  return /\b(fato|fatic|local|endereco|data|hora|via|enunciado|narrativ|cronolog|geografic|consta na peca|sistema entendeu)\b/i.test(textoComparavel(motivo));
+}
+function evidenciaEnunciadoValida(campos, enunciado, motivo) {
+  if (!recursoContestaFato(motivo)) return true;
+  const evidencia = textoComparavel(campos && campos.evidenciaEnunciado);
+  return evidencia.length >= 8 && textoComparavel(enunciado).includes(evidencia);
+}
+function camposAnaliseRecursoValidos(campos, enunciado, motivo) {
+  return !!(campos && campos.resultado && campos.nota != null && campos.nota >= 0 && campos.nota <= 5 && campos.justificativa.length >= 30 && evidenciaEnunciadoValida(campos, enunciado, motivo));
 }
 async function recursoAnalisarIA(req, res) {
   const sess = sessaoDe(req); if (!sess) return json(res, 401, { erro: 'SESSAO' }); if (sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
@@ -2936,21 +2949,22 @@ async function recursoAnalisarIA(req, res) {
   if (!e || !e.recurso || e.recurso.status !== 'pendente') return json(res, 404, { erro: 'Recurso pendente não encontrado.' });
   if (!podeAcessarPeca(sess.usuario, p)) return json(res, 403, { erro: 'Sem acesso a esta peça.' });
   const original = e.snapshotPeca || fotografiaPeca(p, { legado: true });
+  const enunciadoAtual = p.caso || original.caso || '';
   const base = Object.assign({}, original, { nomePeca: p.nomePeca || original.nomePeca, disc: p.disc || original.disc, gab: p.gab, versaoGabarito: p.versao || 1 });
-  const sistema = 'Você auxilia um professor de prática penal na análise de recurso acadêmico contra correção de peça. Sua análise é estritamente consultiva e não substitui a decisão humana. Confronte cada razão do aluno com o texto efetivamente entregue, o gabarito e o espelho original. Não presuma fatos, não redija a peça para o aluno e não produza um novo espelho de correção. Analise somente os pontos contestados. Responda em português do Brasil SOMENTE com um objeto JSON válido, sem markdown e sem texto antes ou depois, com estas chaves exatas: {"resultado":"Aceito|Aceito parcialmente|Não aceito","nota":3.15,"justificativa":"texto pronto, objetivo, individualizado e respeitoso, com pelo menos 30 caracteres","analiseTecnica":"fundamentação consultiva para o professor","fontesOficiais":[]}. A nota deve ser número de 0 a 5. Se o recurso não for aceito, mantenha exatamente a nota recorrida. Se for aceito total ou parcialmente, recalcule apenas o impacto dos pontos contestados. Um recurso nunca pode reduzir a nota anterior. Verifique citações jurídicas em fontes oficiais quando necessário e inclua somente URLs reais no vetor fontesOficiais.';
-  const usuario = '<enunciado_original>\n' + documentoIA(original.caso || p.caso, 20000) + '\n</enunciado_original>\n<gabarito_atual_corrigido versao="' + (base.versaoGabarito || 1) + '">\n' + documentoIA(base.gab, 30000) + '\n</gabarito_atual_corrigido>\n<peca_entregue>\n' + documentoIA(e.texto, 60000) + '\n</peca_entregue>\n<espelho_original>\n' + documentoIA(e.recurso.relatorioRecorrido || e.relatorio, 30000) + '\n</espelho_original>\n<nota_recorrida>' + documentoIA(String(e.recurso.notaRecorrida), 20) + '</nota_recorrida>\n<razoes_do_recurso>\n' + documentoIA(e.recurso.motivo, 5000) + '\n</razoes_do_recurso>\nAnalise apenas os pontos contestados confrontando obrigatoriamente o enunciado original, a peça entregue, o espelho recorrido e o gabarito ATUAL corrigido pelo professor.';
+  const sistema = 'Você auxilia um professor de prática penal na análise de recurso acadêmico contra correção de peça. Sua análise é estritamente consultiva e não substitui a decisão humana. O ENUNCIADO ATUAL PUBLICADO é a fonte autoritativa dos fatos; o espelho recorrido pode conter erro e nunca prevalece sobre ele. Confronte cada razão do aluno com o texto efetivamente entregue, o gabarito e o espelho original. Não presuma fatos, não redija a peça para o aluno e não produza um novo espelho de correção. Analise somente os pontos contestados. Em contestação factual, copie em evidenciaEnunciado um trecho LITERAL do enunciado atual que prove sua conclusão; não parafraseie e não invente. Responda em português do Brasil SOMENTE com um objeto JSON válido, sem markdown e sem texto antes ou depois, com estas chaves exatas: {"resultado":"Aceito|Aceito parcialmente|Não aceito","nota":3.15,"justificativa":"texto pronto, objetivo, individualizado e respeitoso, com pelo menos 30 caracteres","evidenciaEnunciado":"citação literal do enunciado atual, ou vazio se a controvérsia não for factual","analiseTecnica":"fundamentação consultiva para o professor","fontesOficiais":[]}. A nota deve ser número de 0 a 5. Se o recurso não for aceito, mantenha exatamente a nota recorrida. Se for aceito total ou parcialmente, recalcule apenas o impacto dos pontos contestados. Um recurso nunca pode reduzir a nota anterior. Verifique citações jurídicas em fontes oficiais quando necessário e inclua somente URLs reais no vetor fontesOficiais.';
+  const usuario = '<enunciado_atual_autoritativo>\n' + documentoIA(enunciadoAtual, 20000) + '\n</enunciado_atual_autoritativo>\n<gabarito_atual_corrigido versao="' + (base.versaoGabarito || 1) + '">\n' + documentoIA(base.gab, 30000) + '\n</gabarito_atual_corrigido>\n<peca_entregue>\n' + documentoIA(e.texto, 60000) + '\n</peca_entregue>\n<espelho_original_nao_autoritativo>\n' + documentoIA(e.recurso.relatorioRecorrido || e.relatorio, 30000) + '\n</espelho_original_nao_autoritativo>\n<nota_recorrida>' + documentoIA(String(e.recurso.notaRecorrida), 20) + '</nota_recorrida>\n<razoes_do_recurso>\n' + documentoIA(e.recurso.motivo, 5000) + '\n</razoes_do_recurso>\nAnalise apenas os pontos contestados. Para fatos, prevalece obrigatoriamente o enunciado atual autoritativo e a evidência deve ser uma citação literal dele.';
   let r = await iaTexto(sistema, usuario, 8000, true, sess);
   if (!r.ok) return erroIA(res, r);
   let analise = String(r.texto || '').trim();
   let campos = extrairCamposAnaliseRecurso(analise);
-  if (!camposAnaliseRecursoValidos(campos)) {
-    const reparo = '<analise_recurso>\n' + documentoIA(analise, 20000) + '\n</analise_recurso>\nReorganize sem alterar o mérito e devolva somente JSON válido com as chaves resultado, nota, justificativa, analiseTecnica e fontesOficiais.';
-    r = await iaTexto('Você apenas converte uma análise de recurso já concluída em JSON. Não altere o resultado, a nota, os fatos nem os fundamentos. Responda somente com {"resultado":"Aceito|Aceito parcialmente|Não aceito","nota":0,"justificativa":"texto com pelo menos 30 caracteres","analiseTecnica":"texto","fontesOficiais":[]}.', reparo, 8000, false, sess, { model: MODELO_REPARO });
+  if (!camposAnaliseRecursoValidos(campos, enunciadoAtual, e.recurso.motivo)) {
+    const reparo = '<enunciado_atual_autoritativo>\n' + documentoIA(enunciadoAtual, 20000) + '\n</enunciado_atual_autoritativo>\n<analise_recurso_invalida>\n' + documentoIA(analise, 20000) + '\n</analise_recurso_invalida>\nCorrija qualquer afirmação factual incompatível com o enunciado atual. Em recurso factual, evidenciaEnunciado deve copiar literalmente um trecho existente no enunciado. Devolva somente JSON válido com as chaves resultado, nota, justificativa, evidenciaEnunciado, analiseTecnica e fontesOficiais.';
+    r = await iaTexto('Você revisa uma análise de recurso usando o enunciado atual como fonte autoritativa. O espelho anterior pode estar errado. Não invente nem preserve fato incompatível com o enunciado. Responda somente com {"resultado":"Aceito|Aceito parcialmente|Não aceito","nota":0,"justificativa":"texto com pelo menos 30 caracteres","evidenciaEnunciado":"citação literal do enunciado atual","analiseTecnica":"texto","fontesOficiais":[]}.', reparo, 8000, false, sess, { model: MODELO_REPARO });
     if (!r.ok) return erroIA(res, r);
     analise = String(r.texto || '').trim();
     campos = extrairCamposAnaliseRecurso(analise);
   }
-  if (!camposAnaliseRecursoValidos(campos)) return json(res, 502, { erro: 'A IA não informou resultado, justificativa e nota em formato utilizável. Nenhuma decisão foi salva; tente novamente.' });
+  if (!camposAnaliseRecursoValidos(campos, enunciadoAtual, e.recurso.motivo)) return json(res, 502, { erro: 'A análise citou fato que não consta do enunciado atual e foi bloqueada. Nenhuma decisão foi salva; tente novamente.' });
   const mapaResultado = { 'ACEITO': 'Aceito', 'ACEITO PARCIALMENTE': 'Aceito parcialmente', 'NAO ACEITO': 'Não aceito' };
   const resultadoSugerido = mapaResultado[campos.resultado] || 'Não aceito';
   const notaRecorrida = Math.max(0, Math.min(5, Number(e.recurso.notaRecorrida != null ? e.recurso.notaRecorrida : e.nota) || 0));
