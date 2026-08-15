@@ -4,7 +4,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { limparEnunciadoIA, limparGabaritoIA, limparCorrecaoIA, normalizarPenalidadesCorrecao, normalizarGabaritoPenal, validarEnunciado, analisarEspelho, normalizarEspelhoCinco, detectarJurisprudencia, similaridadeNarrativa, validarGabarito, validarCorrecao } = require('./validation');
+const { limparEnunciadoIA, limparGabaritoIA, limparCorrecaoIA, normalizarPenalidadesCorrecao, normalizarGabaritoPenal, validarEnunciado, analisarEspelho, normalizarEspelhoCinco, detectarJurisprudencia, similaridadeNarrativa, validarGabarito, validarCorrecao, sanearCorrecaoIA } = require('./validation');
 const { LIMITE_ARQUIVO, decodificarDataUrl, tipoArquivo, extrairTextoDocx, extrairTextoDocLegado, auditarFormatacaoDocx, auditarFormatacaoPdf, auditarFormatacaoNaoVerificavel, penalidadeFormatacao, detectarSinaisPrompt, analisarRobotizacao, validarParecerInicial } = require('./arquivo-peca');
 const { gerarPdfEspelho, gerarPdfParecerInicial, relatorioParaHtml } = require('./relatorio-pdf');
 const { capturarEstadoCorrecao, restaurarEstadoCorrecao, aplicarResultadoCorrecao } = require('./correcao-transacao');
@@ -2595,13 +2595,13 @@ async function gerarRelatorioCorrecao(sess, p, e) {
   const usuario = [blocoContexto, { type: 'text', text: respostaIndividual }];
   let r = await iaTexto(SISTEMA_CORRECAO_CRITERIOSO, usuario, 14000, true, sess);
   if (!r.ok) return { ok: false, erroIA: r, erro: r.erro || 'Falha na correção por IA.' };
-  let relatorio = normalizarPenalidadesCorrecao(limparCorrecaoIA(garantirLinksFontes((r.texto || '').trim(), true)), auditoriaFormatacao);
+  let relatorio = sanearCorrecaoIA(normalizarPenalidadesCorrecao(limparCorrecaoIA(garantirLinksFontes((r.texto || '').trim(), true)), auditoriaFormatacao), e.texto);
   let vr = validarCorrecao(relatorio, e.texto);
   if (!vr.ok) {
     const reparo = '<resposta_original_apenas_para_comparacao>\n' + documentoIA(e.texto, 60000) + '\n</resposta_original_apenas_para_comparacao>\n<relatorio_alta_capacidade>\n' + documentoIA(relatorio, 30000) + '\n</relatorio_alta_capacidade>\n<falhas_estruturais>\n' + documentoIA(vr.erros.join(' '), 4000) + '\n</falhas_estruturais>\nCorrija TODAS as falhas indicadas sem alterar o mérito jurídico. A resposta original serve somente para detectar cópia: não reproduza dela nenhuma sequência de 12 ou mais palavras. Substitua transcrições por sínteses avaliativas curtas, preserve a tabela, os cálculos, a nota, as fontes e todas as seções obrigatórias.';
     r = await iaTexto(SISTEMA_REPARO_CORRECAO, reparo, 12000, false, sess, { model: MODELO_REPARO });
     if (!r.ok) return { ok: false, erroIA: r, erro: r.erro || 'Falha na correção por IA.' };
-    relatorio = normalizarPenalidadesCorrecao(limparCorrecaoIA(garantirLinksFontes((r.texto || '').trim(), true)), auditoriaFormatacao);
+    relatorio = sanearCorrecaoIA(normalizarPenalidadesCorrecao(limparCorrecaoIA(garantirLinksFontes((r.texto || '').trim(), true)), auditoriaFormatacao), e.texto);
     vr = validarCorrecao(relatorio, e.texto);
   }
   if (!vr.ok) return { ok: false, erro: 'A correção da IA foi bloqueada por inconsistência: ' + vr.erros.join(' ') };

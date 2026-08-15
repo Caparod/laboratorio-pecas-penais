@@ -52,6 +52,86 @@ function contemTrechoExtensoCopiado(relatorio, respostaAluno, quantidade) {
   return false;
 }
 
+function tokensComPosicao(valor) {
+  const texto = String(valor || '');
+  const encontrados = [];
+  const re = /[\p{L}\p{N}]+/gu;
+  let m;
+  while ((m = re.exec(texto))) encontrados.push({ valor: normalizar(m[0]), inicio: m.index, fim: m.index + m[0].length });
+  return encontrados;
+}
+
+function parafrasearCopiasExtensas(relatorio, respostaAluno, quantidade) {
+  const tamanho = Math.max(12, Number(quantidade) || 12);
+  const origem = tokensComPosicao(respostaAluno);
+  if (origem.length < tamanho) return String(relatorio || '');
+  const janelas = new Map();
+  for (let i = 0; i <= origem.length - tamanho; i++) {
+    const chave = origem.slice(i, i + tamanho).map(t => t.valor).join(' ');
+    const indices = janelas.get(chave) || [];
+    if (indices.length < 4) indices.push(i);
+    janelas.set(chave, indices);
+  }
+  return String(relatorio || '').split(/\r?\n/).map(linhaOriginal => {
+    let linha = linhaOriginal;
+    for (let rodada = 0; rodada < 30; rodada++) {
+      const destino = tokensComPosicao(linha);
+      let melhor = null;
+      for (let i = 0; i <= destino.length - tamanho; i++) {
+        const chave = destino.slice(i, i + tamanho).map(t => t.valor).join(' ');
+        const candidatos = janelas.get(chave);
+        if (!candidatos) continue;
+        for (const origemInicio of candidatos) {
+          let extensao = tamanho;
+          while (i + extensao < destino.length && origemInicio + extensao < origem.length && destino[i + extensao].valor === origem[origemInicio + extensao].valor) extensao++;
+          if (!melhor || extensao > melhor.extensao) melhor = { inicio: i, extensao };
+        }
+      }
+      if (!melhor) break;
+      const primeiro = destino[melhor.inicio], ultimo = destino[melhor.inicio + melhor.extensao - 1];
+      linha = linha.slice(0, primeiro.inicio) + 'o argumento desenvolvido pelo aluno' + linha.slice(ultimo.fim);
+    }
+    return linha;
+  }).join('\n');
+}
+
+function normalizarListasAvaliativas(texto) {
+  const saida = [];
+  let secaoLista = false;
+  let ultimoItem = -1;
+  for (const linhaOriginal of String(texto || '').replace(/\r\n/g, '\n').split('\n')) {
+    const titulo = linhaOriginal.match(/^\s*##\s+(.+)$/);
+    if (titulo) {
+      const nome = normalizar(titulo[1]);
+      secaoLista = nome.startsWith('acertos') || nome.startsWith('erros formais') || nome.startsWith('erros materiais');
+      ultimoItem = -1;
+      saida.push(linhaOriginal);
+      continue;
+    }
+    if (!secaoLista) { saida.push(linhaOriginal); continue; }
+    const limpo = linhaOriginal.trim();
+    if (!limpo) { saida.push(''); ultimoItem = -1; continue; }
+    if (/^[-*+]\s+/.test(limpo)) {
+      saida.push('- ' + limpo.replace(/^[-*+]\s+/, ''));
+      ultimoItem = saida.length - 1;
+      continue;
+    }
+    if (/^\d+[.)]\s+/.test(limpo)) {
+      saida.push('- ' + limpo.replace(/^\d+[.)]\s+/, ''));
+      ultimoItem = saida.length - 1;
+      continue;
+    }
+    const conteudo = limpo.replace(/^#{1,6}\s*/, '');
+    if (ultimoItem >= 0) saida[ultimoItem] += ' ' + conteudo;
+    else { saida.push('- ' + conteudo); ultimoItem = saida.length - 1; }
+  }
+  return saida.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+function sanearCorrecaoIA(relatorio, respostaAluno) {
+  return normalizarListasAvaliativas(parafrasearCopiasExtensas(relatorio, respostaAluno, 12));
+}
+
 function linhasSoltasEmLista(texto, titulo) {
   return secao(texto, titulo).split(/\r?\n/).slice(1).filter(linha => {
     const l = linha.trim();
@@ -419,4 +499,4 @@ function validarCorrecao(texto, respostaAluno) {
   return resultado(erros, { nota, riscoRobotizacao: risco, penalidadeRobotizacao: penalidade, penalidadeJurisprudencia, penalidadeFormatacaoNpj, outrasPenalidades, totalPenalidades });
 }
 
-module.exports = { normalizar, limparEnunciadoIA, limparGabaritoIA, limparCorrecaoIA, normalizarPenalidadesCorrecao, normalizarGabaritoPenal, validarEnunciado, analisarEspelho, normalizarEspelhoCinco, detectarJurisprudencia, similaridadeNarrativa, validarGabarito, validarCorrecao, contemTrechoExtensoCopiado };
+module.exports = { normalizar, limparEnunciadoIA, limparGabaritoIA, limparCorrecaoIA, normalizarPenalidadesCorrecao, normalizarGabaritoPenal, validarEnunciado, analisarEspelho, normalizarEspelhoCinco, detectarJurisprudencia, similaridadeNarrativa, validarGabarito, validarCorrecao, contemTrechoExtensoCopiado, parafrasearCopiasExtensas, normalizarListasAvaliativas, sanearCorrecaoIA };

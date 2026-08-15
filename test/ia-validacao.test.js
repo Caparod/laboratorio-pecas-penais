@@ -1,6 +1,6 @@
 'use strict';
 const assert = require('assert');
-const { limparEnunciadoIA, limparGabaritoIA, limparCorrecaoIA, normalizarPenalidadesCorrecao, normalizarGabaritoPenal, validarEnunciado, analisarEspelho, normalizarEspelhoCinco, detectarJurisprudencia, similaridadeNarrativa, validarGabarito, validarCorrecao } = require('../validation');
+const { limparEnunciadoIA, limparGabaritoIA, limparCorrecaoIA, normalizarPenalidadesCorrecao, normalizarGabaritoPenal, validarEnunciado, analisarEspelho, normalizarEspelhoCinco, detectarJurisprudencia, similaridadeNarrativa, validarGabarito, validarCorrecao, sanearCorrecaoIA } = require('../validation');
 
 const enunciadoMarcado = '<enunciado>\n**Texto integral do caso.**\n</enunciado>';
 assert.equal(limparEnunciadoIA(enunciadoMarcado), 'Texto integral do caso.', 'marcação interna da IA deve ser removida');
@@ -115,6 +115,9 @@ const correcaoComParagrafoSolto = correcao.replace('- Cabimento adequado.', '- I
 assert.equal(validarCorrecao(correcaoComParagrafoSolto).ok, false, 'parágrafo solto no meio da lista de acertos deve bloquear a correção');
 const correcaoComCopiaExtensa = correcao.replace('- Cabimento adequado.', '- O aluno apresentou o seguinte conteúdo: ' + trechoCopiado + '.');
 assert.equal(validarCorrecao(correcaoComCopiaExtensa, trechoCopiado).ok, false, 'trecho extenso copiado da peça do aluno deve ser parafraseado antes do envio');
+const correcaoSaneada = sanearCorrecaoIA(correcaoComParagrafoSolto.replace(trechoCopiado, trechoCopiado + ' e apresentou a mesma passagem novamente'), trechoCopiado + ' e apresentou a mesma passagem novamente');
+assert.equal(validarCorrecao(correcaoSaneada, trechoCopiado + ' e apresentou a mesma passagem novamente').ok, true, 'o saneamento determinístico deve eliminar cópia extensa e parágrafo solto sem invalidar o espelho');
+assert.doesNotMatch(correcaoSaneada, /o reconhecimento de pessoa presencialmente ou por fotografia realizado na fase do inquérito policial/i, 'a transcrição extensa deve ser substituída por síntese avaliativa');
 assert.equal(validarCorrecao(correcao.replace(/\| Item \|[\s\S]*?\| 6 \|[^\n]+/, '- Cabimento: 1,00/1,00\n- Tempestividade: 0,50/0,50\n- Fatos: 0,50/0,50\n- Fundamentação: 1,00/1,50\n- Pedidos: 0,50/0,75\n- Técnica: 0,50/0,75')).ok, false, 'lista sem tabela OAB/FGV deve falhar');
 assert.equal(validarCorrecao(correcao.replace('NOTA SUGERIDA: 4,00/5', 'NOTA SUGERIDA: 3,50/5')).ok, false, 'nota divergente da soma deve falhar');
 assert.equal(validarCorrecao(correcao.replace('- Artigos conferidos no texto oficial.', '- Súmula 9999 — INEXISTENTE/FALSA.')).ok, false, 'citação falsa exige nota zero');
