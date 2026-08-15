@@ -331,17 +331,25 @@ function analisarRobotizacao(texto) {
   };
 }
 
-function validarParecerInicial(texto) {
+function textoComparavelParecer(v) {
+  return String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+function validarParecerInicial(texto, respostaAluno) {
   const t = String(texto || '').trim();
   const erros = [];
-  if (t.length < 250) erros.push('parecer curto demais');
+  if (t.length < 500) erros.push('parecer curto ou superficial demais');
   for (const titulo of ['Leitura inicial', 'Referências e citações', 'Integridade do arquivo', 'Formatação NPJ', 'Pontos de atenção', 'Próximo passo']) {
     if (!new RegExp('##\\s*' + titulo, 'i').test(t)) erros.push('seção ausente: ' + titulo);
   }
+  if ((t.match(/^\s*(?:[-*]|\d+[.)])\s+/gm) || []).length < 4) erros.push('faltam orientações práticas individualizadas em lista');
+  if (respostaAluno) {
+    const baseAluno = textoComparavelParecer(respostaAluno);
+    const citacoes = Array.from(t.matchAll(/["“]([^"”\n]{8,220})["”]/g)).map(m => textoComparavelParecer(m[1])).filter(Boolean);
+    if (!citacoes.some(c => c.length >= 8 && baseAluno.includes(c))) erros.push('nenhum trecho literal da resposta do aluno foi analisado');
+  }
   if (/\b(?:gabarito|espelho de correção|resposta-modelo|peça correta)\b/i.test(t)) erros.push('conteúdo reservado mencionado');
-  if (/\bnota\b|pontua(?:ç|c)[aã]o|\b\d+(?:[,.]\d+)?\s*\/\s*(?:5|10|100)\b/i.test(t)) erros.push('nota ou pontuação mencionada');
-  const nomePeca = /\b(?:resposta\s+[àa]\s+acusa(?:ç|c)[aã]o|alega(?:ç|c)[oõ]es\s+finais(?:\s+por\s+memoriais)?|pedido\s+de\s+liberdade\s+provis[oó]ria|relaxamento\s+de\s+pris[aã]o\s+em\s+flagrante|revoga(?:ç|c)[aã]o\s+de\s+pris[aã]o\s+preventiva|apela(?:ç|c)[aã]o\s+criminal|recurso\s+em\s+sentido\s+estrito|contrarraz[oõ]es\s+de\s+apela(?:ç|c)[aã]o|embargos\s+de\s+declara(?:ç|c)[aã]o|embargos\s+infringentes(?:\s+e\s+de\s+nulidade)?|agravo\s+em\s+execu(?:ç|c)[aã]o|habeas\s+corpus|revis[aã]o\s+criminal|queixa[-\s]crime)\b/i;
-  if (nomePeca.test(t)) erros.push('espécie de peça processual revelada');
+  if (/\bnota\b|pontua(?:ç|c)[aã]o|(?:\b[0-5](?:[,.]\d+)?\s*\/\s*5\b|\b(?:10|[0-9])(?:[,.]\d+)?\s*\/\s*10\b|\b(?:100|[0-9]{1,2})\s*\/\s*100\b)/i.test(t)) erros.push('nota ou pontuação mencionada');
   if (/(?:\ba\s+(?:medida|peça)\s+(?:processual\s+)?(?:cabível|adequada|correta)\s+(?:é|seria|consiste)|\b(?:use|utilize|invoque)\s+(?:o\s+)?art(?:igo)?\.?\s*\d+|\b(?:inclua|apresente|desenvolva)\s+(?:a|uma)\s+tese\s+de\s+|\b(?:peça|requeira|postule)\s+(?:o|a|os|as)?\s*(?:provimento|absolvi(?:ç|c)[aã]o|anula(?:ç|c)[aã]o|desclassifica(?:ç|c)[aã]o|revoga(?:ç|c)[aã]o))/i.test(t)) erros.push('solução ou redação prescritiva revelada');
   return { ok: !erros.length, erros };
 }

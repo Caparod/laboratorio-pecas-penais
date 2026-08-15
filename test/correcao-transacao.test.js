@@ -24,5 +24,7 @@ assert.match(servidor, /vigiarTentativa\(job[\s\S]*limparEstadoTentativa\(e, est
 assert.match(servidor, /catch \(err\) \{\s*limparEstadoTentativa\(e, estadoInicial\)/, 'falha individual deve restaurar o estado anterior');
 assert.match(servidor, /processarLoteCorrecao[\s\S]*catch \(err\) \{[\s\S]*if \(correcaoPersistida\)[\s\S]*break;\s*\}\s*limparEstadoTentativa\(e, estadoInicial\)/, 'cada aluno do lote deve ser tratado como transação isolada, sem reverter correção já persistida por falha de e-mail');
 assert.match(servidor, /relatorioIAInvalido[\s\S]*correcao-incompleta-ou-invalida/, 'reinício do servidor deve remover resíduos antigos de IA');
+assert.match(servidor, /d\.stop_reason === 'max_tokens'[\s\S]*Continue exatamente do ponto em que parou[\s\S]*partesTruncadas\.concat/, 'resposta truncada deve ser continuada e reunida automaticamente');
+assert.match(servidor, /SISTEMA_CORRECAO_CRITERIOSO, usuario, 14000/, 'correção definitiva deve ter margem de saída suficiente');
 
 console.log('OK: correções interrompidas são transacionais e não deixam resíduos.');

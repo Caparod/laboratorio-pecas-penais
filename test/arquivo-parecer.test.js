@@ -65,26 +65,26 @@ assert.ok(analiseRobot.sinais.some(s => /enumerações/.test(s)));
 assert.match(analiseRobot.ressalva, /não comprovam autoria/);
 
 const parecerValido = `## Leitura inicial
-Esta é uma leitura diagnóstica cuidadosa do texto apresentado pelo estudante.
+- Esta é uma leitura diagnóstica cuidadosa do texto apresentado pelo estudante, com indicação dos pontos que precisam de conferência antes do envio definitivo.
 ## Referências e citações
-As referências devem ser conferidas nos portais oficiais indicados e retiradas quando não confirmadas.
+- As referências devem ser conferidas nos portais oficiais indicados e retiradas quando não confirmadas.
 ## Integridade do arquivo
-Não foram encontrados marcadores estranhos ou instruções destinadas a sistemas automáticos.
+- Não foram encontrados marcadores estranhos ou instruções destinadas a sistemas automáticos.
 ## Formatação NPJ
-Confira o papel timbrado, a fonte PT Sans, as margens, o espaçamento, o alinhamento, o recuo e a paginação nas regras oficiais disponibilizadas pelo sistema.
+- Confira o papel timbrado, a fonte PT Sans, as margens, o espaçamento, o alinhamento, o recuo e a paginação nas regras oficiais disponibilizadas pelo sistema.
 ## Pontos de atenção
-Revise a coerência entre os fatos narrados, a fase processual e cada fundamento utilizado, sem completar a resposta automaticamente.
+- Revise a coerência entre os fatos narrados, a fase processual e cada fundamento utilizado, sem completar a resposta automaticamente.
 ## Próximo passo
-Faça uma leitura final em voz alta e confira, item por item, se cada afirmação possui apoio no enunciado ou em fonte oficial.`;
+- Faça uma leitura final em voz alta e confira, item por item, se cada afirmação possui apoio no enunciado ou em fonte oficial.`;
 assert.deepStrictEqual(validarParecerInicial(parecerValido), { ok: true, erros: [] });
 assert.strictEqual(validarParecerInicial(parecerValido + '\nNota: 9/10').ok, false);
 assert.strictEqual(validarParecerInicial(parecerValido + '\nO gabarito correto é outro.').ok, false);
 assert.strictEqual(validarParecerInicial(parecerValido.replace(
-  'Revise a coerência entre os fatos narrados, a fase processual e cada fundamento utilizado, sem completar a resposta automaticamente.',
+  '- Revise a coerência entre os fatos narrados, a fase processual e cada fundamento utilizado, sem completar a resposta automaticamente.',
   'A medida processual adequada é Apelação Criminal. Use o art. 593 do CPP e peça o provimento para absolvição.'
 )).ok, false, 'a pré-correção não pode revelar a peça, o fundamento nem o pedido prontos');
 assert.strictEqual(validarParecerInicial(parecerValido.replace(
-  'Revise a coerência entre os fatos narrados, a fase processual e cada fundamento utilizado, sem completar a resposta automaticamente.',
+  '- Revise a coerência entre os fatos narrados, a fase processual e cada fundamento utilizado, sem completar a resposta automaticamente.',
   'Confira se a medida escolhida corresponde à fase processual e se cada fundamento possui apoio no enunciado.'
 )).ok, true, 'pergunta de autocorreção sem solução deve permanecer permitida');
 

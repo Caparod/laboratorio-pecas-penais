@@ -16,6 +16,8 @@ for (const arquivo of [path.join(__dirname, '..', 'index.html'), path.join(__dir
     assert.match(html, /function profPropostas\(/, 'área do professor deve organizar as peças propostas por rodada');
     assert.match(html, /Corrigir agora/, 'entrega pendente deve oferecer acesso direto à correção');
     assert.match(html, /Rever correção/, 'entrega corrigida deve permanecer acessível ao professor');
+    assert.match(html, /Desconsiderar entrega e liberar nova pré-correção/, 'professor deve poder reabrir a pré-correção de uma entrega específica');
+    assert.match(html, /Pré-correções utilizadas/, 'professor deve visualizar quem já utilizou a pré-correção de cada peça');
     assert.match(html, /function popupSelecionarRodada\(/, 'professor deve selecionar a rodada em um popup');
     assert.match(html, /A primeira peça publicada para cada turma é a Peça 1/, 'interface deve explicar a numeração sequencial das rodadas');
     assert.match(html, /Nota do Estágio \(0 a 5\)/, 'correção deve usar a escala do Estágio');

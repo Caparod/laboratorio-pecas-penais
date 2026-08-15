@@ -683,6 +683,8 @@ async function abrirPeca(id){
   else{ent='<table class="painel"><tr><th>Aluno</th><th>Matrícula</th><th>Enviado</th><th>Nota</th><th>Status</th><th></th></tr>';
     for(const e of d.entregas)ent+='<tr><td>'+esc(e.nome)+'</td><td>'+e.matricula+'</td><td>'+dataHora(e.enviadoEm)+'</td><td>'+(e.nota!=null?String(e.nota).replace('.',','):'—')+'</td><td>'+(e.validado?'✅ validada':(e.temRelatorio?'📝 corrigida (não validada)':'⏳ pendente'))+'</td><td><a style="cursor:pointer;color:var(--azul)" onclick="abrirEntrega(\''+id+'\',\''+e.matricula+'\')">corrigir</a></td></tr>';
     ent+='</table>';}
+  const preusos=d.precorrecoes||[];
+  const preHtml=preusos.length?'<table class="painel"><tr><th>Aluno</th><th>Matrícula</th><th>Utilizada em</th><th>Entrega definitiva</th><th></th></tr>'+preusos.map(x=>'<tr><td>'+esc(x.nome)+'</td><td>'+esc(x.matricula)+'</td><td>'+esc(dataHora(x.utilizadaEm))+'</td><td>'+(x.temEntrega?'sim':'não')+'</td><td><button onclick="liberarNovaPrecorrecao(\''+id+'\',\''+escAttr(x.matricula)+'\','+(x.temEntrega?'true':'false')+')">Liberar novamente</button></td></tr>').join('')+'</table>':'<p style="color:var(--cinza)">Nenhum aluno utilizou a pré-correção desta peça.</p>';
   window.__peca=p;
   const liberadosCount=Object.keys(d.liberados||{}).length;
   const souAutor=(p.autor===AUTH.usuario)||podeGerirAgora();
@@ -710,6 +712,7 @@ async function abrirPeca(id){
    +'<div class="card"><h3>Gabarito</h3><div class="bloco" style="background:#eef5ee;border:1px solid #cfe3cf;border-radius:8px;padding:14px">'+linkCitacoesHtml(md2html(p.gab||'(sem gabarito)'))+'</div></div>'
    +(p.publicada
      ?('<div class="card painel"><h3>Entregas dos alunos</h3>'+ent+'</div>'
+      +'<div class="card painel"><h3>Pré-correções utilizadas</h3><p style="font-size:.85rem;color:var(--cinza)">Libere individualmente apenas quando o aluno precisar refazer a pré-correção.</p>'+preHtml+'</div>'
       +'<div class="card"><h3>Liberar entrega fora do prazo para um aluno</h3>'
       +'<p style="font-size:.85rem;color:var(--cinza)">Digite a matrícula do aluno que poderá enviar mesmo após o prazo.</p>'
       +'<div style="font-family:Arial,sans-serif"><input id="pz_mat" placeholder="Matrícula" style="padding:8px;border:1px solid #cfc9b8;border-radius:6px"> <button onclick="liberarAluno(\''+id+'\')">✅ Liberar este aluno</button></div>'
@@ -770,6 +773,14 @@ async function vincularTurma(){
   }catch(e){fb.innerHTML='<p class="erro-ia">Falha: '+esc(e.message)+'</p>';}
 }
 async function renovarPrazo(id){const v=document.getElementById('pz_novo').value;if(!v){alert('Escolha o novo prazo.');return}const r=await apiPost('/api/peca/renovar-prazo',{id,prazo:v});const d=await r.json();document.getElementById('pz_fb').innerHTML=r.ok?'<p style="color:var(--verde);font-family:Arial,sans-serif;font-size:.85rem">Prazo renovado para '+esc(dataHoraBR(v))+'.</p>':'<p class="erro-ia">'+esc(d.erro||'Erro')+'</p>';}
+async function liberarNovaPrecorrecao(id,matricula,temEntrega){
+  const aviso=temEntrega?'Este aluno já enviou a versão definitiva. A entrega e eventual correção também serão removidas.':'O parecer anterior será apagado e o aluno poderá solicitar uma nova pré-correção.';
+  if(!confirm('Liberar uma nova pré-correção para a matrícula '+matricula+'? '+aviso))return;
+  const r=await apiPost('/api/peca/precorrecao/liberar',{id,matricula,desconsiderarEntrega:!!temEntrega});const d=await r.json();
+  if(!r.ok){alert(d.erro||'Não foi possível liberar.');return}
+  alert('Nova pré-correção liberada para '+(d.nome||matricula)+(d.entregaDesconsiderada?'. A entrega anterior foi desconsiderada.':'.'));
+  abrirPeca(id);
+}
 async function liberarGeral(id,val){const r=await apiPost('/api/peca/liberar-prazo',{id,liberar:val});const d=await r.json();document.getElementById('pz_fb').innerHTML=r.ok?'<p style="color:var(--verde);font-family:Arial,sans-serif;font-size:.85rem">'+(val?'Entregas fora do prazo LIBERADAS para a turma.':'Bloqueio de prazo reativado.')+'</p>':'<p class="erro-ia">'+esc(d.erro||'Erro')+'</p>';}
 async function liberarAluno(id,mat,val){const m=mat||document.getElementById('pz_mat').value.trim();if(!m){alert('Informe a matrícula.');return}const r=await apiPost('/api/peca/liberar-prazo',{id,matricula:m,liberar:val!==false});if(r.ok)abrirPeca(id);}
 function dataHora(ts){if(!ts)return '—';const d=new Date(ts);return d.toLocaleString('pt-BR')}
@@ -786,7 +797,7 @@ async function abrirEntrega(id,mat){
   const relatorioInicial=d.relatorio;
   const notaInicial=sugestaoRecurso&&sugestaoRecurso.nota!=null?sugestaoRecurso.nota:(d.nota!==''&&d.nota!=null?d.nota:(d.notaSugerida!=null?d.notaSugerida:''));
   const recursoHtml=recursoPendente?'<div class="card" style="border-color:#d9bd64;background:#fffaf0"><span class="badge">Recurso pendente</span><h3>Razões apresentadas pelo aluno</h3><div class="caso">'+esc(d.recurso.motivo)+'</div><p style="font: .82rem Arial,sans-serif;color:var(--cinza);margin-top:10px">Nota recorrida: '+esc(String(d.recurso.notaRecorrida).replace('.',','))+'/5 · apresentado em '+esc(dataHora(d.recurso.criadoEm))+'</p><div class="botoes"><button class="primario" onclick="analisarRecursoIA()">🤖 Analisar recurso com IA</button></div><div id="recurso_ia_fb"></div></div>':'';
-  conteudo.innerHTML='<div class="botoes" style="margin-bottom:10px"><button onclick="abrirPeca(\''+id+'\')">← Voltar</button></div>'
+  conteudo.innerHTML='<div class="botoes" style="margin-bottom:10px"><button onclick="abrirPeca(\''+id+'\')">← Voltar</button>'+(recursoPendente?'':'<button onclick="desconsiderarEntrega()" style="color:#a3271d;border-color:#a3271d">🗑 Desconsiderar entrega e liberar nova pré-correção</button>')+'</div>'
    +'<span class="badge">Peça '+d.peca.num+'</span><h2 class="titulo-peca">'+esc(d.aluno.nome)+' · '+d.aluno.matricula+'</h2>'
    +recursoHtml
    +'<div class="card"><h3>Peça enviada pelo aluno</h3>'
@@ -812,6 +823,14 @@ function atualizarDisponibilidadePrevia(){
   const pronta=!!(rel&&rel.value.trim()&&nota&&nota.value.trim()!=='');btn.disabled=!pronta;btn.title=pronta?'Visualizar exatamente como o aluno receberá':'A prévia será liberada quando a correção e a nota estiverem prontas';
 }
 const ETAPAS_CORR=[[0,'📖 Lendo a peça do aluno...'],[10,'⚖️ Verificando jurisprudência (STF/STJ)...'],[45,'🧐 Conferindo citações e anexo...'],[75,'🧮 Calculando a nota ponto a ponto...']];
+async function desconsiderarEntrega(){
+  const ent=window.__ent;if(!ent)return;
+  if(!confirm('Desconsiderar esta entrega? O texto enviado e eventual correção serão removidos. O aluno poderá fazer uma nova pré-correção e enviar novamente. Esta ação não afeta outros alunos.'))return;
+  const r=await apiPost('/api/entrega/desconsiderar',{id:ent.id,matricula:ent.mat,confirmar:true});const d=await r.json();
+  if(!r.ok){alert(d.erro||'Não foi possível desconsiderar a entrega.');return}
+  alert('Entrega de '+(d.nome||d.matricula)+' desconsiderada. Uma nova pré-correção foi liberada para este aluno.');
+  profPropostas();
+}
 async function corrigirEntregaIA(){
   const fb=document.getElementById('corrfb'),campoRel=document.getElementById('relatorio'),campoNota=document.getElementById('nota');
   const estadoAnterior={relatorio:campoRel?campoRel.value:'',nota:campoNota?campoNota.value:''};
