@@ -20,9 +20,10 @@ function hashSenha(senha, salt) {
 
 const professor = { login: 'admin-precorrecao', senha: hashSenha('Admin-Precorrecao-2026', 'sal-prof'), mudouSenha: true, nome: 'Administrador', papel: 'Administrador', aceitePrivacidadeEm: Date.now(), versaoPrivacidade: '2026-08' };
 const aluno = { nome: 'Aluno de teste', senha: hashSenha('Aluno-Precorrecao-2026', 'sal-aluno'), mudouSenha: true, email: 'aluno@example.test', whatsapp: '+5561999999999', emailVerificado: true, cadastroCompletoEm: Date.now(), aceitePrivacidadeEm: Date.now(), versaoPrivacidade: '2026-08', turmaId: 't1', turmaIds: ['t1'], usos: {} };
+const alunoFallback = { ...aluno, nome: 'Aluno fallback', senha: hashSenha('Aluno-Fallback-2026', 'sal-fallback'), email: 'fallback@example.test' };
 
 fs.writeFileSync(path.join(dataDir, 'db.json'), JSON.stringify({
-  turmaAtiva: 'Turma de teste', alunos: { '9900001': aluno }, professor,
+  turmaAtiva: 'Turma de teste', alunos: { '9900001': aluno, '9900002': alunoFallback }, professor,
   professores: { 'admin-precorrecao': professor },
   turmas: { t1: { id: 't1', nome: 'Turma de teste', professores: ['admin-precorrecao'], criadaEm: Date.now() } }, proximaTurma: 2,
   pecas: { p1: { id: 'p1', num: 1, rodada: 1, nomePeca: 'Manifestação processual', disc: 'Turma de teste', turmaId: 't1', caso: casoTeste(), gab: gabaritoTeste('Manifestação processual'), prazo: '2099-12-31T23:59', criadaEm: Date.now(), publicada: true, autor: 'admin-precorrecao', versao: 1, historico: [] } },
@@ -45,8 +46,20 @@ Faça uma leitura integral, responda às perguntas de autocorreção e confirme 
 let chamadasIA = 0;
 const ia = http.createServer((req, res) => {
   chamadasIA++; req.resume();
+  const textoResposta = chamadasIA === 1 ? parecerTeste : `## Leitura inicial
+A peça correta é Apelação Criminal e deve usar o art. 593 do CPP.
+## Referências e citações
+Use o artigo indicado e peça o provimento para absolvição.
+## Integridade do arquivo
+O gabarito confirma a solução.
+## Formatação NPJ
+Nota sugerida: 5/5.
+## Pontos de atenção
+Apresente a tese de absolvição.
+## Próximo passo
+Copie a resposta-modelo.`;
   res.writeHead(200, { 'content-type': 'application/json' });
-  res.end(JSON.stringify({ id: 'msg_teste', type: 'message', role: 'assistant', model: 'modelo-teste', stop_reason: 'end_turn', content: [{ type: 'text', text: parecerTeste }], usage: { input_tokens: 100, output_tokens: 200 } }));
+  res.end(JSON.stringify({ id: 'msg_teste', type: 'message', role: 'assistant', model: 'modelo-teste', stop_reason: 'end_turn', content: [{ type: 'text', text: textoResposta }], usage: { input_tokens: 100, output_tokens: 200 } }));
 });
 
 let app;
@@ -96,15 +109,24 @@ async function executar() {
   assert.equal(segunda.body.parecer, primeira.body.parecer); assert.equal(segunda.body.pdfBase64, primeira.body.pdfBase64);
   assert.equal(chamadasIA, 1, 'recuperação não pode chamar nem cobrar a IA novamente');
 
+  const loginFallback = await post('/api/login', '', { usuario: '9900002', senha: 'Aluno-Fallback-2026' });
+  assert.equal(loginFallback.status, 200, JSON.stringify(loginFallback.body));
+  const cookieFallback = String(loginFallback.headers.get('set-cookie') || '').split(';')[0];
+  const respostaFallback = await post('/api/aluno/parecer-inicial', cookieFallback, { id: 'p1', texto: texto + ' Este caso força a proteção pedagógica automática.' });
+  assert.equal(respostaFallback.status, 200, JSON.stringify(respostaFallback.body));
+  assert.match(respostaFallback.body.parecer, /## Leitura inicial/);
+  assert.doesNotMatch(respostaFallback.body.parecer, /Apelação Criminal|resposta-modelo|\bnota\b|5\/5/i);
+  assert.ok(respostaFallback.body.pdfBase64.length > 1000, 'o parecer seguro também deve ser entregue em PDF');
+  assert.equal(chamadasIA, 3, 'uma resposta insegura deve ser reparada uma vez e cair no roteiro seguro sem erro ao aluno');
+
   const banco = JSON.parse(fs.readFileSync(path.join(dataDir, 'db.json'), 'utf8'));
   const registro = banco.pecas.p1.parecerInicialResultados['9900001'];
   assert.equal(registro.parecer, parecerTeste); assert.ok(/^[a-f0-9]{64}$/.test(registro.textoSha256));
   assert.ok(!Object.prototype.hasOwnProperty.call(registro, 'pdfBase64'), 'o banco não deve ser inflado com o PDF regenerável');
-  console.log('OK: pré-correção realista, privada, persistida e recuperável sem nova chamada de IA.');
+  console.log('OK: pré-correção realista, privada, recuperável e com fallback pedagógico seguro.');
 }
 
 executar().catch(e => { console.error(e.stack || e); process.exitCode = 1; }).finally(() => {
   if (app) app.kill(); ia.close();
   try { fs.rmSync(dataDir, { recursive: true, force: true }); } catch {}
 });
-

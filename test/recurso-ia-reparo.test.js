@@ -74,9 +74,9 @@ NOTA SUGERIDA: 4,00/5
   const ia = http.createServer((req, res) => {
     let corpo = ''; req.on('data', b => { corpo += b; }); req.on('end', () => {
       const pedido = JSON.parse(corpo); requisicoesIA.push(pedido);
-      const texto = `RESULTADO RECOMENDADO: ACEITO PARCIALMENTE
-NOVA NOTA: 3,50/5
-JUSTIFICATIVA AO ALUNO: O recurso foi aceito parcialmente porque a informação sobre a Via Hélio Prates consta expressamente da peça entregue, afastando o desconto factual contestado.
+      const texto = `**RESULTADO RECOMENDADO:** ACEITO PARCIALMENTE
+**NOVA NOTA:** 3,50/5
+**JUSTIFICATIVA AO ALUNO:** O recurso foi aceito parcialmente porque a informação sobre a Via Hélio Prates consta expressamente da peça entregue, afastando o desconto factual contestado.
 ## Análise técnica para o professor
 A entrega confirma o ponto factual indicado pelo aluno; os demais critérios permanecem inalterados.
 ## Fontes oficiais consultadas
@@ -100,7 +100,7 @@ A entrega confirma o ponto factual indicado pelo aluno; os demais critérios per
     assert.equal(analise.status, 200, JSON.stringify(analise.body));
     assert.equal(analise.body.resultadoSugerido, 'Aceito parcialmente'); assert.equal(analise.body.notaSugerida, 3.5);
     assert.ok(!Object.prototype.hasOwnProperty.call(analise.body, 'relatorio'), 'o recurso não deve gerar novo espelho');
-    assert.equal(requisicoesIA.length, 1, 'a decisão simples deve exigir somente uma análise');
+    assert.equal(requisicoesIA.length, 1, 'rótulos em negrito não podem provocar falsa resposta incompleta nem nova cobrança');
 
     const confirmacao = await post('/api/entrega/validar', { id: 'p2', matricula: '9900001', validar: true, relatorio: 'tentativa de substituir o espelho', nota: 3.5, resultadoRecurso: 'Aceito parcialmente', decisaoRecurso: analise.body.decisaoSugerida }, loginProfessor.cookie);
     assert.equal(confirmacao.status, 200, JSON.stringify(confirmacao.body)); assert.equal(confirmacao.body.recursoDecidido, true); assert.equal(confirmacao.body.pdfAnexado, false);
