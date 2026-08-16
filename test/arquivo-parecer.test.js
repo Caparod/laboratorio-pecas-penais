@@ -78,6 +78,33 @@ No caso, a sentença associou a elevação exclusivamente ao elemento já consid
 Dessa forma, se afastado o fundamento indevido, a consequência jurídica é o recálculo da pena-base no patamar correspondente às circunstâncias efetivamente reconhecidas, com reflexo no pedido subsidiário formulado ao Tribunal.`;
 assert.equal(analisarDensidadeArgumentativa(teseDensa).topicosSuperficiais.length, 0, 'tópico desenvolvido com fato, fundamento, aplicação e consequência não deve ser penalizado');
 
+const enderecamentoTribunal = `RAZÕES DE APELAÇÃO
+EGRÉGIO TRIBUNAL DE JUSTIÇA DO DISTRITO FEDERAL E DOS TERRITÓRIOS
+COLENDA TURMA CRIMINAL
+Apelante: BRUNO TAVARES MENEGATTI
+Apelado: MINISTÉRIO PÚBLICO DO DISTRITO FEDERAL E TERRITÓRIOS
+Origem: 3ª Vara Criminal da Circunscrição Judiciária de Brasília/DF
+
+III.1 - ABSOLVIÇÃO POR INSUFICIÊNCIA PROBATÓRIA (CPP, ART. 386, VII)
+No caso, os registros internos indicam a utilização da credencial, mas a prova pericial não individualiza o responsável pelas operações.
+
+A mesma fragilidade aparece nas mensagens, pois o número do contato não foi vinculado ao apelante.
+
+Por isso, a dúvida razoável impõe a absolvição com fundamento no art. 386, VII, do CPP.`;
+const densidadeComEnderecamento = analisarDensidadeArgumentativa(enderecamentoTribunal);
+assert.equal(densidadeComEnderecamento.topicosSuperficiais.length, 0, 'endereçamento ao Tribunal e identificação das partes não são teses defensivas e jamais podem gerar desconto');
+assert.ok(!densidadeComEnderecamento.topicosSuperficiais.some(t => /COLENDA|EGRÉGIO|APELANTE|APELADO/i.test(t.titulo)), 'órgão julgador e partes devem permanecer fora da triagem argumentativa');
+const cabecalhosVariados = `SUPREMO TRIBUNAL FEDERAL
+EXCELENTÍSSIMO SENHOR MINISTRO RELATOR
+Impetrante: DEFENSORIA PÚBLICA
+Paciente: FULANO DE TAL
+Origem: Tribunal de Justiça
+DA ABSOLVIÇÃO POR ATIPICIDADE
+No caso, a conduta narrada não se ajusta ao tipo penal indicado na acusação.`;
+const densidadeCabecalhosVariados = analisarDensidadeArgumentativa(cabecalhosVariados);
+assert.equal(densidadeCabecalhosVariados.topicosSuperficiais.length, 1, 'somente a tese jurídica real deve entrar na triagem, independentemente do Tribunal ou das partes');
+assert.match(densidadeCabecalhosVariados.topicosSuperficiais[0].titulo, /ABSOLVIÇÃO/, 'a triagem deve apontar a tese, nunca o cabeçalho institucional');
+
 const parecerValido = `## Leitura inicial
 - Esta é uma leitura diagnóstica cuidadosa do texto apresentado pelo estudante, com indicação dos pontos que precisam de conferência antes do envio definitivo.
 ## Referências e citações

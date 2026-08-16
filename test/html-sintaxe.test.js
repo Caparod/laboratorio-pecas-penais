@@ -15,6 +15,10 @@ for (const arquivo of [path.join(__dirname, '..', 'index.html'), path.join(__dir
     assert.match(html, /window\.location\.assign\(caminho\)/, 'PDF do aluno não deve depender de URL temporária incompatível com celular');
     assert.match(html, /function profPropostas\(/, 'área do professor deve organizar as peças propostas por rodada');
     assert.match(html, /Corrigir agora/, 'entrega pendente deve oferecer acesso direto à correção');
+    assert.match(html, /Registrar entrega de aluno/, 'professor deve ter uma ação própria para registrar arquivo recebido fora do sistema');
+    assert.match(html, /id="rep_rodada"[\s\S]*id="rep_aluno"[\s\S]*id="rep_arquivo"/, 'registro pelo professor deve exigir rodada, aluno e arquivo');
+    assert.match(html, /\/api\/entrega\/registrar-professor/, 'interface deve enviar a entrega para a rota exclusiva do professor');
+    assert.match(html, /Arquivo registrado em nome do aluno por/, 'tela de correção deve identificar entregas registradas pelo professor');
     assert.match(html, /Rever correção/, 'entrega corrigida deve permanecer acessível ao professor');
     assert.match(html, /Desconsiderar entrega e liberar nova pré-correção/, 'professor deve poder reabrir a pré-correção de uma entrega específica');
     assert.match(html, /Pré-correções utilizadas/, 'professor deve visualizar quem já utilizou a pré-correção de cada peça');

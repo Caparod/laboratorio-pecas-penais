@@ -567,7 +567,7 @@ async function profPecas(){
   }catch(e){}
 }
 async function profPropostas(){
-  conteudo.innerHTML='<h2 class="titulo-peca">Peças propostas</h2><p style="color:var(--cinza);font-family:Arial,sans-serif;font-size:.88rem;margin-bottom:12px">A primeira peça publicada para cada turma é a Peça 1; as seguintes são numeradas pela ordem de publicação.</p><div class="abas"><button class="ativa">Rodadas</button><button onclick="profRecursos()">Recursos pendentes</button></div><div class="botoes" style="margin-bottom:14px"><button onclick="escolherRodadaProposta()">Selecionar rodada</button></div><div id="lprop"><p><span class="spinner"></span>Carregando...</p></div>';
+  conteudo.innerHTML='<h2 class="titulo-peca">Peças propostas</h2><p style="color:var(--cinza);font-family:Arial,sans-serif;font-size:.88rem;margin-bottom:12px">A primeira peça publicada para cada turma é a Peça 1; as seguintes são numeradas pela ordem de publicação.</p><div class="abas"><button class="ativa">Rodadas</button><button onclick="profRecursos()">Recursos pendentes</button></div><div class="botoes" style="margin-bottom:14px"><button onclick="escolherRodadaProposta()">Selecionar rodada</button><button class="primario" onclick="abrirRegistroEntregaProfessor()">📤 Registrar entrega de aluno</button></div><div id="lprop"><p><span class="spinner"></span>Carregando...</p></div>';
   try{const r=await apiGet('/api/pecas');const d=await r.json();
     if(!r.ok){document.getElementById('lprop').innerHTML='<p class="erro-ia">'+esc(d.erro||'Erro')+'</p>';return}
     const propostas=(d.pecas||[]).filter(p=>p.publicada).sort((a,b)=>(a.rodada||a.num)-(b.rodada||b.num));
@@ -576,6 +576,40 @@ async function profPropostas(){
     const atual=propostas.some(p=>p.id===window.__rodadaPropostaId)?window.__rodadaPropostaId:propostas[0].id;
     window.__rodadaPropostaId=atual;renderRodadaProposta(atual);
   }catch(e){document.getElementById('lprop').innerHTML='<p class="erro-ia">Falha ao carregar as peças propostas.</p>';}
+}
+function fecharRegistroEntregaProfessor(){const o=document.getElementById('registro_entrega_professor');if(o)o.remove();window.__registroEntregaProfessor=null}
+function atualizarAlunosRegistroProfessor(){
+  const estado=window.__registroEntregaProfessor,seletor=document.getElementById('rep_aluno'),rodada=document.getElementById('rep_rodada');if(!estado||!seletor||!rodada)return;
+  const p=estado.propostas.find(x=>x.id===rodada.value),entregues=new Set([...(p&&p.aCorrigir||[]),...(p&&p.corrigidas||[])].map(x=>String(x.matricula)));
+  const alunos=estado.alunos.filter(a=>(!p.turmaId||(a.turmaIds||[a.turmaId]).filter(Boolean).includes(p.turmaId))&&!entregues.has(String(a.matricula))).sort((a,b)=>(a.nome||a.matricula).localeCompare(b.nome||b.matricula,'pt-BR'));
+  seletor.innerHTML=alunos.length?'<option value="">Selecione o aluno</option>'+alunos.map(a=>'<option value="'+escAttr(a.matricula)+'">'+esc(a.nome||'Sem nome')+' · '+esc(a.matricula)+'</option>').join(''):'<option value="">Todos os alunos desta turma já possuem entrega</option>';
+  estado.arquivo=null;estado.texto='';const f=document.getElementById('rep_arquivo');if(f)f.value='';const fb=document.getElementById('rep_arquivo_fb');if(fb)fb.innerHTML='';
+}
+async function abrirRegistroEntregaProfessor(){
+  try{
+    const [rp,ra]=await Promise.all([apiGet('/api/pecas'),apiPost('/api/admin',{})]),dp=await rp.json(),da=await ra.json();
+    if(!rp.ok||!ra.ok){alert(dp.erro||da.erro||'Não foi possível carregar alunos e rodadas.');return}
+    const propostas=(dp.pecas||[]).filter(p=>p.publicada);if(!propostas.length){alert('Não há rodada publicada para receber a entrega.');return}
+    window.__registroEntregaProfessor={propostas,alunos:da.alunos||[],arquivo:null,texto:''};
+    const anterior=document.getElementById('registro_entrega_professor');if(anterior)anterior.remove();
+    const overlay=document.createElement('div');overlay.id='registro_entrega_professor';overlay.className='senha-overlay';overlay.setAttribute('role','dialog');overlay.setAttribute('aria-modal','true');
+    const atual=window.__rodadaPropostaId||propostas[0].id;
+    overlay.innerHTML='<div class="senha-modal" style="max-width:660px"><h3>Registrar entrega em nome do aluno</h3><p>Use quando o aluno entregou o arquivo fora do sistema. A peça será registrada diretamente em <b>A corrigir</b>, sem consumir a pré-correção.</p><label style="display:block;margin-top:12px">Rodada<select id="rep_rodada" style="display:block;width:100%;margin-top:4px;padding:9px">'+propostas.map(p=>'<option value="'+escAttr(p.id)+'" '+(p.id===atual?'selected':'')+'>Peça '+esc(p.rodada||p.num)+' · '+esc(p.disc||'Turma')+' · '+esc(p.nomePeca)+'</option>').join('')+'</select></label><label style="display:block;margin-top:12px">Aluno<select id="rep_aluno" style="display:block;width:100%;margin-top:4px;padding:9px"></select></label><label style="display:block;margin-top:12px">Arquivo da peça<input id="rep_arquivo" type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="display:block;width:100%;margin-top:6px" onchange="importarEntregaProfessor(this)"></label><div id="rep_arquivo_fb"></div><div id="rep_fb"></div><div class="acoes"><button type="button" class="primario" onclick="salvarEntregaProfessor()">Registrar em A corrigir</button><button type="button" onclick="fecharRegistroEntregaProfessor()">Cancelar</button></div></div>';
+    overlay.onclick=e=>{if(e.target===overlay)fecharRegistroEntregaProfessor()};document.body.append(overlay);document.getElementById('rep_rodada').onchange=atualizarAlunosRegistroProfessor;atualizarAlunosRegistroProfessor();
+  }catch(e){alert('Falha ao preparar o registro da entrega.')}
+}
+async function importarEntregaProfessor(inp){
+  const estado=window.__registroEntregaProfessor,fb=document.getElementById('rep_arquivo_fb'),f=inp.files&&inp.files[0];if(!estado||!fb||!f)return;
+  if(f.size>6*1024*1024){fb.innerHTML='<p class="erro-ia">O arquivo ultrapassa 6 MB.</p>';return}
+  fb.innerHTML='<p><span class="spinner"></span>Lendo e auditando o arquivo...</p>';estado.arquivo=null;estado.texto='';
+  try{const dataUrl=await arquivoParaDataUrl(f),r=await apiPost('/api/aluno/extrair-arquivo',{nome:f.name,arquivo:dataUrl}),d=await r.json();if(!r.ok){fb.innerHTML='<p class="erro-ia">'+esc(d.erro||'Não foi possível ler o arquivo.')+'</p>';return}estado.arquivo=d.arquivo;estado.texto=d.texto;fb.innerHTML='<p style="color:var(--verde);font: .85rem Arial,sans-serif">✅ <b>'+esc(d.arquivo.nome)+'</b> pronto para registro · '+Math.max(1,Math.round(d.arquivo.tamanho/1024))+' KB</p>'+auditoriaFormatacaoHtml(d.arquivo.formatacao)+((d.avisos||[]).length?'<ul class="erro-ia">'+d.avisos.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>':'')}catch(e){fb.innerHTML='<p class="erro-ia">Falha ao ler o arquivo.</p>'}
+}
+async function salvarEntregaProfessor(){
+  const estado=window.__registroEntregaProfessor,rodada=(document.getElementById('rep_rodada')||{}).value||'',matricula=(document.getElementById('rep_aluno')||{}).value||'',fb=document.getElementById('rep_fb');if(!estado||!fb)return;
+  if(!rodada||!matricula){fb.innerHTML='<p class="erro-ia">Selecione a rodada e o aluno.</p>';return}if(!estado.arquivo||!estado.texto){fb.innerHTML='<p class="erro-ia">Suba e aguarde a leitura do arquivo.</p>';return}
+  const p=estado.propostas.find(x=>x.id===rodada),a=estado.alunos.find(x=>String(x.matricula)===matricula);if(!confirm('Registrar o arquivo como entrega de '+(a&&a.nome||matricula)+' na Peça '+(p&&(p.rodada||p.num)||'')+'?'))return;
+  fb.innerHTML='<p><span class="spinner"></span>Registrando entrega...</p>';const r=await apiPost('/api/entrega/registrar-professor',{id:rodada,matricula,texto:estado.texto,arquivo:estado.arquivo}),d=await r.json();if(!r.ok){fb.innerHTML='<p class="erro-ia">'+esc(d.erro||'Não foi possível registrar a entrega.')+'</p>';return}
+  window.__rodadaPropostaId=rodada;fecharRegistroEntregaProfessor();await atualizarPropostasProfessor(rodada);
 }
 async function profRecursos(){
   conteudo.innerHTML='<h2 class="titulo-peca">Peças propostas</h2><div class="abas"><button onclick="profPropostas()">Rodadas</button><button class="ativa">Recursos pendentes</button></div><div id="lrec"><p><span class="spinner"></span>Carregando recursos...</p></div>';
@@ -801,6 +835,7 @@ async function abrirEntrega(id,mat){
    +'<span class="badge">Peça '+d.peca.num+'</span><h2 class="titulo-peca">'+esc(d.aluno.nome)+' · '+d.aluno.matricula+'</h2>'
    +recursoHtml
    +'<div class="card"><h3>Peça enviada pelo aluno</h3>'
+   +(d.registradaPeloProfessor?'<p class="aviso">📤 Arquivo registrado em nome do aluno por <b>'+esc(d.registradaPeloProfessor.nome)+'</b> em '+esc(dataHora(d.registradaPeloProfessor.em))+'.</p>':'')
    +(d.arquivo?'<p style="font: .8rem Arial,sans-serif;color:var(--cinza);margin-bottom:10px">📎 Texto importado de <b>'+esc(d.arquivo.nome)+'</b> · '+esc(d.arquivo.tipo.toUpperCase())+' · '+Math.max(1,Math.round(d.arquivo.tamanho/1024))+' KB</p>':'')
    +'<div class="caso" style="max-height:340px;overflow:auto">'+esc(d.texto)+'</div></div>'
    +'<div class="card"><h3>'+(recursoPendente?'Espelho original da correção — preservado':'Relatório de correção')+'</h3>'

@@ -1273,7 +1273,7 @@ async function alunoExtrairArquivo(req, res) {
   const sess = sessaoDe(req);
   if (!sess) return json(res, 401, { erro: 'SESSAO' });
   const ctx = alunoDaSessao(sess);
-  if (!ctx) return json(res, 400, { erro: 'TURMA_ATUACAO_INVALIDA', mensagem: 'Selecione uma turma válida para a visão de aluno.' });
+  if (!ctx && sess.tipo !== 'professor') return json(res, 400, { erro: 'TURMA_ATUACAO_INVALIDA', mensagem: 'Selecione uma turma válida para a visão de aluno.' });
   let d; try { d = await lerJson(req, 9 * 1024 * 1024); } catch { return json(res, 413, { erro: 'O arquivo deve ter no máximo 6 MB.' }); }
   const nome = path.basename(String(d.nome || '')).replace(/[\u0000-\u001f]/g, '').slice(0, 180);
   let decoded, tipo;
@@ -2366,7 +2366,7 @@ function resumoPeca(p) {
   }));
   const aCorrigir = registros.filter(e => !e.validado).sort((a, b) => Number(a.enviadoEm || 0) - Number(b.enviadoEm || 0));
   const corrigidas = registros.filter(e => e.validado).sort((a, b) => Number(b.enviadoEm || 0) - Number(a.enviadoEm || 0));
-  return { id: p.id, num: p.num, rodada: rodadaValida(p.rodada) ? Number(p.rodada) : null, nomePeca: p.nomePeca, disc: p.disc, prazo: p.prazo, publicarEm: p.publicarEm || '', publicada: p.publicada, disponivel: pecaDisponivelAgora(p), criadoEm: p.criadoEm, entregas: registros.length, validadas: corrigidas.length, aCorrigir, corrigidas, autor: p.autor || '', autorNome: ((professorDe(p.autor) || {}).nome) || p.autor || '—', versao: p.versao || 1, revisaoObrigatoria: p.revisaoObrigatoria || null };
+  return { id: p.id, num: p.num, rodada: rodadaValida(p.rodada) ? Number(p.rodada) : null, nomePeca: p.nomePeca, disc: p.disc, turmaId: p.turmaId || null, prazo: p.prazo, publicarEm: p.publicarEm || '', publicada: p.publicada, disponivel: pecaDisponivelAgora(p), criadoEm: p.criadoEm, entregas: registros.length, validadas: corrigidas.length, aCorrigir, corrigidas, autor: p.autor || '', autorNome: ((professorDe(p.autor) || {}).nome) || p.autor || '—', versao: p.versao || 1, revisaoObrigatoria: p.revisaoObrigatoria || null };
 }
 async function pecasListar(req, res) {
   const sess = sessaoDe(req); if (!sess) return json(res, 401, { erro: 'SESSAO' }); if (sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
@@ -2502,6 +2502,45 @@ async function entregar(req, res) {
   const pesquisaPosPeca2Disponivel = !ctx.virtual && rodadaDaPeca(p) === 2 && !pesquisaPosPeca2RespondidaAluno(p.turmaId, ctx.id);
   json(res, 200, { ok: true, reenvio: jaTinha, pesquisaPosPeca2Disponivel });
 }
+// Professor: registrar arquivo recebido fora do sistema em nome de um aluno.
+// A entrega entra diretamente em "A corrigir" e não altera o uso da pré-correção.
+async function entregaRegistrarProfessor(req, res) {
+  const sess = sessaoDe(req); if (!sess) return json(res, 401, { erro: 'SESSAO' });
+  if (sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito ao professor.' });
+  let d; try { d = await lerJson(req, 300000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
+  const id = String(d.id || '').trim();
+  const matricula = String(d.matricula || '').trim();
+  const p = db.pecas[id];
+  const a = db.alunos[matricula];
+  if (!p || !p.publicada) return json(res, 404, { erro: 'Rodada não encontrada.' });
+  if (!podeAcessarPeca(sess.usuario, p)) return json(res, 403, { erro: 'Sem acesso a esta rodada.' });
+  if (!a) return json(res, 404, { erro: 'Aluno não encontrado.' });
+  if (p.turmaId ? !alunoNaTurma(a, p.turmaId) : a.disc !== p.disc) return json(res, 403, { erro: 'O aluno não pertence à turma desta rodada.' });
+  if (pecasEmCorrecaoLote.has(p.id) || entregasEmCorrecao.has(p.id + '\u0000' + matricula)) return json(res, 409, { erro: 'Aguarde o término da correção em andamento nesta rodada.' });
+  db.entregas[p.id] = db.entregas[p.id] || {};
+  if (db.entregas[p.id][matricula]) return json(res, 409, { erro: 'Este aluno já possui uma entrega nesta rodada. Abra a entrega existente ou desconsidere-a antes de registrar outra.' });
+  const texto = String(d.texto || '').trim();
+  if (texto.length < 80) return json(res, 400, { erro: 'O arquivo não produziu texto suficiente para uma peça.' });
+  if (texto.length > 60000) return json(res, 400, { erro: 'A peça ultrapassa o limite de 60.000 caracteres.' });
+  const arquivoNormalizado = normalizarArquivoAluno(d.arquivo);
+  if (!arquivoNormalizado) return json(res, 400, { erro: 'Suba um arquivo PDF, DOCX ou DOC antes de registrar a entrega.' });
+  const agora = Date.now();
+  const arquivo = { nome: arquivoNormalizado.nome, tipo: arquivoNormalizado.tipo, tamanho: arquivoNormalizado.tamanho, sha256: arquivoNormalizado.sha256, formatacao: arquivoNormalizado.formatacao, importadoEm: agora };
+  db.entregas[p.id][matricula] = {
+    texto,
+    arquivo,
+    enviadoEm: agora,
+    nome: a.nome || '',
+    turmaId: p.turmaId || a.turmaId || null,
+    origemProfessor: sess.usuario,
+    registradaPeloProfessor: { login: sess.usuario, nome: ((professorDe(sess.usuario) || {}).nome) || sess.usuario, em: agora, motivo: 'arquivo-recebido-fora-do-sistema' },
+    versaoPeca: p.versao || 1,
+    snapshotPeca: fotografiaPeca(p, { capturadoEm: agora })
+  };
+  try { await salvarDbCritico(); }
+  catch (e) { delete db.entregas[p.id][matricula]; return json(res, 503, { erro: 'A entrega não pôde ser confirmada no banco. Tente novamente.' }); }
+  json(res, 200, { ok: true, id: p.id, rodada: rodadaDaPeca(p), matricula, nome: a.nome || matricula, status: 'A corrigir', registradoEm: agora });
+}
 // Aluno: descadastro — sai do sistema e apaga o próprio nome da lista da turma
 async function descadastrarAluno(req, res) {
   const sess = sessaoDe(req); if (!sess || sess.tipo !== 'aluno') return json(res, 401, { erro: 'SESSAO' });
@@ -2521,7 +2560,7 @@ async function entregaGet(req, res, id, mat) {
   const base = e.snapshotPeca || fotografiaPeca(p, { legado: true });
   const validacaoRelatorio = e.relatorio ? validarCorrecao(e.relatorio, e.texto) : null;
   const notaSugerida = e.notaSugerida != null ? e.notaSugerida : (validacaoRelatorio && validacaoRelatorio.detalhes ? validacaoRelatorio.detalhes.nota : null);
-  json(res, 200, { ok: true, peca: { num: rodadaDaPeca(p), rodada: rodadaDaPeca(p), nomePeca: base.nomePeca, caso: base.caso, gab: base.gab, versao: base.versao || 1 }, aluno: { matricula: mat, nome: nomeParticipanteEntrega(mat, e) }, texto: e.texto, arquivo: e.arquivo || null, relatorio: e.relatorio || '', nota: (e.nota != null ? e.nota : ''), notaSugerida, validado: !!e.validado, recurso: e.recurso || null });
+  json(res, 200, { ok: true, peca: { num: rodadaDaPeca(p), rodada: rodadaDaPeca(p), nomePeca: base.nomePeca, caso: base.caso, gab: base.gab, versao: base.versao || 1 }, aluno: { matricula: mat, nome: nomeParticipanteEntrega(mat, e) }, texto: e.texto, arquivo: e.arquivo || null, registradaPeloProfessor: e.registradaPeloProfessor ? { nome: e.registradaPeloProfessor.nome || e.registradaPeloProfessor.login || 'Professor', em: e.registradaPeloProfessor.em || e.enviadoEm } : null, relatorio: e.relatorio || '', nota: (e.nota != null ? e.nota : ''), notaSugerida, validado: !!e.validado, recurso: e.recurso || null });
 }
 async function entregaDesconsiderar(req, res) {
   const sess = sessaoDe(req); if (!sess) return json(res, 401, { erro: 'SESSAO' }); if (sess.tipo !== 'professor') return json(res, 403, { erro: 'Acesso restrito.' });
@@ -2892,6 +2931,7 @@ async function processarLoteCorrecao(job, sess, p, pendentes) {
           }
           limparEstadoTentativa(e, estadoInicial);
           const mensagem = String(err.message || err);
+          console.warn('[CORRECAO_LOTE] tentativa rejeitada', { job: job.id, pecaId: p.id, tentativa, erro: mensagem.slice(0, 500) });
           const naoRetriavel = /gabarito|sem chave|limite mensal|acesso restrito|HTTP 401|HTTP 403/i.test(mensagem);
           if (tentativa < 2 && !naoRetriavel) {
             job.tentativasExtras++;
@@ -3551,6 +3591,7 @@ const server = http.createServer((req, res) => {
   if (req.method === 'GET' && req.url === '/api/pesquisa-pos-peca2-aluno') return pesquisaPosPeca2AlunoGet(req, res);
   if (req.method === 'POST' && req.url === '/api/pesquisa-pos-peca2/responder') return pesquisaPosPeca2Responder(req, res);
   if (req.method === 'POST' && req.url === '/api/entregar') return entregar(req, res);
+  if (req.method === 'POST' && req.url === '/api/entrega/registrar-professor') return entregaRegistrarProfessor(req, res);
   if (req.method === 'POST' && req.url === '/api/descadastrar') return descadastrarAluno(req, res);
   if (req.method === 'GET' && req.url.startsWith('/api/entrega?')) { const q = new URLSearchParams(req.url.split('?')[1]); return entregaGet(req, res, q.get('id'), q.get('matricula')); }
   if (req.method === 'POST' && req.url === '/api/entrega/desconsiderar') return entregaDesconsiderar(req, res);

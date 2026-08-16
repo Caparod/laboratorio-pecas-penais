@@ -349,9 +349,16 @@ function analisarDensidadeArgumentativa(texto) {
     } else if (atual && linha.length >= 20) atual.paragrafos.push(linha);
   }
   const normalizar = v => String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-  const estruturais = /(?:^|\s)(?:sintese(?:\s+dos\s+fatos)?|dos?\s+fatos|pedidos|requerimentos|qualifica[cç][aã]o|endere[cç]amento|interposi[cç][aã]o|razoes\s+recursais|fechamento|fontes|anexo)(?:\s|$)/i;
+  const estruturais = /(?:^|\s)(?:sintese(?:\s+dos\s+fatos)?|dos?\s+fatos|pedidos|requerimentos|qualifica[cç][aã]o|endere[cç]amento|interposi[cç][aã]o|recurso\s+de\s+apelacao|razoes(?:\s+recursais|\s+de\s+apelacao)?|egr[eé]gio(?:\s+tribunal)?|colenda(?:\s+turma|\s+c[aâ]mara)?|apelante|apelado|recorrente|recorrido|impetrante|impetrado|paciente|origem|autos(?:\s+do\s+processo)?|advogado|oab|fechamento|fontes|anexo)(?:\s|$)/i;
   const pais = /^(?:do\s+direito|merito|preliminares?|fundamenta[cç][aã]o|teses)$/i;
-  const analisados = topicos.filter(t => t.paragrafos.length && !estruturais.test(normalizar(t.titulo).replace(/[^a-z0-9çãõáéíóúâêô\s]/g, ' ')) && !pais.test(normalizar(t.titulo).replace(/[^a-z0-9\s]/g, ' ').trim())).map(t => {
+  const teseNomeada = /(?:absolvi[cç][aã]o|nulidade|cerceamento|in[eé]pcia|atipicidade|prescri[cç][aã]o|decad[eê]ncia|punibilidade|insufici[eê]ncia|desclassifica[cç][aã]o|impron[uú]ncia|despron[uú]ncia|dosimetria|pena[ -]base|redimensionamento|regime|substitui[cç][aã]o|afastamento|exclus[aã]o|revoga[cç][aã]o|liberdade|trancamento|ilicitude|prova\s+il[ií]cita|leg[ií]tima\s+defesa|estado\s+de\s+necessidade|inexigibilidade|erro\s+de\s+tipo|erro\s+de\s+proibi[cç][aã]o|tentativa|participa[cç][aã]o|continuidade\s+delitiva|concurso\s+de\s+crimes|privilegiad[ao]|causa\s+de\s+aumento|qualificadora|agravante|atenuante|restitui[cç][aã]o|indeniza[cç][aã]o|compet[eê]ncia|gratuidade|tutela|liminar|cabimento|tempestividade)/i;
+  const analisados = topicos.filter(t => {
+    if (!t.paragrafos.length) return false;
+    const tituloNormalizado = normalizar(t.titulo).replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (estruturais.test(tituloNormalizado) || pais.test(tituloNormalizado)) return false;
+    const tituloNumerado = /^(?:\d+(?:\.\d+)*|[ivxlcdm]+(?:\.\d+)*)\s+/.test(tituloNormalizado);
+    return tituloNumerado || teseNomeada.test(tituloNormalizado);
+  }).map(t => {
     const corpo = t.paragrafos.join(' ');
     const palavras = (corpo.match(/[A-Za-zÀ-ÿ0-9]+/g) || []).length;
     const temFundamento = /\b(?:art(?:igo)?\.?\s*\d+|s[uú]mula\s*\d+|lei\s*n?[º°]?\s*[\d.]|c[oó]digo|\bCF\b|\bCPP\b|\bCP\b|precedente|jurisprud[eê]ncia)/i.test(corpo);
