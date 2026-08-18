@@ -40,6 +40,8 @@ for (const arquivo of [path.join(__dirname, '..', 'index.html'), path.join(__dir
     assert.match(html, /\/materiais\/regras-formatacao-npj\.pdf/, 'aluno deve poder baixar as regras de formatação');
     assert.match(html, /Falhas formais comprovadas reduzem a nota final/, 'pré-correção deve alertar sobre a consequência acadêmica');
     assert.match(html, /parecer-inicial',\{id,texto,arquivo:window\.__arquivoAluno\|\|null\}/, 'auditoria autenticada do arquivo deve acompanhar a pré-correção');
+    assert.doesNotMatch(html, /Enviar sem parecer|enviá-la sem o parecer/i, 'interface não pode oferecer caminho que contorne a pré-correção obrigatória');
+    assert.match(html, /Prefira PDF ou DOCX[\s\S]*Reserve fotos e a transcrição por OCR para peças manuscritas/, 'interface deve orientar o formato de menor custo conforme o tipo de trabalho');
     assert.match(html, /id="np_publicar_em"/, 'formulário deve permitir escolher quando a peça será publicada');
     assert.match(html, /A publicação não pode acontecer depois do prazo de entrega/, 'interface deve validar a ordem entre publicação e entrega');
     assert.match(html, /function subirGabaritoPdf\(/, 'professor deve poder importar o gabarito em PDF');
@@ -60,6 +62,10 @@ for (const arquivo of [path.join(__dirname, '..', 'index.html'), path.join(__dir
     assert.match(html, /async function apiGet\(u\)\{\s*const proc=iniciarProcessamento/, 'todos os carregamentos da API devem acionar a barra');
     assert.match(html, /acompanharCorrecaoTodas\(pecaId,jobId,proc\)/, 'o lote deve manter a trava durante todo o processamento no servidor');
     assert.doesNotMatch(html, /notaInicial\)\.replace\('\.',','\)/, 'nota numérica não pode ser preenchida com vírgula no valor interno');
+    assert.match(html, /entradas e saídas podem permanecer na Anthropic por até 29 dias/i, 'aceite curto deve destacar a retenção máxima dos lotes Anthropic');
+    assert.match(html, /href="\/privacidade"[\s\S]{0,200}Ler o aviso completo/i, 'aceite curto deve apontar para o aviso de privacidade completo');
+    assert.match(html, /Chamadas com cobrança incerta/, 'painel de custos deve tornar pendências financeiras visíveis');
+    assert.match(html, /não visualizada — registro externo do professor/, 'painel do professor não pode fingir visualização da pré-correção externa');
   }
   if (arquivo.endsWith(path.join('render-app', 'index.html'))) {
     assert.match(html, /function mostrarSenhaTemporaria\(/);

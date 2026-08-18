@@ -35,7 +35,7 @@ async function executar() {
   const respostaVersao = await fetch(base + '/api/versao');
   assert.equal(respostaVersao.status, 200);
   assert.match(respostaVersao.headers.get('cache-control') || '', /no-store/);
-  assert.deepEqual(await respostaVersao.json(), { ok: true, versao: versaoEsperada });
+  assert.deepEqual(await respostaVersao.json(), { ok: true, versao: versaoEsperada, schemaVersion: 2, backupPreMigracaoConfirmado: false });
   console.log('OK: detecção de nova versão e atualização segura validadas.');
 }
 

@@ -12,7 +12,7 @@ const base = `http://127.0.0.1:${port}`;
 const adminLogin = 'admin-auditoria';
 const server = spawn(process.execPath, ['server.js'], {
   cwd: appDir,
-  env: Object.assign({}, process.env, { DATA_DIR: dataDir, PORT: String(port), PROF_LOGIN: adminLogin, PROF_SENHA: adminLogin, CRIAR_CONTAS_DEMO: 'true', SUPABASE_URL: '', SUPABASE_SERVICE_ROLE_KEY: '' }),
+  env: Object.assign({}, process.env, { DATA_DIR: dataDir, PORT: String(port), PROF_LOGIN: adminLogin, PROF_SENHA: adminLogin, CRIAR_CONTAS_DEMO: 'true', SUPABASE_URL: '', SUPABASE_SERVICE_ROLE_KEY: '', ANTHROPIC_API_KEY: '' }),
   stdio: ['ignore', 'pipe', 'pipe']
 });
 
@@ -134,6 +134,8 @@ async function executar() {
   assert.equal(r.body.erro, 'VERIFICAR_EMAIL');
   r = await requisitar('/api/verificar-email', alunoInicial.token, { codigo });
   assert.equal(r.status, 200);
+  r = await requisitar('/api/aceitar-privacidade', alunoInicial.token, { aceite: true });
+  assert.equal(r.status, 200, 'a pré-correção obrigatória exige a ciência de privacidade');
 
   r = await requisitar('/api/peca/salvar', professor, { nomePeca: 'Peça inválida', caso: casoTeste(), gab: 'Gabarito sem espelho.', turmaId: turmaA, prazo: '2099-12-31T23:59', publicar: true });
   assert.equal(r.status, 400, 'publicação deve bloquear gabarito sem estrutura e soma verificáveis');
@@ -176,7 +178,11 @@ async function executar() {
   assert.equal(r.body.pecas.find(p => p.id === pecaAgendadaId).disponivel, false, 'professor deve enxergar o agendamento e seu estado');
   r = await requisitar('/api/peca/excluir', professor, { id: pecaAgendadaId });
   assert.equal(r.status, 200);
-  r = await requisitar('/api/entregar', alunoInicial.token, { id: pecaId, texto: 'Texto de entrega suficientemente longo para validar a limpeza completa de dados da turma durante o teste automatizado.' });
+  const textoPrimeiraEntrega = 'Texto de entrega suficientemente longo para validar a limpeza completa de dados da turma durante o teste automatizado.';
+  r = await requisitar('/api/aluno/parecer-inicial', alunoInicial.token, { id: pecaId, texto: textoPrimeiraEntrega });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.contingencia, true, 'sem chave externa a pré-correção obrigatória deve usar contingência');
+  r = await requisitar('/api/entregar', alunoInicial.token, { id: pecaId, texto: textoPrimeiraEntrega });
   assert.equal(r.status, 200, JSON.stringify(r.body));
   r = await requisitar('/api/pecas-aluno', alunoInicial.token);
   assert.equal(r.status, 200);
@@ -267,7 +273,10 @@ NOTA SUGERIDA: 4,25/5
   assert.equal(r.body.turmas.find(t => t.id === turmaA).elegivel, false, 'nova pesquisa deve aguardar o envio efetivo da Peça 2');
   r = await requisitar('/api/pesquisa-pos-peca2/responder', alunoInicial.token, { turmaId: turmaA, valores: [5, 5, 5, 5, 5] });
   assert.equal(r.status, 403, 'aluno não pode responder a pesquisa pós-Peça 2 antes da entrega');
-  r = await requisitar('/api/entregar', alunoInicial.token, { id: pecaExpiradaId, texto: 'Segunda peça entregue após a pesquisa inicial, com fundamentação jurídica, estrutura formal, pedidos e fechamento suficientes para o teste de acompanhamento pedagógico.' });
+  const textoSegundaEntrega = 'Segunda peça entregue após a pesquisa inicial, com fundamentação jurídica, estrutura formal, pedidos e fechamento suficientes para o teste de acompanhamento pedagógico.';
+  r = await requisitar('/api/aluno/parecer-inicial', alunoInicial.token, { id: pecaExpiradaId, texto: textoSegundaEntrega });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  r = await requisitar('/api/entregar', alunoInicial.token, { id: pecaExpiradaId, texto: textoSegundaEntrega });
   assert.equal(r.status, 200, JSON.stringify(r.body));
   assert.equal(r.body.pesquisaPosPeca2Disponivel, true, 'envio da Peça 2 deve abrir imediatamente a nova pesquisa');
   r = await requisitar('/api/pesquisa-pos-peca2-aluno', alunoInicial.token);

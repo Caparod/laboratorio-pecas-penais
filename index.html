@@ -461,7 +461,7 @@ async function reenviarCodigo(){try{await apiPost('/api/reenviar-codigo',{});ale
 function trocarMinhaSenha(){AUTH.precisaTrocarSenha=true;renderTroca();}
 function renderPrivacidade(){
   menu.innerHTML='';barra();
-  conteudo.innerHTML='<div class="loginwrap"><h2>Aviso de privacidade</h2><p>O e-mail e o WhatsApp do aluno são usados para devolutivas e comunicações acadêmicas. Alguns recursos também enviam enunciados, textos, imagens e listas acadêmicas ao provedor de inteligência artificial para processamento. Envie somente o necessário para a atividade.</p><p><a href="/privacidade" target="_blank" rel="noopener" style="color:var(--azul)">Ler o aviso completo</a></p><label style="display:flex;gap:8px;align-items:flex-start;text-align:left;font-family:Arial,sans-serif;font-size:.85rem"><input id="priv_ok" type="checkbox" style="width:auto;margin-top:2px">Li o aviso e estou ciente do tratamento descrito.</label><button onclick="confirmarPrivacidade()">Continuar</button><div id="priv_fb"></div></div>';
+  conteudo.innerHTML='<div class="loginwrap"><h2>Aviso de privacidade</h2><p>O e-mail e o WhatsApp do aluno são usados para devolutivas e comunicações acadêmicas. Alguns recursos também enviam enunciados, textos, imagens e listas acadêmicas ao provedor de inteligência artificial para processamento. Nas correções coletivas assíncronas, entradas e saídas podem permanecer na Anthropic por até 29 dias; o sistema solicita a exclusão remota após importar os resultados. Envie somente o necessário para a atividade.</p><p><a href="/privacidade" target="_blank" rel="noopener" style="color:var(--azul)">Ler o aviso completo</a></p><label style="display:flex;gap:8px;align-items:flex-start;text-align:left;font-family:Arial,sans-serif;font-size:.85rem"><input id="priv_ok" type="checkbox" style="width:auto;margin-top:2px">Li o aviso e estou ciente do tratamento descrito.</label><button onclick="confirmarPrivacidade()">Continuar</button><div id="priv_fb"></div></div>';
 }
 async function confirmarPrivacidade(){
   const fb=document.getElementById('priv_fb');if(!document.getElementById('priv_ok').checked){fb.innerHTML='<p class="erro-ia">Marque a confirmação para continuar.</p>';return}
@@ -594,7 +594,7 @@ async function abrirRegistroEntregaProfessor(){
     const anterior=document.getElementById('registro_entrega_professor');if(anterior)anterior.remove();
     const overlay=document.createElement('div');overlay.id='registro_entrega_professor';overlay.className='senha-overlay';overlay.setAttribute('role','dialog');overlay.setAttribute('aria-modal','true');
     const atual=window.__rodadaPropostaId||propostas[0].id;
-    overlay.innerHTML='<div class="senha-modal" style="max-width:660px"><h3>Registrar entrega em nome do aluno</h3><p>Use quando o aluno entregou o arquivo fora do sistema. A peça será registrada diretamente em <b>A corrigir</b>, sem consumir a pré-correção.</p><label style="display:block;margin-top:12px">Rodada<select id="rep_rodada" style="display:block;width:100%;margin-top:4px;padding:9px">'+propostas.map(p=>'<option value="'+escAttr(p.id)+'" '+(p.id===atual?'selected':'')+'>Peça '+esc(p.rodada||p.num)+' · '+esc(p.disc||'Turma')+' · '+esc(p.nomePeca)+'</option>').join('')+'</select></label><label style="display:block;margin-top:12px">Aluno<select id="rep_aluno" style="display:block;width:100%;margin-top:4px;padding:9px"></select></label><label style="display:block;margin-top:12px">Arquivo da peça<input id="rep_arquivo" type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="display:block;width:100%;margin-top:6px" onchange="importarEntregaProfessor(this)"></label><div id="rep_arquivo_fb"></div><div id="rep_fb"></div><div class="acoes"><button type="button" class="primario" onclick="salvarEntregaProfessor()">Registrar em A corrigir</button><button type="button" onclick="fecharRegistroEntregaProfessor()">Cancelar</button></div></div>';
+    overlay.innerHTML='<div class="senha-modal" style="max-width:660px"><h3>Registrar entrega em nome do aluno</h3><p>Use quando o aluno entregou o arquivo fora do sistema. Antes de entrar em <b>A corrigir</b>, o sistema registra automaticamente uma pré-correção obrigatória de contingência, sem custo de API e identificada como não visualizada pelo aluno.</p><label style="display:block;margin-top:12px">Rodada<select id="rep_rodada" style="display:block;width:100%;margin-top:4px;padding:9px">'+propostas.map(p=>'<option value="'+escAttr(p.id)+'" '+(p.id===atual?'selected':'')+'>Peça '+esc(p.rodada||p.num)+' · '+esc(p.disc||'Turma')+' · '+esc(p.nomePeca)+'</option>').join('')+'</select></label><label style="display:block;margin-top:12px">Aluno<select id="rep_aluno" style="display:block;width:100%;margin-top:4px;padding:9px"></select></label><label style="display:block;margin-top:12px">Arquivo da peça<input id="rep_arquivo" type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="display:block;width:100%;margin-top:6px" onchange="importarEntregaProfessor(this)"></label><div id="rep_arquivo_fb"></div><div id="rep_fb"></div><div class="acoes"><button type="button" class="primario" onclick="salvarEntregaProfessor()">Registrar em A corrigir</button><button type="button" onclick="fecharRegistroEntregaProfessor()">Cancelar</button></div></div>';
     overlay.onclick=e=>{if(e.target===overlay)fecharRegistroEntregaProfessor()};document.body.append(overlay);document.getElementById('rep_rodada').onchange=atualizarAlunosRegistroProfessor;atualizarAlunosRegistroProfessor();
   }catch(e){alert('Falha ao preparar o registro da entrega.')}
 }
@@ -643,59 +643,97 @@ async function escolherRodadaProposta(inicial){
 function renderRodadaProposta(id){
   const p=(window.__propostasProfessor||[]).find(x=>x.id===id);if(!p)return;
   const pendentes=p.aCorrigir||[],corrigidas=p.corrigidas||[];
-  const linha=function(e,corrigida){return '<div style="padding:10px 0;border-bottom:1px solid #e7e2d7"><b>'+esc(e.nome||e.matricula)+'</b><div style="font: .79rem Arial,sans-serif;color:var(--cinza);margin-top:3px">Matrícula '+esc(e.matricula)+' · entregue em '+esc(dataHora(e.enviadoEm))+(corrigida&&e.nota!=null?' · nota '+esc(String(e.nota).replace('.',','))+'/5':'')+'</div><div class="botoes" style="margin-top:7px"><button '+(corrigida?'':'class="primario" ')+'onclick="abrirEntrega(\''+p.id+'\',\''+e.matricula+'\')">'+(corrigida?'Rever correção':'Corrigir agora')+'</button></div></div>'};
-  document.getElementById('lprop').innerHTML='<div class="card"><div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap"><div><span class="badge">Rodada · Peça '+(p.rodada||p.num)+'</span><h3 style="margin:8px 0 3px">'+esc(p.nomePeca)+'</h3><p style="font: .82rem Arial,sans-serif;color:var(--cinza);margin:0">'+esc(p.disc||'—')+' · prazo '+(p.prazo?esc(dataHoraBR(p.prazo)):'não informado')+'</p></div><div class="botoes" style="margin-top:0"><button class="primario" onclick="abrirPeca(\''+p.id+'\')">Abrir rodada</button>'+(pendentes.length?'<button class="primario" onclick="corrigirTodasRodada(\''+p.id+'\','+Number(p.rodada||p.num)+','+pendentes.length+')">🤖 Corrigir todas</button>':'')+'</div></div><div id="corrigir_todas_fb"></div>'
+  const semRascunho=pendentes.filter(e=>!e.temRascunho);
+  const linha=function(e,corrigida){const rascunho=!corrigida&&e.temRascunho;return '<div style="padding:10px 0;border-bottom:1px solid #e7e2d7"><b>'+esc(e.nome||e.matricula)+'</b><div style="font: .79rem Arial,sans-serif;color:var(--cinza);margin-top:3px">Matrícula '+esc(e.matricula)+' · entregue em '+esc(dataHora(e.enviadoEm))+(corrigida&&e.nota!=null?' · nota '+esc(String(e.nota).replace('.',','))+'/5':(rascunho?' · 📝 rascunho pronto para revisão'+(e.notaSugerida!=null?' · sugestão '+esc(String(e.notaSugerida).replace('.',','))+'/5':''):''))+'</div><div class="botoes" style="margin-top:7px"><button '+(corrigida?'':'class="primario" ')+'onclick="abrirEntrega(\''+p.id+'\',\''+e.matricula+'\')">'+(corrigida?'Rever correção':(rascunho?'Revisar e validar':'Corrigir agora'))+'</button></div></div>'};
+  document.getElementById('lprop').innerHTML='<div class="card"><div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap"><div><span class="badge">Rodada · Peça '+(p.rodada||p.num)+'</span><h3 style="margin:8px 0 3px">'+esc(p.nomePeca)+'</h3><p style="font: .82rem Arial,sans-serif;color:var(--cinza);margin:0">'+esc(p.disc||'—')+' · prazo '+(p.prazo?esc(dataHoraBR(p.prazo)):'não informado')+'</p></div><div class="botoes" style="margin-top:0"><button class="primario" onclick="abrirPeca(\''+p.id+'\')">Abrir rodada</button>'+(semRascunho.length?'<button class="primario" onclick="corrigirTodasRodada(\''+p.id+'\','+Number(p.rodada||p.num)+','+semRascunho.length+')">🤖 Gerar rascunhos ('+semRascunho.length+')</button>':'')+'</div></div><div id="corrigir_todas_fb"></div>'
    +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:14px;margin-top:16px">'
    +'<section style="background:#fff8e8;border:1px solid #ead7a4;border-radius:8px;padding:14px"><h3 style="color:#8a6415;margin:0 0 8px">⏳ A corrigir ('+pendentes.length+')</h3>'+(pendentes.length?pendentes.map(e=>linha(e,false)).join(''):'<p style="font: .84rem Arial,sans-serif;color:var(--cinza)">Nenhuma entrega aguardando correção.</p>')+'</section>'
    +'<section style="background:#eef7ef;border:1px solid #c9dfcc;border-radius:8px;padding:14px"><h3 style="color:var(--verde);margin:0 0 8px">✅ Corrigidas ('+corrigidas.length+')</h3>'+(corrigidas.length?corrigidas.map(e=>linha(e,true)).join(''):'<p style="font: .84rem Arial,sans-serif;color:var(--cinza)">Nenhuma entrega corrigida nesta rodada.</p>')+'</section>'
    +'</div></div>';
+  setTimeout(()=>retomarAcompanhamentoLote(id),0);
 }
 async function atualizarPropostasProfessor(id){
   const r=await apiGet('/api/pecas');const d=await r.json();
   if(r.ok){window.__propostasProfessor=(d.pecas||[]).filter(p=>p.publicada).sort((a,b)=>(a.rodada||a.num)-(b.rodada||b.num));renderRodadaProposta(id)}
 }
 async function corrigirTodasRodada(id,rodada,total){
-  if(!confirm('Corrigir automaticamente '+total+' entrega(s) da Peça '+rodada+'? O sistema validará as notas e enviará os relatórios em PDF aos alunos SEM revisão do professor.'))return;
+  if(!confirm('Enviar '+total+' correção(ões) para um lote assíncrono da Peça '+rodada+'? O processamento pode demorar e continuará mesmo se você sair desta tela. Nenhuma nota será validada e nenhum aluno receberá relatório ou e-mail. Depois, revise e valide cada rascunho individualmente.'))return;
   const fb=document.getElementById('corrigir_todas_fb');
-  const proc=iniciarProcessamento('Corrigindo o lote da Peça '+rodada+'...',{bloqueia:true,prioridade:10});
-  fb.innerHTML='<div class="parecer-inicial"><p><span class="spinner"></span>Iniciando correção automática...</p></div>';
+  const proc=iniciarProcessamento('Acompanhando lote da Peça '+rodada+'...',{bloqueia:false,prioridade:10});
+  fb.innerHTML='<div class="parecer-inicial"><p><span class="spinner"></span>Enviando o lote assíncrono...</p><p style="font: .82rem Arial,sans-serif;color:var(--cinza)">A Anthropic informa que lotes podem levar até 24 horas. O sistema retomará a consulta após reinicializações e salvará somente rascunhos para revisão humana.</p></div>';
   try{
     const r=await apiPost('/api/entrega/corrigir-todas',{id});const d=await r.json();
     if(!r.ok){proc.fim();fb.innerHTML='<p class="erro-ia">'+esc(d.erro||'Não foi possível iniciar.')+'</p>';return}
+    fb.innerHTML='<div class="parecer-inicial"><p><span class="spinner"></span>'+(d.criacaoIncerta?'A confirmação do provedor não chegou; o sistema bloqueou a repetição para evitar cobrança e correção duplicadas.':(d.faseSequencial&&!d.fallbackSequencial?'Os itens de alto risco serão corrigidos individualmente, com controle de orçamento por chamada.':(d.assincrono?(d.loteHibrido?'Lote econômico aceito; os itens de alto risco serão processados individualmente na segunda fase.':'Lote aceito e processando em segundo plano.'):'O provedor recusou explicitamente o lote; usando o fluxo seguro sequencial.')))+'</p><p style="font: .82rem Arial,sans-serif;color:var(--cinza)">Você pode continuar usando o sistema. Nenhuma nota será liberada automaticamente.</p></div>';
+    window.__loteAcompanhadoPorPeca=window.__loteAcompanhadoPorPeca||{};window.__loteAcompanhadoPorPeca[id]=d.jobId;
     await acompanharCorrecaoTodas(id,d.jobId,proc);
   }catch(e){proc.fim();if(fb)fb.innerHTML='<p class="erro-ia">Falha de conexão. Tente novamente.</p>'}
 }
-function sincronizarConcluidasLote(pecaId,itens){
+function sincronizarRascunhosLote(pecaId,itens){
   const p=(window.__propostasProfessor||[]).find(x=>x.id===pecaId);if(!p||!Array.isArray(itens)||!itens.length)return false;
   p.aCorrigir=p.aCorrigir||[];p.corrigidas=p.corrigidas||[];let mudou=false;
   for(const item of itens){
-    const mat=String(item.matricula||''),indice=p.aCorrigir.findIndex(x=>String(x.matricula)===mat);
-    const anterior=indice>=0?p.aCorrigir.splice(indice,1)[0]:{};
-    const registro=Object.assign({},anterior,item,{matricula:mat});
-    const ja=p.corrigidas.find(x=>String(x.matricula)===mat);
-    if(ja)Object.assign(ja,registro);else p.corrigidas.push(registro);
-    if(indice>=0||!ja)mudou=true;
+    if(item.ignorado)continue;
+    const mat=String(item.matricula||''),registro=p.aCorrigir.find(x=>String(x.matricula)===mat);
+    if(registro){const novo=!registro.temRascunho||registro.notaSugerida!==item.notaSugerida;Object.assign(registro,item,{matricula:mat,temRascunho:true,validado:false});if(novo)mudou=true}
   }
   return mudou;
+}
+window.__loteAcompanhadoPorPeca=window.__loteAcompanhadoPorPeca||{};
+async function retomarAcompanhamentoLote(pecaId){
+  if(window.__loteAcompanhadoPorPeca[pecaId])return;
+  window.__loteAcompanhadoPorPeca[pecaId]='consultando';
+  try{
+    const r=await apiGet('/api/entrega/corrigir-todas-status?peca='+encodeURIComponent(pecaId));
+    if(!r.ok){delete window.__loteAcompanhadoPorPeca[pecaId];return}
+    const d=await r.json(),j=d.job||{};
+    if(!['processando','criando','fallback-sequencial','fase-sequencial','criacao-incerta','resultados-indisponiveis'].includes(j.status)){delete window.__loteAcompanhadoPorPeca[pecaId];return}
+    window.__loteAcompanhadoPorPeca[pecaId]=j.id;
+    const proc=iniciarProcessamento('Retomando o acompanhamento do lote...',{bloqueia:false,prioridade:10});
+    acompanharCorrecaoTodas(pecaId,j.id,proc);
+  }catch(e){delete window.__loteAcompanhadoPorPeca[pecaId]}
+}
+async function reconciliarLoteIncerto(jobId,pecaId,status){
+  const motivo=prompt('Depois de conferir o lote no Console da Anthropic, registre o resultado da conferência (mínimo de 20 caracteres):','Conferi o Console e não existe lote aceito para esta solicitação.');
+  if(!motivo||motivo.trim().length<20)return;
+  const body={job:jobId,confirmacao:'LIBERAR RESERVA',motivo:motivo.trim()};
+  if(status==='resultados-indisponiveis'){
+    if(!confirm('Os resultados expiraram. Converter a reserva ainda aberta em gasto conservador e encerrar a pendência?'))return;
+  }else{
+    const resultado=prompt('Digite NAO ACEITO se o Console confirma que a solicitação não criou lote. Digite CUSTO se o lote foi encerrado e você conferiu a cobrança.','NAO ACEITO');
+    if(resultado==='NAO ACEITO')body.resultadoConsole='nao-aceito';
+    else if(resultado==='CUSTO'){
+      const custo=prompt('Informe em dólares o custo adicional ainda não registrado no painel (use ponto ou vírgula):','0');if(custo==null)return;
+      body.resultadoConsole='encerrado-custo-conferido';body.custoConfirmadoUSD=custo;
+    }else{alert('Reconciliação cancelada: use exatamente NAO ACEITO ou CUSTO.');return}
+    if(!confirm('Registrar esta conferência e liberar a reserva financeira?'))return;
+  }
+  const r=await apiPost('/api/lotes-anthropic/reconciliar',body);const d=await r.json();
+  if(!r.ok){alert(d.erro||'Não foi possível reconciliar o lote.');return}
+  if(window.__loteAcompanhadoPorPeca)delete window.__loteAcompanhadoPorPeca[pecaId];
+  atualizarPropostasProfessor(pecaId);
 }
 async function acompanharCorrecaoTodas(pecaId,jobId,proc){
   let fb=document.getElementById('corrigir_todas_fb');if(!fb){if(proc)proc.fim();return}
   try{
     const r=await apiGet('/api/entrega/corrigir-todas-status?job='+encodeURIComponent(jobId));const d=await r.json();
     if(!r.ok){if(proc)proc.fim();fb.innerHTML='<p class="erro-ia">'+esc(d.erro||'Não foi possível acompanhar a correção.')+'</p>';return}
-    const j=d.job||{},processadas=(j.concluidas||0)+(j.falhas||0),pct=j.total?Math.round(processadas*100/j.total):0;
-    if(proc)proc.atualizar(pct,j.atual?'Corrigindo '+j.atual+'...':'Acompanhando a correção do lote...');
-    if(sincronizarConcluidasLote(pecaId,j.itensConcluidos)){renderRodadaProposta(pecaId);fb=document.getElementById('corrigir_todas_fb')}
-    fb.innerHTML='<div class="parecer-inicial"><p><b>Concluídas neste lote: '+processadas+' de '+j.total+'</b>'+(j.atual?' · corrigindo '+esc(j.atual):'')+'</p>'+(j.repetindo?'<p style="color:var(--dourado);font-family:Arial,sans-serif">↻ Repetindo automaticamente a correção de '+esc(j.repetindo)+'.</p>':'')+'<div class="pbar"><div class="trilho"><div class="fill" style="width:'+pct+'%"></div></div></div><p style="font: .82rem Arial,sans-serif;color:var(--cinza)">Relatórios enviados por e-mail: '+(j.emailsEnviados||0)+(j.semEmail?' · não enviados: '+j.semEmail:'')+(j.tentativasExtras?' · repetições automáticas: '+j.tentativasExtras:'')+'</p>'+(j.falhas?'<p class="erro-ia">Falhas de correção até agora: '+j.falhas+'</p>':'')+'</div>';
-    if(j.status==='processando'){setTimeout(()=>acompanharCorrecaoTodas(pecaId,jobId,proc),1500);return}
+    const j=d.job||{},progressoProvedor=j.progressoProvedor||{},processadas=Math.max((j.concluidas||0)+(j.falhas||0),progressoProvedor.processados||0),pct=j.total?Math.min(100,Math.round(processadas*100/j.total)):0;
+    if(proc)proc.atualizar(pct,j.atual?'Gerando rascunho para '+j.atual+'...':(String(j.modo||'').startsWith('anthropic-message-batch')?'Lote assíncrono em processamento...':(j.status==='fase-sequencial'?'Processando itens de alto risco individualmente...':'Acompanhando a geração dos rascunhos...')));
+    if(sincronizarRascunhosLote(pecaId,j.itensConcluidos)){renderRodadaProposta(pecaId);fb=document.getElementById('corrigir_todas_fb')}
+    fb.innerHTML='<div class="parecer-inicial"><p><b>Itens processados no lote: '+processadas+' de '+j.total+'</b>'+(j.atual?' · gerando para '+esc(j.atual):'')+'</p><div class="pbar"><div class="trilho"><div class="fill" style="width:'+pct+'%"></div></div></div><p style="font: .82rem Arial,sans-serif;color:var(--cinza)">'+(j.modo==='anthropic-message-batch'?'Processamento assíncrono: pode demorar e é retomado pelo servidor após reinicializações. ':'')+'Rascunhos salvos: '+(j.rascunhosGerados||0)+' · aguardando revisão individual do professor. Nenhum aluno é notificado nesta etapa.</p>'+(j.falhas?'<p class="erro-ia">Falhas de geração até agora: '+j.falhas+'</p>':'')+'</div>';
+    if(j.status==='processando'||j.status==='criando'||j.status==='fallback-sequencial'||j.status==='fase-sequencial'){setTimeout(()=>acompanharCorrecaoTodas(pecaId,jobId,proc),60000);return}
+    if(j.status==='criacao-incerta'){fb.innerHTML='<div class="parecer-inicial"><p class="erro-ia"><b>Confirmação de criação incerta.</b> O provedor não devolveu um identificador seguro. Para evitar cobrança duplicada, o sistema não repetirá o lote e manterá a reserva financeira até a conferência manual no Console da Anthropic.</p><p style="font: .82rem Arial,sans-serif;color:var(--cinza)">Nenhuma correção foi liberada ao aluno.</p>'+(AUTH&&AUTH.admin?'<button onclick="reconciliarLoteIncerto(\''+escAttr(jobId)+'\',\''+escAttr(pecaId)+'\',\'criacao-incerta\')">Registrar conferência e liberar reserva</button>':'<p style="font: .82rem Arial,sans-serif;color:var(--cinza)">Solicite a reconciliação à administração.</p>')+'</div>';setTimeout(()=>acompanharCorrecaoTodas(pecaId,jobId,proc),60000);return}
+    if(j.status==='resultados-indisponiveis'){if(proc)proc.fim();fb.innerHTML='<div class="parecer-inicial"><p class="erro-ia"><b>Os resultados remotos deste lote não estão mais disponíveis.</b> Nenhum item pendente será repetido automaticamente. A reserva permanece bloqueada até a administração conferir o Console; ao reconciliar, o saldo ainda reservado será registrado como gasto conservador.</p>'+(AUTH&&AUTH.admin?'<button onclick="reconciliarLoteIncerto(\''+escAttr(jobId)+'\',\''+escAttr(pecaId)+'\',\'resultados-indisponiveis\')">Conferir e reconciliar lote</button>':'<p style="font: .82rem Arial,sans-serif;color:var(--cinza)">Solicite a reconciliação à administração.</p>')+'</div>';return}
+    if(j.status==='pendencia-batch-reconciliada'){if(proc)proc.fim();fb.innerHTML='<div class="parecer-inicial"><p class="erro-ia"><b>Pendência do lote reconciliada pela administração.</b> A reserva foi liberada após conferência registrada no Console. Inicie um novo lote somente se essa conferência descartou cobrança ou processamento pendente.</p></div>';return}
     if(j.status==='falhou'){
       if(proc)proc.fim();
-      fb.innerHTML='<div class="parecer-inicial"><p class="erro-ia"><b>A correção automática foi interrompida.</b> O conteúdo parcial foi removido e as entregas não concluídas continuam pendentes.</p>'+((j.erros||[]).length?'<ul class="erro-ia">'+j.erros.map(x=>'<li>'+esc(x.aluno)+': '+esc(x.erro)+'</li>').join('')+'</ul>':'')+'</div>';
+      fb.innerHTML='<div class="parecer-inicial"><p class="erro-ia"><b>A geração de rascunhos foi interrompida.</b> Os rascunhos já salvos foram mantidos; resíduos das tentativas incompletas foram removidos, e as demais entregas continuam pendentes.</p>'+((j.erros||[]).length?'<ul class="erro-ia">'+j.erros.map(x=>'<li>'+esc(x.aluno)+': '+esc(x.erro)+'</li>').join('')+'</ul>':'')+'</div>';
       setTimeout(()=>atualizarPropostasProfessor(pecaId),1200);return;
     }
     if(proc)proc.fim();
-    const loteOk=!(j.falhas||0);
-    fb.innerHTML='<div class="parecer-inicial"><p class="'+(loteOk?'':'erro-ia')+'" style="'+(loteOk?'color:var(--verde)':'')+'"><b>'+(loteOk?'✅ Todas as entregas do lote foram corrigidas.':'⚠️ Lote finalizado com pendência.')+'</b> '+j.concluidas+' correção(ões) validada(s), '+j.falhas+' falha(s) e '+(j.emailsEnviados||0)+' relatório(s) enviado(s) por e-mail.'+(j.semEmail?' '+j.semEmail+' relatório(s) não enviado(s) por e-mail; o PDF permanece disponível no sistema.':'')+'</p>'+((j.erros||[]).length?'<ul class="erro-ia">'+j.erros.map(x=>'<li>'+esc(x.aluno)+': '+esc(x.erro)+'</li>').join('')+'</ul>':'')+((j.falhasEmail||[]).length?'<p class="erro-ia"><b>Falhas de e-mail:</b></p><ul class="erro-ia">'+j.falhasEmail.map(x=>'<li>'+esc(x.aluno)+': '+esc(x.erro)+'</li>').join('')+'</ul>':'')+'</div>';
+    const ignorados=(j.itensConcluidos||[]).filter(x=>x.ignorado).length,loteOk=!(j.falhas||0)&&!(j.cancelados||0)&&!ignorados;
+    fb.innerHTML='<div class="parecer-inicial"><p class="'+(loteOk?'':'erro-ia')+'" style="'+(loteOk?'color:var(--verde)':'')+'"><b>'+(loteOk?'✅ Todos os rascunhos do lote foram gerados e salvos.':'⚠️ Lote de rascunhos finalizado com pendência.')+'</b> '+(j.rascunhosGerados||0)+' rascunho(s) aguardam revisão e validação individual do professor; '+(j.falhas||0)+' geração(ões) falharam'+(ignorados?' e '+ignorados+' item(ns) foram ignorados por alteração, validação, cancelamento ou ausência da entrega':'')+(j.cancelados?' ('+j.cancelados+' cancelado(s) no provedor)':'')+'. Nenhuma nota foi liberada e nenhum e-mail foi enviado ao aluno.</p>'+((j.erros||[]).length?'<ul class="erro-ia">'+j.erros.map(x=>'<li>'+esc(x.aluno)+': '+esc(x.erro)+'</li>').join('')+'</ul>':'')+'</div>';
     setTimeout(()=>atualizarPropostasProfessor(pecaId),1200);
   }catch(e){if(proc)proc.fim();fb.innerHTML='<p class="erro-ia">Falha ao acompanhar o lote. Atualize a página para consultar o resultado.</p>'}
 }
@@ -715,10 +753,10 @@ async function abrirPeca(id){
   let ent='';
   if(!d.entregas.length)ent='<p style="color:var(--cinza)">Nenhuma entrega ainda.</p>';
   else{ent='<table class="painel"><tr><th>Aluno</th><th>Matrícula</th><th>Enviado</th><th>Nota</th><th>Status</th><th></th></tr>';
-    for(const e of d.entregas)ent+='<tr><td>'+esc(e.nome)+'</td><td>'+e.matricula+'</td><td>'+dataHora(e.enviadoEm)+'</td><td>'+(e.nota!=null?String(e.nota).replace('.',','):'—')+'</td><td>'+(e.validado?'✅ validada':(e.temRelatorio?'📝 corrigida (não validada)':'⏳ pendente'))+'</td><td><a style="cursor:pointer;color:var(--azul)" onclick="abrirEntrega(\''+id+'\',\''+e.matricula+'\')">corrigir</a></td></tr>';
+    for(const e of d.entregas)ent+='<tr><td>'+esc(e.nome)+'</td><td>'+e.matricula+'</td><td>'+dataHora(e.enviadoEm)+'</td><td>'+(e.nota!=null?String(e.nota).replace('.',','):'—')+'</td><td>'+(e.validado?'✅ validada':(e.temRelatorio?'📝 rascunho — revisão pendente':'⏳ aguardando rascunho'))+'</td><td><a style="cursor:pointer;color:var(--azul)" onclick="abrirEntrega(\''+id+'\',\''+e.matricula+'\')">'+(e.temRelatorio&&!e.validado?'revisar e validar':'corrigir')+'</a></td></tr>';
     ent+='</table>';}
   const preusos=d.precorrecoes||[];
-  const preHtml=preusos.length?'<table class="painel"><tr><th>Aluno</th><th>Matrícula</th><th>Utilizada em</th><th>Entrega definitiva</th><th></th></tr>'+preusos.map(x=>'<tr><td>'+esc(x.nome)+'</td><td>'+esc(x.matricula)+'</td><td>'+esc(dataHora(x.utilizadaEm))+'</td><td>'+(x.temEntrega?'sim':'não')+'</td><td><button onclick="liberarNovaPrecorrecao(\''+id+'\',\''+escAttr(x.matricula)+'\','+(x.temEntrega?'true':'false')+')">Liberar novamente</button></td></tr>').join('')+'</table>':'<p style="color:var(--cinza)">Nenhum aluno utilizou a pré-correção desta peça.</p>';
+  const preHtml=preusos.length?'<table class="painel"><tr><th>Aluno</th><th>Matrícula</th><th>Registrada em</th><th>Ciência do aluno</th><th>Entrega definitiva</th><th></th></tr>'+preusos.map(x=>'<tr><td>'+esc(x.nome)+'</td><td>'+esc(x.matricula)+'</td><td>'+esc(dataHora(x.utilizadaEm))+'</td><td>'+(x.visualizadoPeloAluno?'✅ visualizada':'⚠️ não visualizada — registro externo do professor')+'</td><td>'+(x.temEntrega?'sim':'não')+'</td><td><button onclick="liberarNovaPrecorrecao(\''+id+'\',\''+escAttr(x.matricula)+'\','+(x.temEntrega?'true':'false')+')">Liberar novamente</button></td></tr>').join('')+'</table>':'<p style="color:var(--cinza)">Nenhuma pré-correção válida foi registrada nesta peça.</p>';
   window.__peca=p;
   const liberadosCount=Object.keys(d.liberados||{}).length;
   const souAutor=(p.autor===AUTH.usuario)||podeGerirAgora();
@@ -825,7 +863,7 @@ async function abrirEntrega(id,mat){
   conteudo.innerHTML='<p><span class="spinner"></span>Abrindo entrega...</p>';
   const r=await apiGet('/api/entrega?id='+id+'&matricula='+mat);const d=await r.json();
   if(!r.ok){conteudo.innerHTML='<p class="erro-ia">'+esc(d.erro||'Erro')+'</p>';return}
-  window.__ent={id,mat,recurso:d.recurso||null};
+  window.__ent={id,mat,recurso:d.recurso||null,validado:!!d.validado};
   const recursoPendente=d.recurso&&d.recurso.status==='pendente';
   const sugestaoRecurso=recursoPendente&&d.recurso.sugestaoIA?d.recurso.sugestaoIA:null;
   const relatorioInicial=d.relatorio;
@@ -839,13 +877,14 @@ async function abrirEntrega(id,mat){
    +(d.arquivo?'<p style="font: .8rem Arial,sans-serif;color:var(--cinza);margin-bottom:10px">📎 Texto importado de <b>'+esc(d.arquivo.nome)+'</b> · '+esc(d.arquivo.tipo.toUpperCase())+' · '+Math.max(1,Math.round(d.arquivo.tamanho/1024))+' KB</p>':'')
    +'<div class="caso" style="max-height:340px;overflow:auto">'+esc(d.texto)+'</div></div>'
    +'<div class="card"><h3>'+(recursoPendente?'Espelho original da correção — preservado':'Relatório de correção')+'</h3>'
+   +(!recursoPendente&&!d.validado&&d.relatorio?'<p class="aviso">📝 Este é um rascunho. Revise o relatório e a nota; o aluno só terá acesso depois da validação explícita do professor.</p>':'')
    +(recursoPendente?'<p class="aviso">O recurso não gera um novo espelho. O professor confirma apenas o resultado, a justificativa e a nova nota.</p>':'<div class="botoes"><button class="primario" onclick="corrigirEntregaIA()">🤖 Corrigir com IA</button></div>')
    +'<div id="corrfb"></div>'
    +'<textarea id="relatorio" class="redacao" style="min-height:280px" '+(recursoPendente?'readonly aria-readonly="true"':'')+' placeholder="Relatório de correção gerado pela IA — revise e altere apenas se desejar.">'+esc(relatorioInicial)+'</textarea>'
    +'<div style="font-family:Arial,sans-serif;margin-top:10px">'+(recursoPendente?'Nova nota após o recurso (0 a 5): ':'Nota do Estágio (0 a 5): ')+'<input id="nota" type="number" min="0" max="5" step="0.01" style="width:90px;padding:8px;border:1px solid #cfc9b8;border-radius:6px" value="'+(notaInicial!==''?String(notaInicial):'')+'"></div>'
    +(recursoPendente?'<div class="campo-grid" style="margin-top:14px"><label>Resultado do recurso<select id="resultado_recurso" style="display:block;width:100%;margin-top:4px;padding:9px;border:1px solid #cfc9b8;border-radius:6px"><option value="">Selecione</option><option '+(sugestaoRecurso&&['Aceito','Deferido'].includes(sugestaoRecurso.resultado)?'selected':'')+'>Aceito</option><option '+(sugestaoRecurso&&['Aceito parcialmente','Deferido parcialmente'].includes(sugestaoRecurso.resultado)?'selected':'')+'>Aceito parcialmente</option><option '+(sugestaoRecurso&&['Não aceito','Indeferido'].includes(sugestaoRecurso.resultado)?'selected':'')+'>Não aceito</option></select></label><label style="grid-column:1/-1">Justificativa ao aluno<textarea id="decisao_recurso" class="redacao" style="min-height:110px;margin-top:4px" placeholder="A IA preencherá este campo. Revise antes de confirmar o envio.">'+esc(sugestaoRecurso?sugestaoRecurso.decisao:'')+'</textarea></label></div>':'')
    +'<div class="botoes" style="margin-top:12px">'+(recursoPendente?'':'<button onclick="salvarEntrega(false)">💾 Salvar rascunho</button><button id="btn_previa_correcao" onclick="visualizarPreviaCorrecao()">👁 Visualizar prévia</button>')
-   +'<button class="primario" onclick="salvarEntrega(true)">'+(recursoPendente?'✅ Revisar, confirmar e enviar ao aluno':'✅ Validar e enviar ao aluno por e-mail')+'</button></div>'
+   +'<button class="primario" onclick="salvarEntrega(true)">'+(recursoPendente?'✅ Revisar, confirmar e enviar ao aluno':(d.validado?'✅ Revisar, revalidar e reenviar':'✅ Revisei: validar e enviar ao aluno'))+'</button></div>'
    +(d.validado?'<p class="aviso">Esta entrega já foi validada — validar de novo reenvia o e-mail ao aluno.</p>':'')
    +'<div id="valfb"></div></div>';
   const rel=document.getElementById('relatorio'),nota=document.getElementById('nota');
@@ -887,22 +926,22 @@ async function corrigirEntregaIA(){
     document.getElementById('relatorio').value=pronto.relatorio;
     if(pronto.notaSugerida!=null)document.getElementById('nota').value=String(pronto.notaSugerida);
     atualizarDisponibilidadePrevia();
-    fb.innerHTML='<p style="font-family:Arial,sans-serif;font-size:.85rem;color:var(--verde)">Relatório gerado pela IA. Revise, ajuste a nota e valide.</p>';
+    fb.innerHTML='<p style="font-family:Arial,sans-serif;font-size:.85rem;color:var(--verde)">📝 Rascunho gerado e salvo. Revise o relatório e a nota; nada foi liberado ao aluno.</p>';
   }catch(e){prog.fim();restaurarTela();fb.innerHTML='<p class="erro-ia">Falha: '+esc(e.message)+'. O estado anterior foi restaurado.</p>';}
 }
 async function salvarEntrega(validar){
   const rel=document.getElementById('relatorio').value.trim();const nota=document.getElementById('nota').value.trim();
   const fb=document.getElementById('valfb');
   if(!nota){fb.innerHTML='<p class="erro-ia">Informe a nota.</p>';return}
-  if(validar){const recursoPendente=window.__ent.recurso&&window.__ent.recurso.status==='pendente';const resultado=recursoPendente?((document.getElementById('resultado_recurso')||{}).value||''):'';const decisao=recursoPendente?((document.getElementById('decisao_recurso')||{}).value||'').trim():'';if(recursoPendente&&(!resultado||decisao.length<30)){fb.innerHTML='<p class="erro-ia">Revise o resultado e escreva uma justificativa com ao menos 30 caracteres antes de confirmar.</p>';return}const pergunta=recursoPendente?'Confirma o envio desta decisão ao aluno?\n\nResultado: '+resultado+'\nNova nota: '+nota+'/5\n\nJustificativa:\n'+decisao:'Validar e enviar o relatório e a nota '+nota+' ao e-mail do aluno?';if(!confirm(pergunta))return}
+  if(!validar&&window.__ent.validado&&!confirm('Salvar como rascunho retirará temporariamente esta correção da área do aluno até uma nova revisão e validação. Continuar?'))return;
+  if(validar){const recursoPendente=window.__ent.recurso&&window.__ent.recurso.status==='pendente';const resultado=recursoPendente?((document.getElementById('resultado_recurso')||{}).value||''):'';const decisao=recursoPendente?((document.getElementById('decisao_recurso')||{}).value||'').trim():'';if(recursoPendente&&(!resultado||decisao.length<30)){fb.innerHTML='<p class="erro-ia">Revise o resultado e escreva uma justificativa com ao menos 30 caracteres antes de confirmar.</p>';return}const pergunta=recursoPendente?'Confirma que revisou e deseja enviar esta decisão ao aluno?\n\nResultado: '+resultado+'\nNova nota: '+nota+'/5\n\nJustificativa:\n'+decisao:'Confirmo que revisei o relatório e a nota '+nota+'/5. Validar a correção, liberá-la no sistema e tentar enviar o PDF ao e-mail do aluno?';if(!confirm(pergunta))return}
   const payload={id:window.__ent.id,matricula:window.__ent.mat,relatorio:rel,nota:nota,validar:!!validar};
   if(validar&&window.__ent.recurso&&window.__ent.recurso.status==='pendente'){payload.resultadoRecurso=((document.getElementById('resultado_recurso')||{}).value||'');payload.decisaoRecurso=((document.getElementById('decisao_recurso')||{}).value||'').trim()}
   try{const r=await apiPost('/api/entrega/validar',payload);
   const d=await r.json();if(!r.ok){fb.innerHTML='<p class="erro-ia">'+esc(d.erro||'Erro')+'</p>';return}
-  if(validar&&d.emailEnviado)fb.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif">'+(d.recursoDecidido?'✅ Decisão do recurso confirmada pelo professor e enviada ao aluno por e-mail.':'✅ Correção validada e PDF enviado ao aluno por e-mail.')+'</p>';
-  else if(validar)fb.innerHTML='<p class="erro-ia">⚠️ '+(d.recursoDecidido?'Decisão confirmada e disponível no sistema, mas o e-mail ao aluno não foi enviado. ':'Correção validada e disponível no sistema, mas o e-mail não foi enviado. ')+esc(d.avisoEmail||'Confira o e-mail do aluno e a configuração de envio.')+'</p>';
-  else fb.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif">💾 Rascunho salvo.</p>';
-  }catch(e){}
+  if(validar){window.__ent.validado=true;if(d.emailEnviado)fb.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif">'+(d.recursoDecidido?'✅ Decisão do recurso confirmada pelo professor e enviada ao aluno por e-mail.':'✅ Correção revisada, validada e PDF enviado ao aluno por e-mail.')+'</p>';else fb.innerHTML='<p class="aviso">⚠️ '+(d.recursoDecidido?'Decisão confirmada e disponível no sistema. ':'Correção revisada, validada e disponível no sistema. ')+esc(d.avisoEmail||'O envio do e-mail falhou, mas isso não desfez a validação; o aluno já pode consultar o resultado no sistema.')+'</p>'}
+  else{window.__ent.validado=false;fb.innerHTML='<p style="color:var(--verde);font-family:Arial,sans-serif">💾 Rascunho salvo para revisão. Nada foi liberado ao aluno.</p>'}
+  }catch(e){fb.innerHTML='<p class="erro-ia">Falha de conexão. O servidor não confirmou a operação; atualize a entrega antes de tentar novamente.</p>'}
 }
 // ---- Nova peça (IA ou PDF ou manual) ----
 let RASCUNHO={nomePeca:'',disc:'',caso:'',gab:''};
@@ -1121,10 +1160,16 @@ function importarPdfAlunos(inp){const f=inp.files&&inp.files[0];if(!f)return;con
 
 // ---- Gastos (Administrador e Coordenação) ----
 function mesBR(x){const p=x.split('-');const n=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];return n[parseInt(p[1],10)-1]+'/'+p[0]}
-function usdBR(v){return 'US$ '+v.toFixed(2).replace('.',',')}
+function usdBR(v){return 'US$ '+(Number(v)||0).toFixed(2).replace('.',',')}
+async function reconciliarPendenciaIA(id,resultadoConsole){
+  const motivo=prompt('Descreva o que foi conferido no Console da Anthropic (mínimo de 20 caracteres):');if(!motivo||motivo.trim().length<20)return;
+  if(!confirm(resultadoConsole==='cobrada-estimada'?'Converter a reserva desta chamada em gasto conservador?':'Liberar a reserva após confirmar que a chamada não foi cobrada?'))return;
+  const r=await apiPost('/api/gastos/reconciliar-pendencia',{id,resultadoConsole,motivo:motivo.trim(),confirmacao:'RECONCILIAR CHAMADA'});const d=await r.json();
+  if(!r.ok){alert(d.erro||'Não foi possível reconciliar a chamada.');return}alert('Pendência reconciliada.');profGastos();
+}
 async function profGastos(mes){
-  conteudo.innerHTML='<h2 class="titulo-peca">Gastos com IA</h2>'
-   +'<p style="color:var(--cinza);font-family:Arial,sans-serif;font-size:.88rem;margin-bottom:12px">Registro <b>permanente</b> dos gastos do sistema, mês a mês — não é apagado nem quando alunos ou turmas são excluídos, nem ao zerar o sistema. Cada mês inclui a manutenção do sistema e o uso de IA correspondente ao período.</p>'
+  conteudo.innerHTML='<h2 class="titulo-peca">Custos e licença institucional</h2>'
+   +'<p style="color:var(--cinza);font-family:Arial,sans-serif;font-size:.88rem;margin-bottom:12px">Registro <b>permanente e transparente</b>, mês a mês. O custo real da API e sua reserva operacional aparecem separados da <b>licença institucional</b>, que é o pagamento do autor pela disponibilização do sistema. O histórico é preservado mesmo quando alunos ou turmas são excluídos.</p>'
    +'<div id="gx"><p><span class="spinner"></span>Carregando...</p></div>';
   try{const r=await apiGet('/api/gastos');const d=await r.json();
     const gx=document.getElementById('gx');
@@ -1132,17 +1177,31 @@ async function profGastos(mes){
     if(!d.meses.length){gx.innerHTML='<div class="card"><p>Nenhum uso de IA registrado ainda. A partir de agora, cada chamada (correções, enunciados, gabaritos) fica registrada aqui.</p></div>';return}
     const m=(mes&&d.meses.includes(mes))?mes:d.meses[0];
     const abas='<div class="botoes" style="flex-wrap:wrap;margin-bottom:10px">'+d.meses.map(x=>'<button class="'+(x===m?'primario':'')+'" onclick="profGastos(\''+x+'\')">'+mesBR(x)+'</button>').join('')+'</div>';
-    const regs=Object.values(d.gastos[m]||{}).sort((a,b)=>b.valor-a.valor);
-    const rz=(d.resumos||{})[m]||{manutencao:100,usoIA:0,total:100};
-    const resumo='<div class="metricas"><div class="metrica"><b>'+usdBR(rz.manutencao)+'</b><span>manutenção mensal</span></div><div class="metrica"><b>'+usdBR(rz.usoIA)+'</b><span>uso de IA</span></div><div class="metrica"><b style="color:var(--azul)">'+usdBR(rz.total)+'</b><span>total do mês</span></div></div>';
-    let totVal=0,totCham=0;
-    let h='<table><tr><th>Usuário</th><th>Perfil</th><th>Turma</th><th>Chamadas de IA</th><th>Tokens</th><th>Custo de IA</th></tr>';
-    for(const g of regs){totVal+=g.valor;totCham+=g.chamadas;
-      h+='<tr><td>'+esc(g.nome)+'</td><td>'+esc(g.tipo)+'</td><td>'+esc(g.turma||'—')+'</td><td>'+g.chamadas+'</td><td>'+(g.tokens||0).toLocaleString('pt-BR')+'</td><td><b>'+usdBR(g.valor)+'</b></td></tr>';}
-    h+='<tr><td colspan="5" style="text-align:right">Subtotal de uso:</td><td><b>'+usdBR(totVal)+'</b></td></tr>';
-    h+='<tr><td colspan="5" style="text-align:right">Manutenção mensal do sistema:</td><td><b>'+usdBR(rz.manutencao)+'</b></td></tr>';
-    h+='<tr style="background:#f2eee0"><td colspan="5" style="text-align:right"><b>TOTAL do mês:</b></td><td><b>'+usdBR(rz.total)+'</b></td></tr></table>';
-    gx.innerHTML=abas+'<div class="card">'+resumo+'</div><div class="card painel">'+h+'<p class="aviso" style="margin-top:8px">'+totCham+' chamadas de IA neste mês. Valores consolidados em dólares americanos.</p></div>';
+    const regs=Object.values(d.gastos[m]||{}).sort((a,b)=>(b.usoIAComReserva||b.valor||0)-(a.usoIAComReserva||a.valor||0));
+    const rz=(d.resumos||{})[m]||{custoAPI:0,reservaIA:0,usoIAComReserva:0,licenca:0,total:0};
+    const cfgMes=((d.configuracaoFinanceiraMensal||{})[m])||{};
+    const licenca=Number(rz.licenca)||0,reservaPct=Number(cfgMes.reservaIAPercentual!=null?cfgMes.reservaIAPercentual:d.reservaIAPercentual)||0;
+    const orc=((d.orcamentosIA||{})[m])||{limiteUSD:Number(d.orcamentoIAMensal)||0,consumidoUSD:rz.custoAPI,reservadoUSD:0,disponivelParaNovasChamadasUSD:Math.max(0,(Number(d.orcamentoIAMensal)||0)-rz.custoAPI),percentual:0,nivel:'normal'};
+    const pctOrc=Math.max(0,Number(orc.percentual)||0),larguraOrc=Math.min(100,pctOrc),corOrc=orc.nivel==='esgotado'?'var(--vermelho)':(orc.nivel==='critico'?'#b45309':(orc.nivel==='atencao'?'#c28a18':'var(--verde)'));
+    const tituloOrc=orc.nivel==='esgotado'?'Orçamento da API atingido':(orc.nivel==='critico'?'Uso crítico do orçamento da API':(orc.nivel==='atencao'?'Atenção ao orçamento da API':'Orçamento da API sob controle'));
+    const orcamento='<div class="card" style="border-left:5px solid '+corOrc+'"><div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-end;flex-wrap:wrap"><div><h3 style="margin-bottom:4px">'+esc(tituloOrc)+'</h3><p style="margin:0;font: .84rem Arial,sans-serif;color:var(--cinza)">Consumo bruto e reservas de chamadas em andamento. A licença institucional não entra neste teto.</p></div><b style="color:'+corOrc+'">'+pctOrc.toLocaleString('pt-BR',{maximumFractionDigits:1})+'%</b></div><div style="height:12px;background:#e8e5dc;border-radius:999px;overflow:hidden;margin:12px 0 8px"><div style="height:100%;width:'+larguraOrc+'%;background:'+corOrc+'"></div></div><div class="metricas"><div class="metrica"><b>'+usdBR(orc.consumidoUSD)+'</b><span>já consumido</span></div><div class="metrica"><b>'+usdBR(orc.reservadoUSD)+'</b><span>em chamadas ativas</span></div><div class="metrica"><b>'+usdBR(orc.disponivelParaNovasChamadasUSD)+'</b><span>disponível</span></div><div class="metrica"><b>'+usdBR(orc.limiteUSD)+'</b><span>teto bruto</span></div></div></div>';
+    const resumo='<div class="metricas"><div class="metrica"><b>'+usdBR(rz.custoAPI)+'</b><span>custo real da API</span></div><div class="metrica"><b>'+usdBR(rz.reservaIA)+'</b><span>reserva de IA ('+reservaPct.toLocaleString('pt-BR')+'%)</span></div><div class="metrica"><b>'+usdBR(rz.usoIAComReserva)+'</b><span>IA com reserva</span></div><div class="metrica"><b>'+usdBR(rz.licenca)+'</b><span>licença institucional</span></div><div class="metrica"><b style="color:var(--azul)">'+usdBR(rz.total)+'</b><span>total do mês</span></div></div>';
+    const pendencias=Array.isArray(d.pendenciasFinanceirasIA)?d.pendenciasFinanceirasIA:[];
+    const pendenciasHtml=!pendencias.length?'':('<div class="card painel" style="border-left:5px solid #b45309"><h3>⚠️ Chamadas com cobrança incerta</h3><p class="aviso">Estas reservas continuam consumindo o teto até a administração conferir o Console da Anthropic e reconciliá-las explicitamente.</p><table><tr><th>Detectada</th><th>Operação</th><th>Modelo</th><th>Reserva</th><th>Ação administrativa</th></tr>'+pendencias.map(x=>'<tr><td>'+esc(dataHora(x.detectadaEm||x.criadaEm))+'</td><td>'+esc(x.operacao||'—')+'</td><td>'+esc(x.modelo||'—')+'</td><td><b>'+usdBR(x.reservaOrcamentoUSD)+'</b></td><td>'+(AUTH&&AUTH.admin?'<button onclick="reconciliarPendenciaIA(\''+escAttr(x.id)+'\',\'nao-cobrada\')">Não cobrada</button> <button onclick="reconciliarPendenciaIA(\''+escAttr(x.id)+'\',\'cobrada-estimada\')">Converter reserva em gasto</button>':'A administração deve reconciliar')+'</td></tr>').join('')+'</table></div>');
+    let totCham=0,totBusca=0;
+    let h='<table><tr><th>Usuário</th><th>Perfil</th><th>Turma</th><th>Chamadas</th><th>Tokens</th><th>Buscas web</th><th>API</th><th>Reserva</th><th>IA com reserva</th></tr>';
+    for(const g of regs){totCham+=Number(g.chamadas)||0;totBusca+=Number(g.buscasWeb)||0;
+      h+='<tr><td>'+esc(g.nome)+'</td><td>'+esc(g.tipo)+'</td><td>'+esc(g.turma||'—')+'</td><td>'+g.chamadas+'</td><td>'+(Number(g.tokens)||0).toLocaleString('pt-BR')+'</td><td>'+(Number(g.buscasWeb)||0).toLocaleString('pt-BR')+'</td><td>'+usdBR(g.custoAPI)+'</td><td>'+usdBR(g.reservaIA)+'</td><td><b>'+usdBR(g.usoIAComReserva)+'</b></td></tr>';}
+    h+='<tr><td colspan="8" style="text-align:right">Custo real da API:</td><td><b>'+usdBR(rz.custoAPI)+'</b></td></tr>';
+    h+='<tr><td colspan="8" style="text-align:right">Reserva operacional de IA ('+reservaPct.toLocaleString('pt-BR')+'%):</td><td><b>'+usdBR(rz.reservaIA)+'</b></td></tr>';
+    h+='<tr><td colspan="8" style="text-align:right">Licença institucional — pagamento do autor:</td><td><b>'+usdBR(rz.licenca)+'</b></td></tr>';
+    h+='<tr style="background:#f2eee0"><td colspan="8" style="text-align:right"><b>TOTAL do mês:</b></td><td><b>'+usdBR(rz.total)+'</b></td></tr></table>';
+    const detalhes=(d.detalhamentos||{})[m]||{};
+    function tabelaDetalhe(titulo,lista){if(!Array.isArray(lista)||!lista.length)return '';
+      let x='<div class="card painel"><h3>'+esc(titulo)+'</h3><table><tr><th>Categoria</th><th>Chamadas</th><th>Tokens</th><th>Buscas web</th><th>API</th><th>Reserva</th><th>IA com reserva</th></tr>';
+      for(const z of lista)x+='<tr><td>'+esc(z.nome)+'</td><td>'+Number(z.chamadas||0).toLocaleString('pt-BR')+'</td><td>'+Number(z.tokens||0).toLocaleString('pt-BR')+'</td><td>'+Number(z.buscasWeb||0).toLocaleString('pt-BR')+'</td><td>'+usdBR(z.custoAPI)+'</td><td>'+usdBR(z.reservaIA)+'</td><td><b>'+usdBR(z.usoIAComReserva)+'</b></td></tr>';
+      return x+'</table></div>'}
+    gx.innerHTML=abas+orcamento+pendenciasHtml+'<div class="card">'+resumo+'<p class="aviso" style="margin-top:10px">A reserva operacional incide somente sobre a API. A licença não é assinatura de provedor de IA: remunera o autor pela disponibilização do Laboratório.</p></div><div class="card painel">'+h+'<p class="aviso" style="margin-top:8px">'+totCham+' chamadas de IA e '+totBusca+' buscas web neste mês. Valores em dólares americanos.</p></div>'+tabelaDetalhe('Custos por modelo',detalhes.porModelo)+tabelaDetalhe('Custos por operação',detalhes.porOperacao);
   }catch(e){document.getElementById('gx').innerHTML='<p class="erro-ia">Falha ao carregar.</p>';}
 }
 
@@ -1574,7 +1633,7 @@ function abrirPecaAluno(id){
    +'<div class="envio-opcoes">'
    +'<label class="envio-opcao"><span style="font-size:1.5rem">📄</span><span><b>Enviar PDF ou Word</b><small>PDF, DOCX ou DOC · até 6 MB</small></span><input type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="display:none" onchange="subirArquivoAluno(this,\''+id+'\')"></label>'
    +'<label class="envio-opcao"><span style="font-size:1.5rem">📷</span><span><b>Transcrever fotos</b><small>Até 6 páginas manuscritas, na ordem</small></span><input type="file" accept="image/*" multiple style="display:none" onchange="transcreverFotos(this,\''+id+'\')"></label>'
-   +'</div><div id="al_import">'+(window.__arquivoAluno?'<p style="color:var(--verde);font: .82rem Arial,sans-serif">📎 Arquivo importado: <b>'+esc(window.__arquivoAluno.nome)+'</b></p>':'')+'</div><div id="al_ocr"></div>'
+   +'</div><p class="aviso" style="margin-top:8px"><b>Trabalho digitado?</b> Prefira PDF ou DOCX. Reserve fotos e a transcrição por OCR para peças manuscritas.</p><div id="al_import">'+(window.__arquivoAluno?'<p style="color:var(--verde);font: .82rem Arial,sans-serif">📎 Arquivo importado: <b>'+esc(window.__arquivoAluno.nome)+'</b></p>':'')+'</div><div id="al_ocr"></div>'
    +'<textarea id="al_texto" class="redacao" placeholder="EXCELENTÍSSIMO SENHOR...">'+esc(rasc)+'</textarea>'
    +'<div class="botoes"><button onclick="salvarRascunhoAluno(\''+id+'\')">💾 Salvar rascunho</button>'
    +(parecerUsado?'<button class="primario" onclick="enviarPeca(\''+id+'\',true)">📨 Enviar diretamente para correção</button>':'<button class="primario" onclick="pedirParecerInicial(\''+id+'\')">🔎 Receber pré-correção e decidir</button>')+'</div>'
@@ -1614,13 +1673,13 @@ async function pedirParecerInicial(id){
   const prog=progresso(fb,ETAPAS_PARECER,110);
   try{
     const r=await apiPost('/api/aluno/parecer-inicial',{id,texto,arquivo:window.__arquivoAluno||null});const d=await r.json();prog.fim();
-    if(!r.ok){if(d.erro==='PARECER_JA_UTILIZADO'){const p=(window.__pecasAluno||[]).find(x=>x.id===id);if(p)p.parecerInicialUsado=true;fb.innerHTML='<div class="parecer-inicial"><p><b>A pré-correção desta peça já foi utilizada.</b> Revise o texto e envie esta versão diretamente para correção.</p><div class="botoes"><button class="primario" onclick="enviarPeca(\''+id+'\',true)">📨 Enviar diretamente para correção</button></div></div>';return}let m=d.mensagem||d.erro||'Não foi possível preparar o parecer agora.';if(m==='LIMITE_CREDITOS')m='O recurso de análise atingiu o limite temporário.';fb.innerHTML='<div class="parecer-inicial"><p class="erro-ia">'+esc(m)+'</p><p class="aviso">Sua peça continua salva. Para não perder o prazo, você pode tentar novamente ou enviá-la sem o parecer.</p><div class="botoes"><button onclick="pedirParecerInicial(\''+id+'\')">Tentar novamente</button><button class="primario" onclick="enviarPeca(\''+id+'\',true)">Enviar sem parecer</button></div></div>';return}
+    if(!r.ok){if(d.erro==='PARECER_JA_UTILIZADO'){const p=(window.__pecasAluno||[]).find(x=>x.id===id);if(p)p.parecerInicialUsado=true;fb.innerHTML='<div class="parecer-inicial"><p><b>A pré-correção desta peça já foi utilizada.</b> Revise o texto e envie esta versão diretamente para correção.</p><div class="botoes"><button class="primario" onclick="enviarPeca(\''+id+'\',true)">📨 Enviar diretamente para correção</button></div></div>';return}if(d.erro==='PARECER_EM_ANDAMENTO'){fb.innerHTML='<div class="parecer-inicial"><p><b>Pré-correção em andamento.</b> Aguarde alguns instantes; esta solicitação não será substituída por uma contingência concorrente.</p><div class="botoes"><button onclick="pedirParecerInicial(\''+id+'\')">Verificar resultado</button></div></div>';return}let m=d.mensagem||d.erro||'Não foi possível preparar o parecer agora.';if(m==='LIMITE_CREDITOS')m='O recurso de análise atingiu o limite temporário.';fb.innerHTML='<div class="parecer-inicial"><p class="erro-ia">'+esc(m)+'</p><p class="aviso">Sua peça continua salva. Tente novamente: se o serviço externo estiver indisponível, o sistema preparará automaticamente a pré-correção de contingência.</p><div class="botoes"><button onclick="pedirParecerInicial(\''+id+'\')">Tentar novamente</button></div></div>';return}
     window.__textoParecerInicial=texto;
     window.__parecerInicialPdf={base64:d.pdfBase64||'',nomeArquivo:d.nomeArquivo||('parecer-pre-correcao-peca-'+id+'.pdf')};
     const p=(window.__pecasAluno||[]).find(x=>x.id===id);if(p)p.parecerInicialUsado=true;
     fb.innerHTML='<div class="parecer-inicial"><h3>📄 Parecer de pré-correção pronto</h3><p style="font: .84rem Arial,sans-serif;color:var(--cinza)">A triagem pedagógica foi organizada em PDF, sem nota e sem solução-modelo. Leia o parecer antes de decidir.</p><div class="botoes"><button onclick="abrirParecerInicialPdf()">👁 Visualizar parecer</button><button onclick="baixarParecerInicialPdf()">⬇ Baixar PDF</button></div><div style="border-top:1px solid #cdd8e6;margin-top:16px;padding-top:14px"><h3>O que você quer fazer agora?</h3><p style="font: .84rem Arial,sans-serif;color:var(--cinza)">A peça só será enviada se você escolher a primeira opção.</p><div class="botoes"><button class="primario" onclick="enviarPeca(\''+id+'\')">📨 Enviar esta versão para correção</button><button onclick="refazerPecaAluno(\''+id+'\')">✏️ Refazer a peça — não enviar</button></div></div></div>';
     abrirParecerInicialPdf();
-  }catch(e){prog.fim();fb.innerHTML='<div class="parecer-inicial"><p class="erro-ia">Falha de conexão. Sua peça continua salva.</p><div class="botoes"><button onclick="pedirParecerInicial(\''+id+'\')">Tentar novamente</button><button class="primario" onclick="enviarPeca(\''+id+'\',true)">Enviar sem parecer</button></div></div>'}
+  }catch(e){prog.fim();fb.innerHTML='<div class="parecer-inicial"><p class="erro-ia">Falha de conexão. Sua peça continua salva. Tente novamente; a contingência automática será usada quando o serviço de IA estiver indisponível.</p><div class="botoes"><button onclick="pedirParecerInicial(\''+id+'\')">Tentar novamente</button></div></div>'}
 }
 function refazerPecaAluno(id){
   window.__textoParecerInicial=null;
@@ -1647,10 +1706,10 @@ async function transcreverFotos(inp,id){
     t.scrollIntoView({behavior:'smooth',block:'center'});
   }catch(e){fb.innerHTML='<p class="erro-ia">Falha ao processar as fotos: '+esc(e.message)+'</p>';}
 }
-async function enviarPeca(id,semParecer){
+async function enviarPeca(id,parecerRegistrado){
   const texto=document.getElementById('al_texto').value.trim();const fb=document.getElementById('al_fb');
   if(texto.length<80){fb.innerHTML='<p class="erro-ia">Escreva sua peça antes de enviar.</p>';return}
-  if(!semParecer&&window.__textoParecerInicial!==texto){fb.innerHTML='<p class="erro-ia">A peça foi alterada depois do parecer. Solicite um novo parecer inicial antes de decidir o envio.</p>';return}
+  if(!parecerRegistrado&&window.__textoParecerInicial!==texto){fb.innerHTML='<p class="erro-ia">A peça foi alterada depois do parecer. Solicite um novo parecer inicial antes de decidir o envio.</p>';return}
   if(!confirm('Enviar sua peça ao professor? Após o prazo pode não ser possível reenviar.'))return;
   try{const r=await apiPost('/api/entregar',{id,texto,arquivo:window.__arquivoAluno||null});const d=await r.json();
   if(!r.ok){let m=(d.mensagem||d.erro||'Erro');if(d.erro==='PRAZO')m='⏰ O prazo desta peça encerrou ('+dataHoraBR(d.prazo)+'). Fale com o(a) professor(a) para renovar ou liberar sua entrega.';fb.innerHTML='<p class="erro-ia">'+esc(m)+'</p>';return}

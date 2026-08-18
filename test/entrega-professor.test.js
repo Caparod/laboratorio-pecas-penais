@@ -29,7 +29,7 @@ function zipUmaEntrada(nome, conteudo) {
   const agora = Date.now();
   const db = {
     turmaAtiva: 'Turma 1',
-    professor: { login: 'admin', senha: hashSenha('Admin-Entrega-2026', 'sal-admin'), mudouSenha: true, nome: 'Administrador', papel: 'Administrador', aceitePrivacidadeEm: agora, versaoPrivacidade: '2026-08' },
+    professor: { login: 'admin', senha: hashSenha('Admin-Entrega-2026', 'sal-admin'), mudouSenha: true, nome: 'Administrador', papel: 'Administrador', aceitePrivacidadeEm: agora, versaoPrivacidade: '2026-08-batch-v1' },
     professores: {},
     turmas: { t1: { id: 't1', nome: 'Turma 1', professores: ['admin'], criadaEm: agora }, t2: { id: 't2', nome: 'Turma 2', professores: ['admin'], criadaEm: agora } },
     proximaTurma: 3,
@@ -37,7 +37,7 @@ function zipUmaEntrada(nome, conteudo) {
       '9900010': { nome: 'Aluno da Rodada', senha: hashSenha('Aluno-Entrega-2026', 'sal-a1'), mudouSenha: true, email: 'a1@example.test', emailVerificado: true, whatsapp: '+5561999999991', turmaId: 't1', turmaIds: ['t1'] },
       '9900020': { nome: 'Aluno de Outra Turma', senha: hashSenha('Aluno-Outra-2026', 'sal-a2'), mudouSenha: true, email: 'a2@example.test', emailVerificado: true, whatsapp: '+5561999999992', turmaId: 't2', turmaIds: ['t2'] }
     },
-    pecas: { p2: { id: 'p2', num: 2, rodada: 2, nomePeca: 'Apelação Criminal', disc: 'Turma 1', turmaId: 't1', caso: casoTeste(), gab: gabaritoTeste('Apelação Criminal'), prazo: '2000-01-01T00:00', publicada: true, autor: 'admin', versao: 1, historico: [], parecerInicialPorAluno: { '9900010': agora - 1000 } } },
+    pecas: { p2: { id: 'p2', num: 2, rodada: 2, nomePeca: 'Apelação Criminal', disc: 'Turma 1', turmaId: 't1', caso: casoTeste(), gab: gabaritoTeste('Apelação Criminal'), prazo: '2000-01-01T00:00', publicada: true, autor: 'admin', versao: 1, historico: [] } },
     proximoNum: 3,
     entregas: { p2: {} }, sessoes: {}, gastos: {}
   };
@@ -61,6 +61,7 @@ function zipUmaEntrada(nome, conteudo) {
     const registro = await post('/api/entrega/registrar-professor', { id: 'p2', matricula: '9900010', texto: importacao.body.texto, arquivo: importacao.body.arquivo }, login.cookie);
     assert.equal(registro.status, 200, JSON.stringify(registro.body));
     assert.equal(registro.body.status, 'A corrigir');
+    assert.equal(registro.body.precorrecaoContingenciaCriada, true, 'entrega externa sem pré-correção deve ganhar registro de contingência');
 
     const lista = await fetch(base + '/api/pecas', { headers: { cookie: login.cookie } });
     const proposta = (await lista.json()).pecas.find(p => p.id === 'p2');
@@ -68,12 +69,31 @@ function zipUmaEntrada(nome, conteudo) {
     assert.equal(proposta.aCorrigir.length, 1, 'a entrega registrada pelo professor deve entrar imediatamente em A corrigir');
     assert.equal(proposta.aCorrigir[0].matricula, '9900010');
 
+    const painelResposta = await fetch(base + '/api/peca/get?id=p2', { headers: { cookie: login.cookie } });
+    const painel = await painelResposta.json();
+    assert.equal(painelResposta.status, 200, JSON.stringify(painel));
+    const preNoPainel = painel.precorrecoes.find(x => x.matricula === '9900010');
+    assert.ok(preNoPainel, 'painel do professor deve listar a pré-correção criada para entrega externa');
+    assert.equal(preNoPainel.origem, 'registro-professor-entrega-externa');
+    assert.equal(preNoPainel.visualizadoPeloAluno, false, 'painel não pode fingir que a pré-correção externa foi visualizada pelo aluno');
+
     const disco = JSON.parse(fs.readFileSync(path.join(dir, 'db.json'), 'utf8'));
     const entrega = disco.entregas.p2['9900010'];
     assert.equal(entrega.origemProfessor, 'admin');
     assert.equal(entrega.registradaPeloProfessor.motivo, 'arquivo-recebido-fora-do-sistema');
     assert.equal(entrega.validado, undefined, 'a entrega deve permanecer pendente de correção');
-    assert.ok(disco.pecas.p2.parecerInicialPorAluno['9900010'], 'o registro pelo professor não deve consumir nem apagar a pré-correção existente');
+    assert.match(entrega.snapshotPecaRef || '', /^[a-f0-9]{64}$/, 'nova entrega deve apontar para fotografia imutável por SHA-256');
+    assert.ok(!Object.prototype.hasOwnProperty.call(entrega, 'snapshotPeca'), 'nova entrega não deve duplicar caso e gabarito');
+    assert.equal(disco.pecas.p2.snapshots[entrega.snapshotPecaRef].caso, db.pecas.p2.caso);
+    assert.equal(disco.pecas.p2.snapshots[entrega.snapshotPecaRef].gab, db.pecas.p2.gab);
+    const precorrecaoExterna = disco.pecas.p2.parecerInicialResultados['9900010'];
+    assert.equal(precorrecaoExterna.contingencia, true);
+    assert.equal(precorrecaoExterna.modelo, 'deterministico-local');
+    assert.equal(precorrecaoExterna.motivoContingencia, 'entrega-externa-recebida-pelo-professor');
+    assert.equal(precorrecaoExterna.origem, 'registro-professor-entrega-externa');
+    assert.equal(precorrecaoExterna.visualizadoPeloAluno, false, 'o registro externo não pode inventar visualização pelo aluno');
+    assert.equal(precorrecaoExterna.visualizadoPeloAlunoEm, null);
+    assert.ok(!disco.pecas.p2.parecerInicialPorAluno || !disco.pecas.p2.parecerInicialPorAluno['9900010'], 'contingência administrativa não deve marcar o parecer como visto pelo aluno');
 
     const duplicada = await post('/api/entrega/registrar-professor', { id: 'p2', matricula: '9900010', texto: importacao.body.texto, arquivo: importacao.body.arquivo }, login.cookie);
     assert.equal(duplicada.status, 409, 'uma entrega existente nunca deve ser sobrescrita silenciosamente');
@@ -83,6 +103,6 @@ function zipUmaEntrada(nome, conteudo) {
     const loginAluno = await post('/api/login', { usuario: '9900020', senha: 'Aluno-Outra-2026' });
     const alunoTentando = await post('/api/entrega/registrar-professor', { id: 'p2', matricula: '9900020', texto: importacao.body.texto, arquivo: importacao.body.arquivo }, loginAluno.cookie);
     assert.equal(alunoTentando.status, 403, 'a rota de registro em nome de aluno deve ser exclusiva do professor');
-    console.log('OK: professor registra arquivo em nome do aluno, sem sobrescrever entregas nem misturar turmas.');
+    console.log('OK: professor registra entrega externa com pré-correção de contingência explícita, sem inventar visualização.');
   } finally { child.kill(); fs.rmSync(dir, { recursive: true, force: true }); }
 })().catch(e => { console.error(e); process.exit(1); });

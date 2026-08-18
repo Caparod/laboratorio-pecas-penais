@@ -1,6 +1,6 @@
 # Governança de dados e privacidade
 
-Versão do aviso: `2026-08`.
+Versão do aviso: `2026-08-batch-v1`.
 
 ## Controles implementados
 
@@ -10,6 +10,8 @@ Versão do aviso: `2026-08`.
 - dados de API sem cache no navegador;
 - exclusão de entregas e sessões relacionada à exclusão da conta;
 - aviso para não enviar dados pessoais desnecessários.
+- correções coletivas podem usar a Message Batches API da Anthropic; entradas e saídas desse processamento assíncrono podem permanecer no provedor por até 29 dias após a criação do lote;
+- o sistema solicita a exclusão remota do lote assim que conclui a ingestão idempotente dos resultados e mantém a solicitação pendente para nova tentativa após falha ou reinício;
 - coleta obrigatória de e-mail e WhatsApp do aluno, limitada às devolutivas e comunicações acadêmicas e visível apenas à equipe autorizada da turma.
 - pesquisa pedagógica com cinco itens obrigatórios e comentário opcional, vínculo de resposta por hash e resultados exibidos ao professor somente de forma agregada após o mínimo de três respostas;
 

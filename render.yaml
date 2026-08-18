@@ -2,10 +2,10 @@ services:
   - type: web
     name: laboratorio-pecas-penais
     runtime: node
-    rootDir: render-app
     plan: free
     buildCommand: npm ci
     startCommand: npm start
+    healthCheckPath: /healthz
     autoDeploy: true
     envVars:
       - key: NODE_VERSION
@@ -14,10 +14,48 @@ services:
         sync: false
       - key: ANTHROPIC_API_KEY
         sync: false
+      - key: ANTHROPIC_BATCHES_ATIVO
+        value: true
       - key: MODELO_POTENTE
         value: claude-opus-4-8
-      - key: CREDITO_MENSAL_USD
+      - key: MODELO_GERACAO
+        value: claude-sonnet-5
+      - key: MODELO_PRECORRECAO
+        value: claude-sonnet-5
+      - key: MODELO_CORRECAO
+        value: claude-sonnet-5
+      - key: MODELO_REPARO
+        value: claude-sonnet-5
+      - key: MODELO_GABARITO
+        value: claude-opus-4-8
+      - key: MODELO_AUDITORIA
+        value: claude-opus-4-8
+      - key: MODELO_RECURSO
+        value: claude-opus-4-8
+      - key: MODELO_OCR
+        value: claude-haiku-4-5-20251001
+      - key: MODELO_CASO
+        value: claude-haiku-4-5-20251001
+      - key: LICENCA_MENSAL_USD
         value: 100
+      - key: ORCAMENTO_IA_MENSAL_USD
+        value: 100
+      - key: RESERVA_IA_PERCENTUAL
+        value: 25
+      - key: PRECO_WEB_SEARCH_USD
+        value: 0.01
+      - key: PRECO_OPUS_4_8_ENTRADA_MTOK_USD
+        value: 5
+      - key: PRECO_OPUS_4_8_SAIDA_MTOK_USD
+        value: 25
+      - key: PRECO_SONNET_5_ENTRADA_MTOK_USD
+        value: 2
+      - key: PRECO_SONNET_5_SAIDA_MTOK_USD
+        value: 10
+      - key: PRECO_HAIKU_4_5_ENTRADA_MTOK_USD
+        value: 1
+      - key: PRECO_HAIKU_4_5_SAIDA_MTOK_USD
+        value: 5
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_SECRET_KEY
@@ -28,6 +66,10 @@ services:
         value: app_state
       - key: SUPABASE_STATE_ID
         value: main
+      - key: SUPABASE_REQUIRED
+        value: true
+      - key: MIGRACAO_ROLLING_ESPERA_MS
+        value: 90000
       - key: SESSAO_DIAS
         value: 7
       - key: CONFIAR_PROXY

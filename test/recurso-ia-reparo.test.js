@@ -52,7 +52,7 @@ NOTA SUGERIDA: 4,00/5
 (async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'recurso-decisao-'));
   const senhaProfessor = 'Professor-Recurso-2026';
-  const professor = { login: 'admin', senha: hashSenha(senhaProfessor, 'sal-prof'), mudouSenha: true, nome: 'Professor', papel: 'Administrador', emailAviso: 'professor@example.test', aceitePrivacidadeEm: Date.now(), versaoPrivacidade: '2026-08' };
+  const professor = { login: 'admin', senha: hashSenha(senhaProfessor, 'sal-prof'), mudouSenha: true, nome: 'Professor', papel: 'Administrador', emailAviso: 'professor@example.test', aceitePrivacidadeEm: Date.now(), versaoPrivacidade: '2026-08-batch-v1' };
   const caso = casoTeste() + '\nDurante o trajeto, na Via Hélio Prates, ocorreu o fato narrado.'; const gab = gabaritoTeste('Apelação Criminal');
   const casoSnapshotDesatualizado = casoTeste() + '\nDurante o trajeto, na via L2 Norte, ocorreu o fato narrado.';
   const textoAluno = 'A defesa apresentou a síntese dos fatos e registrou expressamente a localização correta na Via Hélio Prates, além de desenvolver fundamentos, pedidos e fechamento em texto acadêmico próprio, suficientemente extenso para a avaliação individualizada.';
@@ -84,12 +84,12 @@ A entrega confirma o ponto factual indicado pelo aluno; os demais critérios per
 ## Fontes oficiais consultadas
 - [CPP](https://www.planalto.gov.br/ccivil_03/decreto-lei/del3689compilado.htm)`;
       res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ id: 'msg-teste', type: 'message', role: 'assistant', model: pedido.model, stop_reason: 'end_turn', content: [{ type: 'text', text: texto }], usage: { input_tokens: 100, output_tokens: 120 } }));
+      res.end(JSON.stringify({ id: 'msg-teste', type: 'message', role: 'assistant', model: 'modelo-real-recurso', stop_reason: 'end_turn', content: [{ type: 'text', text: texto }], usage: { input_tokens: 100, output_tokens: 120 } }));
     });
   });
   await new Promise(resolve => ia.listen(0, '127.0.0.1', resolve));
   const port = await portaLivre();
-  const child = spawn(process.execPath, ['server.js'], { cwd: path.join(__dirname, '..'), env: Object.assign({}, process.env, { DATA_DIR: dir, PORT: String(port), PROF_LOGIN: 'admin', PROF_SENHA: senhaProfessor, CRIAR_CONTAS_DEMO: 'false', SUPABASE_URL: '', SUPABASE_SERVICE_ROLE_KEY: '', GMAIL_USER: '', GMAIL_APP_PASSWORD: '', ANTHROPIC_API_KEY: 'teste', ANTHROPIC_API_URL: 'http://127.0.0.1:' + ia.address().port + '/v1/messages', MODELO_POTENTE: 'modelo-potente-teste' }), stdio: ['ignore', 'pipe', 'pipe'] });
+  const child = spawn(process.execPath, ['server.js'], { cwd: path.join(__dirname, '..'), env: Object.assign({}, process.env, { DATA_DIR: dir, PORT: String(port), PROF_LOGIN: 'admin', PROF_SENHA: senhaProfessor, CRIAR_CONTAS_DEMO: 'false', SUPABASE_URL: '', SUPABASE_SERVICE_ROLE_KEY: '', GMAIL_USER: '', GMAIL_APP_PASSWORD: '', ANTHROPIC_API_KEY: 'teste', ANTHROPIC_API_URL: 'http://127.0.0.1:' + ia.address().port + '/v1/messages', MODELO_RECURSO: 'modelo-recurso-teste' }), stdio: ['ignore', 'pipe', 'pipe'] });
   const base = 'http://127.0.0.1:' + port;
   async function post(rota, body, cookie) { const headers = { 'content-type': 'application/json' }; if (cookie) headers.cookie = cookie; const r = await fetch(base + rota, { method: 'POST', headers, body: JSON.stringify(body) }); return { status: r.status, body: await r.json(), cookie: String(r.headers.get('set-cookie') || '').split(';')[0] }; }
   async function get(rota, cookie) { const r = await fetch(base + rota, { headers: { cookie } }); return { status: r.status, body: await r.json() }; }
@@ -103,14 +103,19 @@ A entrega confirma o ponto factual indicado pelo aluno; os demais critérios per
     assert.equal(analise.body.resultadoSugerido, 'Aceito parcialmente'); assert.equal(analise.body.notaSugerida, 3.5);
     assert.ok(!Object.prototype.hasOwnProperty.call(analise.body, 'relatorio'), 'o recurso não deve gerar novo espelho');
     assert.equal(requisicoesIA.length, 1, 'rótulos em negrito não podem provocar falsa resposta incompleta nem nova cobrança');
+    assert.equal(requisicoesIA[0].model, 'modelo-recurso-teste', 'recurso deve usar o modelo Opus configurado especificamente para essa finalidade');
+    assert.ok(!requisicoesIA[0].tools, 'recurso factual sem jurisprudência nem URL não deve acionar busca web');
     const contextoIA = JSON.stringify(requisicoesIA[0].messages);
     assert.match(contextoIA, /<enunciado_atual_autoritativo>/, 'a análise do recurso deve identificar o enunciado atual como fonte autoritativa');
     assert.match(contextoIA, /Via Hélio Prates/, 'a análise deve receber o enunciado atual publicado');
     assert.doesNotMatch(contextoIA, /via L2 Norte/, 'um snapshot desatualizado não pode substituir o enunciado atual publicado');
 
+    let disco = JSON.parse(fs.readFileSync(path.join(dir, 'db.json'), 'utf8'));
+    assert.equal(disco.entregas.p2['9900001'].recurso.sugestaoIA.modelo, 'modelo-real-recurso', 'registro deve guardar o modelo efetivamente retornado pela API');
+
     const confirmacao = await post('/api/entrega/validar', { id: 'p2', matricula: '9900001', validar: true, relatorio: 'tentativa de substituir o espelho', nota: 3.5, resultadoRecurso: 'Aceito parcialmente', decisaoRecurso: analise.body.decisaoSugerida }, loginProfessor.cookie);
     assert.equal(confirmacao.status, 200, JSON.stringify(confirmacao.body)); assert.equal(confirmacao.body.recursoDecidido, true); assert.equal(confirmacao.body.pdfAnexado, false);
-    let disco = JSON.parse(fs.readFileSync(path.join(dir, 'db.json'), 'utf8'));
+    disco = JSON.parse(fs.readFileSync(path.join(dir, 'db.json'), 'utf8'));
     const decidido = disco.entregas.p2['9900001'];
     assert.equal(decidido.relatorio, relatorioValido, 'o espelho original deve ser preservado byte a byte');
     assert.equal(decidido.nota, 3.5); assert.equal(decidido.recurso.resultado, 'Aceito parcialmente'); assert.equal(decidido.recurso.confirmadoPeloProfessor, true);

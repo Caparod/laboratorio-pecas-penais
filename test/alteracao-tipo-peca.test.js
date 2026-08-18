@@ -21,7 +21,7 @@ async function esperar(url) {
   const caso = casoTeste(), gab = gabaritoTeste('Apelação Criminal');
   const db = {
     turmaAtiva: 'Turma 1',
-    professor: { login: 'admin', senha: hashSenha('Admin-Tipo-2026', 'sal-admin'), mudouSenha: true, nome: 'Administrador', papel: 'Administrador', aceitePrivacidadeEm: Date.now(), versaoPrivacidade: '2026-08' },
+    professor: { login: 'admin', senha: hashSenha('Admin-Tipo-2026', 'sal-admin'), mudouSenha: true, nome: 'Administrador', papel: 'Administrador', aceitePrivacidadeEm: Date.now(), versaoPrivacidade: '2026-08-batch-v1' },
     professores: {}, turmas: { t1: { id: 't1', nome: 'Turma 1', professores: ['admin'], criadaEm: Date.now() } }, proximaTurma: 2,
     alunos: { '9900010': { nome: 'Aluno', senha: hashSenha('Aluno-Tipo-2026', 'sal-aluno'), mudouSenha: true, email: 'aluno@example.test', emailVerificado: true, whatsapp: '+5561999999999', turmaId: 't1', turmaIds: ['t1'] } },
     pecas: { p2: { id: 'p2', num: 2, rodada: 2, nomePeca: 'Queixa-Crime', disc: 'Turma 1', turmaId: 't1', caso, gab, prazo: '2099-12-31T23:59', publicada: true, autor: 'admin', versao: 1, historico: [] } }, proximoNum: 3,
