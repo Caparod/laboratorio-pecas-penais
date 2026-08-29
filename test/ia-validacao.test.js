@@ -135,6 +135,19 @@ const correcaoComDuvidaJurisprudencial = correcao
   .replace('TOTAL DE PENALIDADES FORA DO ESPELHO: 0,00', 'TOTAL DE PENALIDADES FORA DO ESPELHO: -0,25')
   .replace('NOTA SUGERIDA: 4,00/5', 'NOTA SUGERIDA: 3,75/5');
 assert.equal(validarCorrecao(correcaoComDuvidaJurisprudencial).ok, true, 'dúvida jurisprudencial deve gerar penalidade adicional de 0,25');
+const correcaoSemJurisprudencia = correcao.replace(
+  '- Artigos conferidos no texto oficial.',
+  '- O aluno não citou súmulas nem julgados; não há citação jurisprudencial a classificar como falsa ou suspeita.\n- Todas as citações legais estão CORRETAS. Nenhuma citação falsa detectada.'
+);
+const correcaoSemJurisprudenciaNormalizada = normalizarPenalidadesCorrecao(correcaoSemJurisprudencia);
+assert.match(correcaoSemJurisprudenciaNormalizada, /PENALIDADE POR JURISPRUDÊNCIA NÃO CONFIRMADA: 0,00/, 'frase negativa com “suspeita” não pode gerar penalidade');
+assert.match(correcaoSemJurisprudenciaNormalizada, /NOTA SUGERIDA: 4,00\/5/, '“Nenhuma citação falsa detectada” não pode zerar a nota');
+assert.equal(validarCorrecao(correcaoSemJurisprudenciaNormalizada).ok, true, 'correção sem jurisprudência deve permanecer válida após a normalização');
+const correcaoComCitacaoFalsaNormalizada = normalizarPenalidadesCorrecao(
+  correcao.replace('- Artigos conferidos no texto oficial.', '- Súmula 9999 — INEXISTENTE/FALSA.')
+);
+assert.match(correcaoComCitacaoFalsaNormalizada, /NOTA SUGERIDA: 0,00\/5/, 'classificação afirmativa INEXISTENTE/FALSA deve continuar zerando a nota');
+assert.equal(validarCorrecao(correcaoComCitacaoFalsaNormalizada).ok, true, 'nota zero por citação efetivamente falsa deve permanecer válida');
 const correcaoPenalidadesInconsistentes = correcaoComDuvidaJurisprudencial
   .replace('PENALIDADE POR JURISPRUDÊNCIA NÃO CONFIRMADA: -0,25', 'PENALIDADE POR JURISPRUDÊNCIA NÃO CONFIRMADA: 0,00')
   .replace('TOTAL DE PENALIDADES FORA DO ESPELHO: -0,25', 'TOTAL DE PENALIDADES FORA DO ESPELHO: -0,75')

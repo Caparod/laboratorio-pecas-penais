@@ -167,6 +167,27 @@ function falhasFormatacaoNpj(auditoria) {
   }));
 }
 
+function linhaJurisprudenciaDuvidosa(linha) {
+  const texto = String(linha || '').trim();
+  if (!texto) return false;
+  return /(?:—|:|\|)\s*(?:\*{1,2})?(?:SUSPEITA|N[AÃ]O\s+CONFIRMADA)\b/i.test(texto)
+    || /^\s*(?:[-*]|\d+[.)])\s*(?:\*{1,2})?(?:SUSPEITA|N[AÃ]O\s+CONFIRMADA)\b/i.test(texto);
+}
+
+function contarJurisprudenciaDuvidosa(bloco) {
+  return String(bloco || '').split(/\r?\n/).filter(linhaJurisprudenciaDuvidosa).length;
+}
+
+function temCitacaoFalsa(texto) {
+  const conteudo = String(texto || '');
+  const classificacaoExplicita = conteudo.split(/\r?\n/).some(linha =>
+    /(?:—|:|\|)\s*(?:\*{1,2})?INEXISTENTE(?:\/FALSA)?\b/i.test(linha)
+    || /^\s*(?:[-*]|\d+[.)])\s*(?:\*{1,2})?INEXISTENTE(?:\/FALSA)?\b/i.test(linha)
+  );
+  const notaZeroExplicita = /NOTA\s+SUGERIDA\s*:\s*0(?:[.,]0+)?\s*\/\s*5\s*(?:—|-)\s*CITA[CÇ][AÃ]O\s+FALSA\s+DETECTADA\b/i.test(conteudo);
+  return classificacaoExplicita || notaZeroExplicita;
+}
+
 function normalizarPenalidadesCorrecao(texto, auditoriaFormatacao) {
   const original = limparCorrecaoIA(texto);
   const itens = paresPontuacao(secao(original, 'pontuacao item a item'));
@@ -176,14 +197,14 @@ function normalizarPenalidadesCorrecao(texto, auditoriaFormatacao) {
   const risco = riscoMatch ? normalizar(riscoMatch[1]) : 'baixo';
   const penalidadeRobotizacao = risco === 'alto' ? 1 : risco === 'atencao' ? 0.5 : 0;
   const blocoJurisprudencia = secao(original, 'verificacao de jurisprudencia e citacoes');
-  const ocorrenciasDuvidosas = blocoJurisprudencia.split(/\r?\n/).filter(l => /\b(?:SUSPEITA|N[AÃ]O\s+CONFIRMADA)\b/i.test(l)).length;
+  const ocorrenciasDuvidosas = contarJurisprudenciaDuvidosa(blocoJurisprudencia);
   const penalidadeJurisprudencia = Math.min(1, ocorrenciasDuvidosas * 0.25);
   const outrasMatch = original.match(/OUTRAS\s+PENALIDADES\s+FORA\s+DO\s+ESPELHO\s*:\s*-?\s*(\d+(?:[.,]\d+)?)/i);
   const outrasPenalidades = Math.min(5, Math.max(0, outrasMatch ? numeroBR(outrasMatch[1]) || 0 : 0));
   const falhasFormatacao = falhasFormatacaoNpj(auditoriaFormatacao);
   const penalidadeFormatacaoNpj = Math.min(0.60, Math.round(falhasFormatacao.reduce((s, item) => s + item.desconto, 0) * 100) / 100);
   const totalPenalidades = Math.round((penalidadeRobotizacao + penalidadeJurisprudencia + penalidadeFormatacaoNpj + outrasPenalidades) * 100) / 100;
-  const citacaoFalsa = /(?:—|:)\s*INEXISTENTE(?:\/FALSA)?|CITA[CÇ][AÃ]O FALSA DETECTADA/i.test(original);
+  const citacaoFalsa = temCitacaoFalsa(original);
   const nota = citacaoFalsa ? 0 : Math.min(5, Math.max(0, Math.round((subtotal - totalPenalidades) * 100) / 100));
 
   const linhas = original.split(/\r?\n/);
@@ -473,7 +494,7 @@ function validarCorrecao(texto, respostaAluno) {
   const totalPenalidades = totalPenalidadesMatch ? numeroBR(totalPenalidadesMatch[1]) : null;
   if (penalidadeJurisprudencia == null || outrasPenalidades == null || totalPenalidades == null) erros.push('A rastreabilidade deve declarar as penalidades de jurisprudência, outras penalidades externas e o total fora do espelho.');
   const blocoJurisprudencia = secao(t, 'verificacao de jurisprudencia e citacoes');
-  const ocorrenciasDuvidosas = blocoJurisprudencia.split(/\r?\n/).filter(l => /\b(?:SUSPEITA|N[AÃ]O\s+CONFIRMADA)\b/i.test(l)).length;
+  const ocorrenciasDuvidosas = contarJurisprudenciaDuvidosa(blocoJurisprudencia);
   const penalidadeJurisEsperada = Math.min(1, ocorrenciasDuvidosas * 0.25);
   if (penalidadeJurisprudencia != null && Math.abs(penalidadeJurisprudencia - penalidadeJurisEsperada) > 0.01) erros.push('A penalidade jurisprudencial deve ser de 0,25 por ocorrência SUSPEITA ou NÃO CONFIRMADA, limitada a 1,00.');
   if (penalidadeFormatacaoNpj < 0 || penalidadeFormatacaoNpj > 0.60) erros.push('A penalidade objetiva por formatação NPJ deve ficar entre 0,00 e 0,60.');
@@ -486,7 +507,7 @@ function validarCorrecao(texto, respostaAluno) {
     return celulas.length >= 3 && (celulas[celulas.length - 1].match(/\d+(?:[.,]\d+)?/) || [])[0];
   });
   if (!linhasRastreabilidade.length) erros.push('A rastreabilidade precisa apresentar ao menos uma linha de conferência dos descontos.');
-  const citacaoFalsa = /(?:—|:)\s*INEXISTENTE(?:\/FALSA)?|CITA[CÇ][AÃ]O FALSA DETECTADA/i.test(t);
+  const citacaoFalsa = temCitacaoFalsa(t);
   if (nota != null && pares.length >= 2) {
     const obtido = pares.reduce((s, p) => s + p[0], 0);
     const possivel = pares.reduce((s, p) => s + p[1], 0);
