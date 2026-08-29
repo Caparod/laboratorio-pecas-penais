@@ -86,7 +86,7 @@ const anthropic = http.createServer(async (req, res) => {
 
 async function iniciarApp(dataDir, porta, envExtra) {
   let log = '';
-  const app = spawn(process.execPath, ['server.js'], { cwd: appDir, env: Object.assign({}, process.env, { DATA_DIR: dataDir, PORT: String(porta), PROF_LOGIN: 'admin-batch', PROF_SENHA: 'Admin-Batch-2026', CRIAR_CONTAS_DEMO: 'false', SUPABASE_URL: '', SUPABASE_SERVICE_ROLE_KEY: '', ANTHROPIC_API_KEY: 'chave-teste', ANTHROPIC_API_URL: `http://127.0.0.1:${anthropic.address().port}/v1/messages`, ANTHROPIC_BATCHES_API_URL: `http://127.0.0.1:${anthropic.address().port}/v1/messages/batches`, ANTHROPIC_BATCHES_ATIVO: 'true', ORCAMENTO_IA_MENSAL_USD: '100' }, envExtra || {}), stdio: ['ignore', 'pipe', 'pipe'] });
+  const app = spawn(process.execPath, ['server.js'], { cwd: appDir, env: Object.assign({}, process.env, { DATA_DIR: dataDir, PORT: String(porta), PROF_LOGIN: 'admin-batch', PROF_SENHA: 'Admin-Batch-2026', CRIAR_CONTAS_DEMO: 'false', SUPABASE_URL: '', SUPABASE_SERVICE_ROLE_KEY: '', ANTHROPIC_API_KEY: 'chave-teste', ANTHROPIC_API_URL: `http://127.0.0.1:${anthropic.address().port}/v1/messages`, ANTHROPIC_BATCHES_API_URL: `http://127.0.0.1:${anthropic.address().port}/v1/messages/batches`, ANTHROPIC_BATCHES_ATIVO: 'true', ORCAMENTO_IA_MENSAL_USD: '100', ORCAMENTO_IA_SEM_TETO: 'false' }, envExtra || {}), stdio: ['ignore', 'pipe', 'pipe'] });
   appsAtivos.add(app);
   app.stdout.on('data', b => { log += b; }); app.stderr.on('data', b => { log += b; });
   const base = `http://127.0.0.1:${porta}`;

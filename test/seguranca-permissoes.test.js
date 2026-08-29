@@ -256,10 +256,7 @@ NOTA SUGERIDA: 4,25/5
   assert.equal(r.status, 200);
   r = await requisitar('/api/pecas-aluno', alunoInicial.token);
   const segundaPecaAntesPesquisa = r.body.pecas.find(p => p.id === pecaExpiradaId);
-  assert.ok(segundaPecaAntesPesquisa && segundaPecaAntesPesquisa.pesquisaPendente, 'Peça 2 deve aparecer bloqueada até a pesquisa ser respondida');
-  r = await requisitar('/api/entregar', alunoInicial.token, { id: pecaExpiradaId, texto: 'Tentativa de envio da segunda peça antes de responder integralmente à pesquisa pedagógica obrigatória.' });
-  assert.equal(r.status, 403, 'servidor deve bloquear o envio da Peça 2 antes da pesquisa');
-  assert.equal(r.body.erro, 'PESQUISA_OBRIGATORIA');
+  assert.ok(segundaPecaAntesPesquisa && !segundaPecaAntesPesquisa.pesquisaPendente, 'pesquisa pedagógica não pode bloquear nenhuma peça');
   r = await requisitar('/api/pesquisa/responder', alunoInicial.token, { turmaId: turmaA, valores: [5, 4, 5, 4], comentario: 'Resposta incompleta.' });
   assert.equal(r.status, 400, 'todas as cinco afirmações obrigatórias devem ser respondidas');
   r = await requisitar('/api/pesquisa/responder', alunoInicial.token, { turmaId: turmaA, valores: [5, 4, 5, 4, 5], comentario: 'A devolutiva mostrou com clareza onde melhorar.' });
@@ -267,7 +264,7 @@ NOTA SUGERIDA: 4,25/5
   assert.equal(r.body.atualizada, false);
   r = await requisitar('/api/pecas-aluno', alunoInicial.token);
   const segundaPecaDepoisPesquisa = r.body.pecas.find(p => p.id === pecaExpiradaId);
-  assert.ok(segundaPecaDepoisPesquisa && !segundaPecaDepoisPesquisa.pesquisaPendente, 'resposta completa deve liberar automaticamente a Peça 2');
+  assert.ok(segundaPecaDepoisPesquisa && !segundaPecaDepoisPesquisa.pesquisaPendente, 'a pesquisa continua opcional e não altera a liberação da peça');
   r = await requisitar('/api/pesquisa-pos-peca2-aluno', alunoInicial.token);
   assert.equal(r.status, 200);
   assert.equal(r.body.turmas.find(t => t.id === turmaA).elegivel, false, 'nova pesquisa deve aguardar o envio efetivo da Peça 2');

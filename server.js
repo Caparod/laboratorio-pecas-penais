@@ -234,6 +234,7 @@ const ORCAMENTO_IA_MENSAL_USD = numeroFinanceiroEnv(
   'ORCAMENTO_IA_MENSAL_USD',
   numeroFinanceiroEnv('CREDITO_MENSAL_USD', 100)
 );
+const ORCAMENTO_IA_SEM_TETO = process.env.ORCAMENTO_IA_SEM_TETO !== 'false';
 const ALERTAS_ORCAMENTO_IA_PERCENTUAL = Object.freeze([70, 85, 100]);
 const PRECO_WEB_SEARCH_USD = numeroFinanceiroEnv('PRECO_WEB_SEARCH_USD', 0.01);
 const PRECOS_MTOK = {
@@ -265,7 +266,8 @@ function configuracaoFinanceiraDoAmbiente() {
   return {
     licencaMensalUSD: LICENCA_MENSAL_USD,
     reservaIAPercentual: RESERVA_IA_PERCENTUAL,
-    orcamentoIAMensalUSD: ORCAMENTO_IA_MENSAL_USD
+    orcamentoIAMensalUSD: ORCAMENTO_IA_MENSAL_USD,
+    orcamentoIASemTeto: ORCAMENTO_IA_SEM_TETO
   };
 }
 function mesContabilSeguinte(mes) {
@@ -282,6 +284,7 @@ function normalizarConfiguracaoFinanceira(registro, padrao) {
     licencaMensalUSD: numero(registro && registro.licencaMensalUSD, base.licencaMensalUSD),
     reservaIAPercentual: numero(registro && registro.reservaIAPercentual, base.reservaIAPercentual),
     orcamentoIAMensalUSD: numero(registro && registro.orcamentoIAMensalUSD, base.orcamentoIAMensalUSD),
+    orcamentoIASemTeto: registro && typeof registro.orcamentoIASemTeto === 'boolean' ? registro.orcamentoIASemTeto : base.orcamentoIASemTeto === true,
     congeladaEm: Number((registro && registro.congeladaEm) || Date.now())
   };
 }
@@ -366,7 +369,7 @@ function reservarOrcamentoChamadaIA(body, metadados) {
   const estimadoUSD = estimarReservaChamadaIA(body);
   const consumidoUSD = custoAPIBrutoMes(mes);
   const reservadoUSD = totalReservadoOrcamentoIA(mes);
-  if (configuracao.orcamentoIAMensalUSD <= 0 || consumidoUSD + reservadoUSD + estimadoUSD > configuracao.orcamentoIAMensalUSD + 1e-12) {
+  if (!configuracao.orcamentoIASemTeto && (configuracao.orcamentoIAMensalUSD <= 0 || consumidoUSD + reservadoUSD + estimadoUSD > configuracao.orcamentoIAMensalUSD + 1e-12)) {
     const bloqueio = bloqueioOrcamentoIA(estimadoUSD) || {
       ok: false, status: 402, codigo: 'ORCAMENTO_IA_MENSAL_ATINGIDO',
       erro: 'O orçamento mensal da API de IA não possui saldo para reservar esta chamada.',
@@ -393,24 +396,26 @@ function estadoOrcamentoIA(mes) {
   const reservadoPreciso = totalReservadoOrcamentoIA(referencia);
   const comprometidoPreciso = consumidoPreciso + reservadoPreciso;
   const limite = configuracao.orcamentoIAMensalUSD;
-  const percentualPreciso = limite > 0 ? (comprometidoPreciso / limite) * 100 : 100;
-  const esgotado = limite <= 0 || comprometidoPreciso >= limite;
-  const nivel = esgotado ? 'esgotado' : percentualPreciso >= 85 ? 'critico' : percentualPreciso >= 70 ? 'atencao' : 'normal';
+  const semTeto = configuracao.orcamentoIASemTeto === true;
+  const percentualPreciso = semTeto ? 0 : (limite > 0 ? (comprometidoPreciso / limite) * 100 : 100);
+  const esgotado = semTeto ? false : (limite <= 0 || comprometidoPreciso >= limite);
+  const nivel = semTeto ? 'sem-teto' : (esgotado ? 'esgotado' : percentualPreciso >= 85 ? 'critico' : percentualPreciso >= 70 ? 'atencao' : 'normal');
   const arredondar = (valor, casas) => {
     const fator = 10 ** (casas == null ? 2 : casas);
     return Math.round((Number(valor) || 0) * fator) / fator;
   };
   return {
     mes: referencia,
-    limiteUSD: arredondar(limite, 2),
+    limiteUSD: semTeto ? null : arredondar(limite, 2),
     consumidoUSD: arredondar(consumidoPreciso, 6),
     reservadoUSD: arredondar(reservadoPreciso, 6),
     comprometidoUSD: arredondar(comprometidoPreciso, 6),
-    restanteUSD: arredondar(Math.max(0, limite - consumidoPreciso), 6),
-    disponivelParaNovasChamadasUSD: arredondar(Math.max(0, limite - comprometidoPreciso), 6),
+    restanteUSD: semTeto ? null : arredondar(Math.max(0, limite - consumidoPreciso), 6),
+    disponivelParaNovasChamadasUSD: semTeto ? null : arredondar(Math.max(0, limite - comprometidoPreciso), 6),
     percentual: arredondar(percentualPreciso, 2),
     nivel,
     esgotado,
+    semTeto,
     alertas: {
       setenta: percentualPreciso >= 70,
       oitentaECinco: percentualPreciso >= 85,
@@ -422,6 +427,7 @@ function estadoOrcamentoIA(mes) {
 }
 function bloqueioOrcamentoIA(estimadoUSD) {
   const estado = estadoOrcamentoIA();
+  if (estado.semTeto) return null;
   const estimado = Math.max(0, Number(estimadoUSD) || 0);
   if (!estado.esgotado && estimado <= estado.disponivelParaNovasChamadasUSD + 0.0000005) return null;
   return {
@@ -1018,7 +1024,7 @@ function pesquisaRespondidaAluno(turmaId, matricula) {
   return !!(resposta && resposta.versao === VERSAO_PESQUISA_PEDAGOGICA && Array.isArray(resposta.valores) && resposta.valores.length === PERGUNTAS_PESQUISA_PEDAGOGICA.length && resposta.valores.every(v => Number.isInteger(Number(v)) && Number(v) >= 1 && Number(v) <= 5));
 }
 function pesquisaObrigatoriaPendente(ctx, p) {
-  return !!(ctx && !ctx.virtual && p && p.turmaId && rodadaDaPeca(p) >= 2 && !pesquisaRespondidaAluno(p.turmaId, ctx.id));
+  return false;
 }
 function nomeParticipanteEntrega(mat, e) {
   if (db.alunos[mat]) return db.alunos[mat].nome || '';
@@ -1171,6 +1177,20 @@ function podarJobsCorrecao() {
   const agora = Date.now();
   for (const [id, job] of correcoesIndividuais) if (job.status !== 'processando' && agora - Number(job.finalizadoEm || job.iniciadoEm || 0) > RETENCAO_JOB_CORRECAO_MS) correcoesIndividuais.delete(id);
   for (const [id, job] of lotesCorrecao) if (job.status !== 'processando' && agora - Number(job.finalizadoEm || job.iniciadoEm || 0) > RETENCAO_JOB_CORRECAO_MS) lotesCorrecao.delete(id);
+}
+function resumoPublicoJobCorrecao(job) {
+  if (!job || typeof job !== 'object') return job;
+  const copiarPrimitivos = origem => {
+    const destino = {};
+    for (const [chave, valor] of Object.entries(origem || {})) if (valor == null || ['string', 'number', 'boolean'].includes(typeof valor)) destino[chave] = valor;
+    return destino;
+  };
+  const resumo = copiarPrimitivos(job);
+  resumo.progressoProvedor = copiarPrimitivos(job.progressoProvedor);
+  resumo.erros = (job.erros || []).map(copiarPrimitivos);
+  resumo.itensConcluidos = (job.itensConcluidos || []).map(copiarPrimitivos);
+  resumo.itens = (job.itens || []).map(copiarPrimitivos);
+  return resumo;
 }
 function ipCliente(req) {
   if (process.env.CONFIAR_PROXY === 'true') {
@@ -3191,7 +3211,6 @@ async function entregar(req, res) {
   let d; try { d = await lerJson(req, 300000); } catch { return json(res, 400, { erro: 'Requisição inválida.' }); }
   const p = db.pecas[String(d.id || '')]; if (!p || !p.publicada) return json(res, 404, { erro: 'Peça não encontrada.' });
   if (!alunoPodeAcessarPeca(a, p)) return json(res, 403, { erro: 'Esta peça não pertence à sua turma.' });
-  if (pesquisaObrigatoriaPendente(ctx, p)) return json(res, 403, { erro: 'PESQUISA_OBRIGATORIA', mensagem: 'Responda à pesquisa pedagógica antes de enviar a Peça 2.' });
   const texto = String(d.texto || '').trim();
   if (texto.length < 80) return json(res, 400, { erro: 'Escreva sua peça antes de enviar.' });
   if (texto.length > 60000) return json(res, 400, { erro: 'A peça ultrapassa o limite de 60.000 caracteres.' });
@@ -4349,6 +4368,8 @@ async function entregaCorrigirTodas(req, res) {
   if (Array.from(entregasEmCorrecao).some(chave => chave.startsWith(p.id + '\u0000'))) return json(res, 409, { erro: 'Há uma correção individual desta rodada em andamento. Aguarde a conclusão.' });
   const pendentes = Object.entries(db.entregas[p.id] || {}).filter(([mat, e]) => entregaPertenceTurma(mat, e, p) && !e.validado && !e.relatorio).map(([mat, e]) => ({ matricula: mat, nome: nomeParticipanteEntrega(mat, e) }));
   if (!pendentes.length) return json(res, 400, { erro: 'Todas as entregas pendentes já possuem rascunho. Abra cada uma para revisar e validar.' });
+  const bloqueioSemSaldo = bloqueioOrcamentoIA(0);
+  if (bloqueioSemSaldo) return json(res, bloqueioSemSaldo.status || 402, { erro: bloqueioSemSaldo.codigo, mensagem: bloqueioSemSaldo.erro, orcamento: bloqueioSemSaldo.orcamento });
   if (!ANTHROPIC_BATCHES_ATIVO) {
     try { for (const item of pendentes) snapshotDaEntrega(p, (db.entregas[p.id] || {})[item.matricula]); }
     catch (erro) { return responderSnapshotIndisponivel(res, erro); }
@@ -4399,7 +4420,7 @@ async function entregaCorrigirTodasStatus(req, res, id, pecaId) {
   if (job.providerBatchId && !job.ingestaoConcluidaEm && job.status === 'processando') setImmediate(() => retomarLoteAnthropic(job));
   if (job.exclusaoRemotaPendente) setImmediate(() => excluirBatchRemoto(job));
   if (job.status === 'fase-sequencial') setImmediate(() => retomarFaseSequencialBatch(job));
-  json(res, 200, { ok: true, job });
+  json(res, 200, { ok: true, job: resumoPublicoJobCorrecao(job) });
 }
 async function reconciliarCriacaoIncertaBatch(req, res) {
   const sess = sessaoDe(req); if (!sess) return json(res, 401, { erro: 'SESSAO' });

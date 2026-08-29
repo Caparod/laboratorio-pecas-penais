@@ -20,7 +20,7 @@ assert.ok(inicio >= 0 && fim > inicio, 'bloco de orçamento deve existir');
 const codigo = fonte.slice(inicio, fim) + '\nthis.api = { ORCAMENTO_IA_MENSAL_USD, estadoOrcamentoIA, bloqueioOrcamentoIA, estimarReservaChamadaIA, reservarOrcamentoChamadaIA, liberarReservaOrcamentoIA, totalReservadoOrcamentoIA, reservasOrcamentoIA };';
 function carregarFinanceiro(env, usd) {
   const mes = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit' }).format(new Date());
-  const contexto = { process: { env: env || {} }, Date, Intl, Buffer, crypto, MODELO_CORRECAO: 'claude-sonnet-5', db: { gastos: { [mes]: { sistema: { usd } } } } };
+  const contexto = { process: { env: Object.assign({ ORCAMENTO_IA_SEM_TETO: 'false' }, env || {}) }, Date, Intl, Buffer, crypto, MODELO_CORRECAO: 'claude-sonnet-5', db: { gastos: { [mes]: { sistema: { usd } } } } };
   vm.runInNewContext(codigo, contexto);
   return contexto.api;
 }
@@ -34,6 +34,8 @@ assert.equal(carregarFinanceiro({}, 85).estadoOrcamentoIA().nivel, 'critico');
 assert.equal(carregarFinanceiro({}, 85).bloqueioOrcamentoIA(), null, '85% deve alertar, sem corte antecipado');
 assert.equal(carregarFinanceiro({}, 100).estadoOrcamentoIA().nivel, 'esgotado');
 assert.equal(carregarFinanceiro({}, 100).bloqueioOrcamentoIA().codigo, 'ORCAMENTO_IA_MENSAL_ATINGIDO');
+assert.equal(carregarFinanceiro({ ORCAMENTO_IA_SEM_TETO: 'true' }, 1000).bloqueioOrcamentoIA(), null, 'modo sem teto deve manter o registro sem bloquear novas chamadas');
+assert.equal(carregarFinanceiro({ ORCAMENTO_IA_SEM_TETO: 'true' }, 1000).estadoOrcamentoIA().semTeto, true);
 
 // Duas chamadas simultâneas mantêm suas reservas pendentes no mesmo saldo.
 // A terceira é recusada antes de sair do processo, sem ultrapassar o teto.
@@ -107,7 +109,7 @@ async function executar() {
     env: Object.assign({}, process.env, {
       DATA_DIR: dataDir, PORT: String(port), PROF_LOGIN: 'admin-orcamento', PROF_SENHA: 'Admin-Orcamento-2026',
       CRIAR_CONTAS_DEMO: 'false', SUPABASE_URL: '', SUPABASE_SERVICE_ROLE_KEY: '', ANTHROPIC_API_KEY: 'chave-teste',
-      ANTHROPIC_API_URL: `http://127.0.0.1:${ia.address().port}/v1/messages`, ORCAMENTO_IA_MENSAL_USD: '100', LICENCA_MENSAL_USD: '100'
+      ANTHROPIC_API_URL: `http://127.0.0.1:${ia.address().port}/v1/messages`, ORCAMENTO_IA_MENSAL_USD: '100', ORCAMENTO_IA_SEM_TETO: 'false', LICENCA_MENSAL_USD: '100'
     }),
     stdio: ['ignore', 'pipe', 'pipe']
   });

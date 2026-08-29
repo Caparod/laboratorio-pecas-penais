@@ -120,6 +120,7 @@ async function executar() {
       MODELO_POTENTE: 'claude-opus-4-8',
       LICENCA_MENSAL_USD: '100',
       ORCAMENTO_IA_MENSAL_USD: '100',
+      ORCAMENTO_IA_SEM_TETO: 'false',
       RESERVA_IA_PERCENTUAL: '25'
     }),
     stdio: ['ignore', 'pipe', 'pipe']

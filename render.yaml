@@ -40,6 +40,8 @@ services:
         value: 100
       - key: ORCAMENTO_IA_MENSAL_USD
         value: 100
+      - key: ORCAMENTO_IA_SEM_TETO
+        value: true
       - key: RESERVA_IA_PERCENTUAL
         value: 25
       - key: PRECO_WEB_SEARCH_USD

@@ -256,10 +256,11 @@ async function apiPost(u,b){
 }
 async function apiGet(u){
   const proc=iniciarProcessamento(rotuloProcessamento(u,'GET'),{bloqueia:false,prioridade:1});
+  const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),30000);
   try{
   const h={};
   aplicarCabecalhosVisao(h);
-  const r=await fetch(u,{headers:h,credentials:'same-origin'});
+  const r=await fetch(u,{headers:h,credentials:'same-origin',signal:ctrl.signal});
   if(r.status===401){let d=null;try{d=await r.clone().json()}catch(e){}
     if(d&&d.erro==='SESSAO'){sair('Sua sessão expirou. Entre novamente.');throw new Error('sessao')}}
   if(r.status===403){let d=null;try{d=await r.clone().json()}catch(e){}
@@ -268,7 +269,7 @@ async function apiGet(u){
     if(d&&d.erro==='VERIFICAR_EMAIL'&&AUTH){AUTH.emailVerificado=false;aset(JSON.stringify(AUTH));renderVerificarEmail();throw new Error('verificar_email')}
     if(d&&d.erro==='ACEITAR_PRIVACIDADE'&&AUTH){AUTH.precisaAceitarPrivacidade=true;aset(JSON.stringify(AUTH));renderPrivacidade();throw new Error('privacidade')}}
   return r;
-  }finally{proc.fim()}
+  }finally{clearTimeout(timer);proc.fim()}
 }
 function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 function escAttr(t){return esc(t).replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
@@ -663,7 +664,7 @@ async function corrigirTodasRodada(id,rodada,total){
   fb.innerHTML='<div class="parecer-inicial"><p><span class="spinner"></span>Enviando o lote assíncrono...</p><p style="font: .82rem Arial,sans-serif;color:var(--cinza)">A Anthropic informa que lotes podem levar até 24 horas. O sistema retomará a consulta após reinicializações e salvará somente rascunhos para revisão humana.</p></div>';
   try{
     const r=await apiPost('/api/entrega/corrigir-todas',{id});const d=await r.json();
-    if(!r.ok){proc.fim();fb.innerHTML='<p class="erro-ia">'+esc(d.erro||'Não foi possível iniciar.')+'</p>';return}
+    if(!r.ok){proc.fim();fb.innerHTML='<p class="erro-ia">'+esc(d.mensagem||d.erro||'Não foi possível iniciar.')+'</p>';return}
     fb.innerHTML='<div class="parecer-inicial"><p><span class="spinner"></span>'+(d.criacaoIncerta?'A confirmação do provedor não chegou; o sistema bloqueou a repetição para evitar cobrança e correção duplicadas.':(d.faseSequencial&&!d.fallbackSequencial?'Os itens de alto risco serão corrigidos individualmente, com controle de orçamento por chamada.':(d.assincrono?(d.loteHibrido?'Lote econômico aceito; os itens de alto risco serão processados individualmente na segunda fase.':'Lote aceito e processando em segundo plano.'):'O provedor recusou explicitamente o lote; usando o fluxo seguro sequencial.')))+'</p><p style="font: .82rem Arial,sans-serif;color:var(--cinza)">Você pode continuar usando o sistema. Nenhuma nota será liberada automaticamente.</p></div>';
     window.__loteAcompanhadoPorPeca=window.__loteAcompanhadoPorPeca||{};window.__loteAcompanhadoPorPeca[id]=d.jobId;
     await acompanharCorrecaoTodas(id,d.jobId,proc);
@@ -717,7 +718,7 @@ async function acompanharCorrecaoTodas(pecaId,jobId,proc){
   let fb=document.getElementById('corrigir_todas_fb');if(!fb){if(proc)proc.fim();return}
   try{
     const r=await apiGet('/api/entrega/corrigir-todas-status?job='+encodeURIComponent(jobId));const d=await r.json();
-    if(!r.ok){if(proc)proc.fim();fb.innerHTML='<p class="erro-ia">'+esc(d.erro||'Não foi possível acompanhar a correção.')+'</p>';return}
+    if(!r.ok){if(proc)proc.fim();if(window.__loteAcompanhadoPorPeca)delete window.__loteAcompanhadoPorPeca[pecaId];fb.innerHTML='<p class="erro-ia">'+esc(d.mensagem||d.erro||'Não foi possível acompanhar a correção.')+'</p>';return}
     const j=d.job||{},progressoProvedor=j.progressoProvedor||{},processadas=Math.max((j.concluidas||0)+(j.falhas||0),progressoProvedor.processados||0),pct=j.total?Math.min(100,Math.round(processadas*100/j.total)):0;
     if(proc)proc.atualizar(pct,j.atual?'Gerando rascunho para '+j.atual+'...':(String(j.modo||'').startsWith('anthropic-message-batch')?'Lote assíncrono em processamento...':(j.status==='fase-sequencial'?'Processando itens de alto risco individualmente...':'Acompanhando a geração dos rascunhos...')));
     if(sincronizarRascunhosLote(pecaId,j.itensConcluidos)){renderRodadaProposta(pecaId);fb=document.getElementById('corrigir_todas_fb')}
@@ -735,7 +736,7 @@ async function acompanharCorrecaoTodas(pecaId,jobId,proc){
     const ignorados=(j.itensConcluidos||[]).filter(x=>x.ignorado).length,loteOk=!(j.falhas||0)&&!(j.cancelados||0)&&!ignorados;
     fb.innerHTML='<div class="parecer-inicial"><p class="'+(loteOk?'':'erro-ia')+'" style="'+(loteOk?'color:var(--verde)':'')+'"><b>'+(loteOk?'✅ Todos os rascunhos do lote foram gerados e salvos.':'⚠️ Lote de rascunhos finalizado com pendência.')+'</b> '+(j.rascunhosGerados||0)+' rascunho(s) aguardam revisão e validação individual do professor; '+(j.falhas||0)+' geração(ões) falharam'+(ignorados?' e '+ignorados+' item(ns) foram ignorados por alteração, validação, cancelamento ou ausência da entrega':'')+(j.cancelados?' ('+j.cancelados+' cancelado(s) no provedor)':'')+'. Nenhuma nota foi liberada e nenhum e-mail foi enviado ao aluno.</p>'+((j.erros||[]).length?'<ul class="erro-ia">'+j.erros.map(x=>'<li>'+esc(x.aluno)+': '+esc(x.erro)+'</li>').join('')+'</ul>':'')+'</div>';
     setTimeout(()=>atualizarPropostasProfessor(pecaId),1200);
-  }catch(e){if(proc)proc.fim();fb.innerHTML='<p class="erro-ia">Falha ao acompanhar o lote. Atualize a página para consultar o resultado.</p>'}
+  }catch(e){if(proc)proc.fim();if(window.__loteAcompanhadoPorPeca)delete window.__loteAcompanhadoPorPeca[pecaId];fb.innerHTML='<p class="erro-ia">'+(e&&e.name==='AbortError'?'A consulta do lote demorou demais e foi encerrada; ela não iniciou outra cobrança. Atualize a página para consultar novamente.':'Falha ao acompanhar o lote. Atualize a página para consultar o resultado.')+'</p>'}
 }
 function dataBR(iso){if(!iso)return '';const p=iso.split('T')[0].split('-');return p.length===3?(p[2]+'/'+p[1]+'/'+p[0]):iso;}
 function dataHoraBR(iso){if(!iso)return '';const t=iso.split('T');const dd=dataBR(t[0]);const hh=t[1]?(' às '+t[1].slice(0,5)):'';return dd+hh;}
@@ -1182,9 +1183,9 @@ async function profGastos(mes){
     const cfgMes=((d.configuracaoFinanceiraMensal||{})[m])||{};
     const licenca=Number(rz.licenca)||0,reservaPct=Number(cfgMes.reservaIAPercentual!=null?cfgMes.reservaIAPercentual:d.reservaIAPercentual)||0;
     const orc=((d.orcamentosIA||{})[m])||{limiteUSD:Number(d.orcamentoIAMensal)||0,consumidoUSD:rz.custoAPI,reservadoUSD:0,disponivelParaNovasChamadasUSD:Math.max(0,(Number(d.orcamentoIAMensal)||0)-rz.custoAPI),percentual:0,nivel:'normal'};
-    const pctOrc=Math.max(0,Number(orc.percentual)||0),larguraOrc=Math.min(100,pctOrc),corOrc=orc.nivel==='esgotado'?'var(--vermelho)':(orc.nivel==='critico'?'#b45309':(orc.nivel==='atencao'?'#c28a18':'var(--verde)'));
-    const tituloOrc=orc.nivel==='esgotado'?'Orçamento da API atingido':(orc.nivel==='critico'?'Uso crítico do orçamento da API':(orc.nivel==='atencao'?'Atenção ao orçamento da API':'Orçamento da API sob controle'));
-    const orcamento='<div class="card" style="border-left:5px solid '+corOrc+'"><div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-end;flex-wrap:wrap"><div><h3 style="margin-bottom:4px">'+esc(tituloOrc)+'</h3><p style="margin:0;font: .84rem Arial,sans-serif;color:var(--cinza)">Consumo bruto e reservas de chamadas em andamento. A licença institucional não entra neste teto.</p></div><b style="color:'+corOrc+'">'+pctOrc.toLocaleString('pt-BR',{maximumFractionDigits:1})+'%</b></div><div style="height:12px;background:#e8e5dc;border-radius:999px;overflow:hidden;margin:12px 0 8px"><div style="height:100%;width:'+larguraOrc+'%;background:'+corOrc+'"></div></div><div class="metricas"><div class="metrica"><b>'+usdBR(orc.consumidoUSD)+'</b><span>já consumido</span></div><div class="metrica"><b>'+usdBR(orc.reservadoUSD)+'</b><span>em chamadas ativas</span></div><div class="metrica"><b>'+usdBR(orc.disponivelParaNovasChamadasUSD)+'</b><span>disponível</span></div><div class="metrica"><b>'+usdBR(orc.limiteUSD)+'</b><span>teto bruto</span></div></div></div>';
+    const semTeto=orc.semTeto===true,pctOrc=Math.max(0,Number(orc.percentual)||0),larguraOrc=Math.min(100,pctOrc),corOrc=orc.nivel==='esgotado'?'var(--vermelho)':(orc.nivel==='critico'?'#b45309':(orc.nivel==='atencao'?'#c28a18':'var(--verde)'));
+    const tituloOrc=semTeto?'Uso da API sem teto automático':(orc.nivel==='esgotado'?'Orçamento da API atingido':(orc.nivel==='critico'?'Uso crítico do orçamento da API':(orc.nivel==='atencao'?'Atenção ao orçamento da API':'Orçamento da API sob controle')));
+    const orcamento='<div class="card" style="border-left:5px solid '+corOrc+'"><div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-end;flex-wrap:wrap"><div><h3 style="margin-bottom:4px">'+esc(tituloOrc)+'</h3><p style="margin:0;font: .84rem Arial,sans-serif;color:var(--cinza)">'+(semTeto?'Os custos continuam registrados, mas novas chamadas não são bloqueadas por limite mensal.':'Consumo bruto e reservas de chamadas em andamento. A licença institucional não entra neste teto.')+'</p></div><b style="color:'+corOrc+'">'+(semTeto?'sem teto':pctOrc.toLocaleString('pt-BR',{maximumFractionDigits:1})+'%')+'</b></div>'+(semTeto?'':'<div style="height:12px;background:#e8e5dc;border-radius:999px;overflow:hidden;margin:12px 0 8px"><div style="height:100%;width:'+larguraOrc+'%;background:'+corOrc+'"></div></div>')+'<div class="metricas"><div class="metrica"><b>'+usdBR(orc.consumidoUSD)+'</b><span>já consumido</span></div><div class="metrica"><b>'+usdBR(orc.reservadoUSD)+'</b><span>em chamadas ativas</span></div><div class="metrica"><b>'+(semTeto?'Sem limite':usdBR(orc.disponivelParaNovasChamadasUSD))+'</b><span>disponível</span></div><div class="metrica"><b>'+(semTeto?'Sem limite':usdBR(orc.limiteUSD))+'</b><span>teto bruto</span></div></div></div>';
     const resumo='<div class="metricas"><div class="metrica"><b>'+usdBR(rz.custoAPI)+'</b><span>custo real da API</span></div><div class="metrica"><b>'+usdBR(rz.reservaIA)+'</b><span>reserva de IA ('+reservaPct.toLocaleString('pt-BR')+'%)</span></div><div class="metrica"><b>'+usdBR(rz.usoIAComReserva)+'</b><span>IA com reserva</span></div><div class="metrica"><b>'+usdBR(rz.licenca)+'</b><span>licença institucional</span></div><div class="metrica"><b style="color:var(--azul)">'+usdBR(rz.total)+'</b><span>total do mês</span></div></div>';
     const pendencias=Array.isArray(d.pendenciasFinanceirasIA)?d.pendenciasFinanceirasIA:[];
     const pendenciasHtml=!pendencias.length?'':('<div class="card painel" style="border-left:5px solid #b45309"><h3>⚠️ Chamadas com cobrança incerta</h3><p class="aviso">Estas reservas continuam consumindo o teto até a administração conferir o Console da Anthropic e reconciliá-las explicitamente.</p><table><tr><th>Detectada</th><th>Operação</th><th>Modelo</th><th>Reserva</th><th>Ação administrativa</th></tr>'+pendencias.map(x=>'<tr><td>'+esc(dataHora(x.detectadaEm||x.criadaEm))+'</td><td>'+esc(x.operacao||'—')+'</td><td>'+esc(x.modelo||'—')+'</td><td><b>'+usdBR(x.reservaOrcamentoUSD)+'</b></td><td>'+(AUTH&&AUTH.admin?'<button onclick="reconciliarPendenciaIA(\''+escAttr(x.id)+'\',\'nao-cobrada\')">Não cobrada</button> <button onclick="reconciliarPendenciaIA(\''+escAttr(x.id)+'\',\'cobrada-estimada\')">Converter reserva em gasto</button>':'A administração deve reconciliar')+'</td></tr>').join('')+'</table></div>');
@@ -1414,10 +1415,9 @@ async function telaAluno(){
     let cards='';
     for(const p of d.pecas){
       const fechado=!p.noPrazo;
-      const pesquisaPendente=!!p.pesquisaPendente;
       cards+='<div class="card"><span class="badge">Peça '+p.num+'</span> <b>'+esc(p.nomePeca)+'</b>'
-       +'<p style="font-family:Arial,sans-serif;font-size:.85rem;color:'+(fechado?'var(--vermelho)':(pesquisaPendente?'#8a6415':'var(--cinza)'))+'">Prazo: '+(p.prazo?dataHoraBR(p.prazo):'sem prazo')+' · '+(fechado?'🔴 Prazo encerrado':(pesquisaPendente?'🔒 Pesquisa obrigatória pendente':'⏳ A fazer'))+'</p>'
-       +'<div class="botoes"><button class="'+(pesquisaPendente?'':'primario')+'" onclick="'+(pesquisaPendente?'telaPesquisaAluno()':'abrirPecaAluno(\''+p.id+'\')')+'">'+(pesquisaPendente?'Responder pesquisa para liberar a Peça 2':(fechado?'Ver enunciado':'Fazer esta peça'))+'</button></div></div>';
+       +'<p style="font-family:Arial,sans-serif;font-size:.85rem;color:'+(fechado?'var(--vermelho)':'var(--cinza)')+'">Prazo: '+(p.prazo?dataHoraBR(p.prazo):'sem prazo')+' · '+(fechado?'🔴 Prazo encerrado':'⏳ A fazer')+'</p>'
+       +'<div class="botoes"><button class="primario" onclick="abrirPecaAluno(\''+p.id+'\')">'+(fechado?'Ver enunciado':'Fazer esta peça')+'</button></div></div>';
     }
     document.getElementById('la').innerHTML=materiaisNpjHtml(false)+cards;
     window.__pecasAluno=d.pecas;
@@ -1616,7 +1616,6 @@ async function confirmarDescadastro(){
 }
 function abrirPecaAluno(id){
   const p=(window.__pecasAluno||[]).find(x=>x.id===id);if(!p)return;
-  if(p.pesquisaPendente){telaPesquisaAluno();return}
   const parecerUsado=!!p.parecerInicialUsado;
   const rasc=sget(chaveRascunhoAluno(id),'');
   try{window.__arquivoAluno=JSON.parse(sget(chaveArquivoAluno(id),'null'))}catch(e){window.__arquivoAluno=null}

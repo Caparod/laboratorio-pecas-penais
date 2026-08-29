@@ -34,7 +34,7 @@ for (const arquivo of [path.join(__dirname, '..', 'index.html'), path.join(__dir
     assert.match(html, /15\/08\/2026/, 'interface deve informar a aplicação prevista no próximo sábado');
     assert.match(html, /function profPesquisa\(/, 'área do professor deve incluir resultados agregados da pesquisa');
     assert.match(html, /pelo menos três respostas/, 'interface deve explicar o limite mínimo de anonimato');
-    assert.match(html, /Responder pesquisa para liberar a Peça 2/, 'Peça 2 deve orientar o aluno para a pesquisa obrigatória');
+    assert.doesNotMatch(html, /Responder pesquisa para liberar|Pesquisa obrigatória pendente/, 'a pesquisa pedagógica não pode bloquear o acesso a nenhuma peça');
     assert.match(html, /OBRIGATÓRIA/, 'todas as afirmações obrigatórias devem estar identificadas no formulário');
     assert.match(html, /\/materiais\/papel-timbrado-npj\.docx/, 'aluno deve poder baixar o papel timbrado oficial');
     assert.match(html, /\/materiais\/regras-formatacao-npj\.pdf/, 'aluno deve poder baixar as regras de formatação');
