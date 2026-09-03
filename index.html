@@ -645,8 +645,9 @@ function renderRodadaProposta(id){
   const p=(window.__propostasProfessor||[]).find(x=>x.id===id);if(!p)return;
   const pendentes=p.aCorrigir||[],corrigidas=p.corrigidas||[];
   const semRascunho=pendentes.filter(e=>!e.temRascunho);
+  const statusLote=(window.__loteUltimoStatusPorPeca||{})[id],htmlStatusLote=statusLote&&['processando','criando','fallback-sequencial','fase-sequencial'].includes(statusLote.status)?htmlLoteEmAndamento(statusLote):'';
   const linha=function(e,corrigida){const rascunho=!corrigida&&e.temRascunho;return '<div style="padding:10px 0;border-bottom:1px solid #e7e2d7"><b>'+esc(e.nome||e.matricula)+'</b><div style="font: .79rem Arial,sans-serif;color:var(--cinza);margin-top:3px">Matrícula '+esc(e.matricula)+' · entregue em '+esc(dataHora(e.enviadoEm))+(corrigida&&e.nota!=null?' · nota '+esc(String(e.nota).replace('.',','))+'/5':(rascunho?' · 📝 rascunho pronto para revisão'+(e.notaSugerida!=null?' · sugestão '+esc(String(e.notaSugerida).replace('.',','))+'/5':''):''))+'</div><div class="botoes" style="margin-top:7px"><button '+(corrigida?'':'class="primario" ')+'onclick="abrirEntrega(\''+p.id+'\',\''+e.matricula+'\')">'+(corrigida?'Rever correção':(rascunho?'Revisar e validar':'Corrigir agora'))+'</button></div></div>'};
-  document.getElementById('lprop').innerHTML='<div class="card"><div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap"><div><span class="badge">Rodada · Peça '+(p.rodada||p.num)+'</span><h3 style="margin:8px 0 3px">'+esc(p.nomePeca)+'</h3><p style="font: .82rem Arial,sans-serif;color:var(--cinza);margin:0">'+esc(p.disc||'—')+' · prazo '+(p.prazo?esc(dataHoraBR(p.prazo)):'não informado')+'</p></div><div class="botoes" style="margin-top:0"><button class="primario" onclick="abrirPeca(\''+p.id+'\')">Abrir rodada</button>'+(semRascunho.length?'<button class="primario" onclick="corrigirTodasRodada(\''+p.id+'\','+Number(p.rodada||p.num)+','+semRascunho.length+')">🤖 Gerar rascunhos ('+semRascunho.length+')</button>':'')+'</div></div><div id="corrigir_todas_fb"></div>'
+  document.getElementById('lprop').innerHTML='<div class="card"><div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap"><div><span class="badge">Rodada · Peça '+(p.rodada||p.num)+'</span><h3 style="margin:8px 0 3px">'+esc(p.nomePeca)+'</h3><p style="font: .82rem Arial,sans-serif;color:var(--cinza);margin:0">'+esc(p.disc||'—')+' · prazo '+(p.prazo?esc(dataHoraBR(p.prazo)):'não informado')+'</p></div><div class="botoes" style="margin-top:0"><button class="primario" onclick="abrirPeca(\''+p.id+'\')">Abrir rodada</button>'+(semRascunho.length?'<button class="primario" onclick="corrigirTodasRodada(\''+p.id+'\','+Number(p.rodada||p.num)+','+semRascunho.length+')">🤖 Gerar rascunhos ('+semRascunho.length+')</button>':'')+'</div></div><div id="corrigir_todas_fb">'+htmlStatusLote+'</div>'
    +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:14px;margin-top:16px">'
    +'<section style="background:#fff8e8;border:1px solid #ead7a4;border-radius:8px;padding:14px"><h3 style="color:#8a6415;margin:0 0 8px">⏳ A corrigir ('+pendentes.length+')</h3>'+(pendentes.length?pendentes.map(e=>linha(e,false)).join(''):'<p style="font: .84rem Arial,sans-serif;color:var(--cinza)">Nenhuma entrega aguardando correção.</p>')+'</section>'
    +'<section style="background:#eef7ef;border:1px solid #c9dfcc;border-radius:8px;padding:14px"><h3 style="color:var(--verde);margin:0 0 8px">✅ Corrigidas ('+corrigidas.length+')</h3>'+(corrigidas.length?corrigidas.map(e=>linha(e,true)).join(''):'<p style="font: .84rem Arial,sans-serif;color:var(--cinza)">Nenhuma entrega corrigida nesta rodada.</p>')+'</section>'
@@ -680,15 +681,30 @@ function sincronizarRascunhosLote(pecaId,itens){
   }
   return mudou;
 }
+function duracaoCurtaLote(ms){const s=Math.max(0,Math.floor(Number(ms||0)/1000)),m=Math.floor(s/60);return m?(m+' min '+(s%60)+' s'):(s+' s')}
+function htmlLoteEmAndamento(j){
+  const progresso=j.progressoProvedor||{},processadas=Math.max((j.concluidas||0)+(j.falhas||0),progresso.processados||0),pct=j.total?Math.min(100,Math.round(processadas*100/j.total)):0;
+  const itemAtual=(j.itens||[]).find(x=>String(x.matricula||'')===String(j.matriculaAtual||''))||(j.itens||[]).find(x=>x.status==='sequencial-em-chamada');
+  const inicioAtual=Number(itemAtual&&itemAtual.chamadaSequencialIniciadaEm||0),tempo=inicioAtual?'<span data-lote-inicio="'+inicioAtual+'"> · chamada em andamento há '+duracaoCurtaLote(Date.now()-inicioAtual)+'</span>':'';
+  const erros=(j.erros||[]).slice(-4);
+  return '<div class="parecer-inicial"><p><b>Itens processados no lote: '+processadas+' de '+j.total+'</b>'+(j.atual?' · gerando para '+esc(j.atual):'')+tempo+'</p><div class="pbar"><div class="trilho"><div class="fill" style="width:'+pct+'%"></div></div></div><p style="font: .82rem Arial,sans-serif;color:var(--cinza)">Atualização automática a cada 5 segundos. Rascunhos salvos: '+(j.rascunhosGerados||0)+' · aguardando revisão individual do professor. Nenhum aluno é notificado nesta etapa.</p>'+(j.falhas?'<p class="erro-ia"><b>Falhas de geração até agora: '+j.falhas+'</b></p>':'')+(erros.length?'<ul class="erro-ia">'+erros.map(x=>'<li>'+esc(x.aluno||'Item')+': '+esc(x.erro||'Falha não detalhada.')+'</li>').join('')+'</ul>':'')+'</div>';
+}
 window.__loteAcompanhadoPorPeca=window.__loteAcompanhadoPorPeca||{};
+window.__loteUltimoStatusPorPeca=window.__loteUltimoStatusPorPeca||{};
+window.__loteConsultaAtivaPorPeca=window.__loteConsultaAtivaPorPeca||{};
+window.__loteTimerPorPeca=window.__loteTimerPorPeca||{};
+function agendarAcompanhamentoLote(pecaId,jobId,proc,espera){clearTimeout(window.__loteTimerPorPeca[pecaId]);window.__loteTimerPorPeca[pecaId]=setTimeout(()=>acompanharCorrecaoTodas(pecaId,jobId,proc),espera==null?5000:espera)}
+function limparAcompanhamentoLote(pecaId){clearTimeout(window.__loteTimerPorPeca[pecaId]);delete window.__loteTimerPorPeca[pecaId];delete window.__loteAcompanhadoPorPeca[pecaId];delete window.__loteUltimoStatusPorPeca[pecaId]}
 async function retomarAcompanhamentoLote(pecaId){
-  if(window.__loteAcompanhadoPorPeca[pecaId])return;
+  const conhecido=window.__loteAcompanhadoPorPeca[pecaId];
+  if(conhecido&&conhecido!=='consultando'){if(!window.__loteConsultaAtivaPorPeca[pecaId])acompanharCorrecaoTodas(pecaId,conhecido,iniciarProcessamento('Atualizando o lote...',{bloqueia:false,prioridade:10}));return}
+  if(conhecido)return;
   window.__loteAcompanhadoPorPeca[pecaId]='consultando';
   try{
     const r=await apiGet('/api/entrega/corrigir-todas-status?peca='+encodeURIComponent(pecaId));
     if(!r.ok){delete window.__loteAcompanhadoPorPeca[pecaId];return}
     const d=await r.json(),j=d.job||{};
-    if(!['processando','criando','fallback-sequencial','fase-sequencial','criacao-incerta','resultados-indisponiveis'].includes(j.status)){delete window.__loteAcompanhadoPorPeca[pecaId];return}
+    if(!['processando','criando','fallback-sequencial','fase-sequencial','criacao-incerta','resultados-indisponiveis'].includes(j.status)){limparAcompanhamentoLote(pecaId);const fb=document.getElementById('corrigir_todas_fb');if(fb)fb.innerHTML='';return}
     window.__loteAcompanhadoPorPeca[pecaId]=j.id;
     const proc=iniciarProcessamento('Retomando o acompanhamento do lote...',{bloqueia:false,prioridade:10});
     acompanharCorrecaoTodas(pecaId,j.id,proc);
@@ -715,28 +731,32 @@ async function reconciliarLoteIncerto(jobId,pecaId,status){
   atualizarPropostasProfessor(pecaId);
 }
 async function acompanharCorrecaoTodas(pecaId,jobId,proc){
-  let fb=document.getElementById('corrigir_todas_fb');if(!fb){if(proc)proc.fim();return}
+  if(window.__loteConsultaAtivaPorPeca[pecaId])return;
+  window.__loteConsultaAtivaPorPeca[pecaId]=true;
+  let fb=document.getElementById('corrigir_todas_fb');if(!fb){if(proc)proc.fim();window.__loteConsultaAtivaPorPeca[pecaId]=false;agendarAcompanhamentoLote(pecaId,jobId,proc,1000);return}
   try{
     const r=await apiGet('/api/entrega/corrigir-todas-status?job='+encodeURIComponent(jobId));const d=await r.json();
     if(!r.ok){if(proc)proc.fim();if(window.__loteAcompanhadoPorPeca)delete window.__loteAcompanhadoPorPeca[pecaId];fb.innerHTML='<p class="erro-ia">'+esc(d.mensagem||d.erro||'Não foi possível acompanhar a correção.')+'</p>';return}
-    const j=d.job||{},progressoProvedor=j.progressoProvedor||{},processadas=Math.max((j.concluidas||0)+(j.falhas||0),progressoProvedor.processados||0),pct=j.total?Math.min(100,Math.round(processadas*100/j.total)):0;
+    const j=d.job||{},progressoProvedor=j.progressoProvedor||{},processadas=Math.max((j.concluidas||0)+(j.falhas||0),progressoProvedor.processados||0),pct=j.total?Math.min(100,Math.round(processadas*100/j.total)):0;window.__loteUltimoStatusPorPeca[pecaId]=j;
     if(proc)proc.atualizar(pct,j.atual?'Gerando rascunho para '+j.atual+'...':(String(j.modo||'').startsWith('anthropic-message-batch')?'Lote assíncrono em processamento...':(j.status==='fase-sequencial'?'Processando itens de alto risco individualmente...':'Acompanhando a geração dos rascunhos...')));
     if(sincronizarRascunhosLote(pecaId,j.itensConcluidos)){renderRodadaProposta(pecaId);fb=document.getElementById('corrigir_todas_fb')}
-    fb.innerHTML='<div class="parecer-inicial"><p><b>Itens processados no lote: '+processadas+' de '+j.total+'</b>'+(j.atual?' · gerando para '+esc(j.atual):'')+'</p><div class="pbar"><div class="trilho"><div class="fill" style="width:'+pct+'%"></div></div></div><p style="font: .82rem Arial,sans-serif;color:var(--cinza)">'+(j.modo==='anthropic-message-batch'?'Processamento assíncrono: pode demorar e é retomado pelo servidor após reinicializações. ':'')+'Rascunhos salvos: '+(j.rascunhosGerados||0)+' · aguardando revisão individual do professor. Nenhum aluno é notificado nesta etapa.</p>'+(j.falhas?'<p class="erro-ia">Falhas de geração até agora: '+j.falhas+'</p>':'')+'</div>';
-    if(j.status==='processando'||j.status==='criando'||j.status==='fallback-sequencial'||j.status==='fase-sequencial'){setTimeout(()=>acompanharCorrecaoTodas(pecaId,jobId,proc),60000);return}
+    fb.innerHTML=htmlLoteEmAndamento(j);
+    if(j.status==='processando'||j.status==='criando'||j.status==='fallback-sequencial'||j.status==='fase-sequencial'){agendarAcompanhamentoLote(pecaId,jobId,proc);return}
     if(j.status==='criacao-incerta'){fb.innerHTML='<div class="parecer-inicial"><p class="erro-ia"><b>Confirmação de criação incerta.</b> O provedor não devolveu um identificador seguro. Para evitar cobrança duplicada, o sistema não repetirá o lote e manterá a reserva financeira até a conferência manual no Console da Anthropic.</p><p style="font: .82rem Arial,sans-serif;color:var(--cinza)">Nenhuma correção foi liberada ao aluno.</p>'+(AUTH&&AUTH.admin?'<button onclick="reconciliarLoteIncerto(\''+escAttr(jobId)+'\',\''+escAttr(pecaId)+'\',\'criacao-incerta\')">Registrar conferência e liberar reserva</button>':'<p style="font: .82rem Arial,sans-serif;color:var(--cinza)">Solicite a reconciliação à administração.</p>')+'</div>';setTimeout(()=>acompanharCorrecaoTodas(pecaId,jobId,proc),60000);return}
     if(j.status==='resultados-indisponiveis'){if(proc)proc.fim();fb.innerHTML='<div class="parecer-inicial"><p class="erro-ia"><b>Os resultados remotos deste lote não estão mais disponíveis.</b> Nenhum item pendente será repetido automaticamente. A reserva permanece bloqueada até a administração conferir o Console; ao reconciliar, o saldo ainda reservado será registrado como gasto conservador.</p>'+(AUTH&&AUTH.admin?'<button onclick="reconciliarLoteIncerto(\''+escAttr(jobId)+'\',\''+escAttr(pecaId)+'\',\'resultados-indisponiveis\')">Conferir e reconciliar lote</button>':'<p style="font: .82rem Arial,sans-serif;color:var(--cinza)">Solicite a reconciliação à administração.</p>')+'</div>';return}
-    if(j.status==='pendencia-batch-reconciliada'){if(proc)proc.fim();fb.innerHTML='<div class="parecer-inicial"><p class="erro-ia"><b>Pendência do lote reconciliada pela administração.</b> A reserva foi liberada após conferência registrada no Console. Inicie um novo lote somente se essa conferência descartou cobrança ou processamento pendente.</p></div>';return}
+    if(j.status==='pendencia-batch-reconciliada'){if(proc)proc.fim();limparAcompanhamentoLote(pecaId);fb.innerHTML='<div class="parecer-inicial"><p class="erro-ia"><b>Pendência do lote reconciliada pela administração.</b> A reserva foi liberada após conferência registrada no Console. Inicie um novo lote somente se essa conferência descartou cobrança ou processamento pendente.</p></div>';return}
     if(j.status==='falhou'){
       if(proc)proc.fim();
+      limparAcompanhamentoLote(pecaId);
       fb.innerHTML='<div class="parecer-inicial"><p class="erro-ia"><b>A geração de rascunhos foi interrompida.</b> Os rascunhos já salvos foram mantidos; resíduos das tentativas incompletas foram removidos, e as demais entregas continuam pendentes.</p>'+((j.erros||[]).length?'<ul class="erro-ia">'+j.erros.map(x=>'<li>'+esc(x.aluno)+': '+esc(x.erro)+'</li>').join('')+'</ul>':'')+'</div>';
       setTimeout(()=>atualizarPropostasProfessor(pecaId),1200);return;
     }
-    if(proc)proc.fim();
+    if(proc)proc.fim();limparAcompanhamentoLote(pecaId);
     const ignorados=(j.itensConcluidos||[]).filter(x=>x.ignorado).length,loteOk=!(j.falhas||0)&&!(j.cancelados||0)&&!ignorados;
     fb.innerHTML='<div class="parecer-inicial"><p class="'+(loteOk?'':'erro-ia')+'" style="'+(loteOk?'color:var(--verde)':'')+'"><b>'+(loteOk?'✅ Todos os rascunhos do lote foram gerados e salvos.':'⚠️ Lote de rascunhos finalizado com pendência.')+'</b> '+(j.rascunhosGerados||0)+' rascunho(s) aguardam revisão e validação individual do professor; '+(j.falhas||0)+' geração(ões) falharam'+(ignorados?' e '+ignorados+' item(ns) foram ignorados por alteração, validação, cancelamento ou ausência da entrega':'')+(j.cancelados?' ('+j.cancelados+' cancelado(s) no provedor)':'')+'. Nenhuma nota foi liberada e nenhum e-mail foi enviado ao aluno.</p>'+((j.erros||[]).length?'<ul class="erro-ia">'+j.erros.map(x=>'<li>'+esc(x.aluno)+': '+esc(x.erro)+'</li>').join('')+'</ul>':'')+'</div>';
     setTimeout(()=>atualizarPropostasProfessor(pecaId),1200);
   }catch(e){if(proc)proc.fim();if(window.__loteAcompanhadoPorPeca)delete window.__loteAcompanhadoPorPeca[pecaId];fb.innerHTML='<p class="erro-ia">'+(e&&e.name==='AbortError'?'A consulta do lote demorou demais e foi encerrada; ela não iniciou outra cobrança. Atualize a página para consultar novamente.':'Falha ao acompanhar o lote. Atualize a página para consultar o resultado.')+'</p>'}
+  finally{window.__loteConsultaAtivaPorPeca[pecaId]=false}
 }
 function dataBR(iso){if(!iso)return '';const p=iso.split('T')[0].split('-');return p.length===3?(p[2]+'/'+p[1]+'/'+p[0]):iso;}
 function dataHoraBR(iso){if(!iso)return '';const t=iso.split('T');const dd=dataBR(t[0]);const hh=t[1]?(' às '+t[1].slice(0,5)):'';return dd+hh;}

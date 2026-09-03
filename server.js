@@ -1156,6 +1156,15 @@ const correcoesIndividuais = new Map();
 const entregasEmCorrecao = new Set();
 const LIMITE_TENTATIVA_CORRECAO_MS = Math.max(60000, Number(process.env.CORRECAO_LIMITE_MS || 9 * 60 * 1000));
 const RETENCAO_JOB_CORRECAO_MS = 30 * 60 * 1000;
+function limitarDuracaoCorrecao(promessa, limiteMs, mensagem) {
+  let timer;
+  const limite = Math.max(1000, Number(limiteMs) || LIMITE_TENTATIVA_CORRECAO_MS);
+  const expiracao = new Promise((resolve, reject) => {
+    timer = setTimeout(() => reject(new Error(mensagem || 'A correção excedeu o tempo de segurança.')), limite);
+    if (timer.unref) timer.unref();
+  });
+  return Promise.race([Promise.resolve(promessa), expiracao]).finally(() => clearTimeout(timer));
+}
 function limparEstadoTentativa(entrega, estado) {
   restaurarEstadoCorrecao(entrega, estado);
   salvarDb();
@@ -4266,7 +4275,13 @@ async function retomarFaseSequencialBatch(job) {
       await salvarDbCritico();
       item.chamadaSequencialIniciadaEm = Date.now();
       let gerada;
-      try { gerada = await gerarRelatorioCorrecao(sessaoPersistidaDoLote(job), p, e); }
+      try {
+        gerada = await limitarDuracaoCorrecao(
+          gerarRelatorioCorrecao(sessaoPersistidaDoLote(job), p, e),
+          LIMITE_TENTATIVA_CORRECAO_MS,
+          'A correção deste aluno excedeu o tempo de segurança e foi encerrada sem salvar conteúdo parcial.'
+        );
+      }
       catch (err) { gerada = { ok: false, erro: String(err.message || err) }; }
       if (!gerada.ok) {
         const semOrcamento = gerada.erroIA && gerada.erroIA.codigo === 'ORCAMENTO_IA_MENSAL_ATINGIDO';
@@ -4287,7 +4302,14 @@ async function retomarFaseSequencialBatch(job) {
   } catch (err) {
     job.ultimaFalhaFaseSequencial = String(err.message || err).slice(0, 240);
     job.ultimaFalhaFaseSequencialEm = Date.now();
-    salvarDb();
+    const itemAtivo = (job.itens || []).find(item => item.fase === 'sequencial' && !item.resultadoProcessadoEm && item.status === 'sequencial-em-chamada');
+    if (itemAtivo) {
+      const e = (db.entregas[p.id] || {})[itemAtivo.matricula];
+      falharItemFaseSequencial(job, itemAtivo, e, 'falhou-sequencial-interno', 'A correção foi interrompida por uma falha interna. Nenhum conteúdo parcial foi salvo; os demais alunos continuarão sendo processados.');
+    }
+    job.atual = ''; job.matriculaAtual = '';
+    await salvarDbCritico().catch(() => salvarDb());
+    setImmediate(() => retomarFaseSequencialBatch(job));
   } finally { lotesSequenciaisEmAndamento.delete(job.id); }
 }
 function manterLotesAnthropic() {
@@ -4319,17 +4341,13 @@ async function processarLoteCorrecao(job, sess, p, pendentes) {
       }
       const estadoInicial = capturarEstadoCorrecao(e);
       let correcaoPersistida = false;
-      let expirou = false;
-      const timer = setTimeout(() => {
-        expirou = true;
-        limparEstadoTentativa(e, estadoInicial);
-      }, LIMITE_TENTATIVA_CORRECAO_MS);
-      if (timer.unref) timer.unref();
       try {
-        const gerada = await gerarRelatorioCorrecao(sess, p, e);
-        if (expirou) throw new Error('A correção excedeu o tempo de segurança; o conteúdo parcial foi removido.');
+        const gerada = await limitarDuracaoCorrecao(
+          gerarRelatorioCorrecao(sess, p, e),
+          LIMITE_TENTATIVA_CORRECAO_MS,
+          'A correção excedeu o tempo de segurança; o conteúdo parcial foi removido.'
+        );
         if (!gerada.ok) throw new Error(gerada.erro || 'Falha na correção por IA.');
-        clearTimeout(timer);
         aplicarResultadoCorrecao(e, gerada, sess.usuario);
         e.nota = Math.round(Number(gerada.notaSugerida) * 100) / 100;
         e.validado = false;
@@ -4339,7 +4357,6 @@ async function processarLoteCorrecao(job, sess, p, pendentes) {
         delete e.revisaoHumana;
         await salvarDbCritico();
         correcaoPersistida = true;
-        clearTimeout(timer);
         job.concluidas++;
         job.rascunhosGerados++;
         job.itensConcluidos.push({ matricula: item.matricula, nome: item.nome || item.matricula, notaSugerida: e.notaSugerida, temRascunho: true, validado: false, revisaoObrigatoria: true, enviadoEm: e.enviadoEm });
@@ -4352,7 +4369,7 @@ async function processarLoteCorrecao(job, sess, p, pendentes) {
         job.falhas++;
         job.repetindo = '';
         job.erros.push({ aluno: item.nome || item.matricula, erro: (mensagem.slice(0, 200) + ' Nenhum conteúdo parcial foi mantido. Tente novamente por uma nova ação do professor.').slice(0, 300) });
-      } finally { clearTimeout(timer); }
+      }
     }
     job.status = 'concluido'; job.atual = ''; job.matriculaAtual = ''; job.finalizadoEm = Date.now();
     await salvarDbCritico();

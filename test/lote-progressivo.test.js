@@ -15,6 +15,7 @@ function trechoEntre(texto, inicio, fim) {
 }
 
 const processamento = trechoEntre(servidor, 'async function processarLoteCorrecao', 'async function entregaCorrigirTodas');
+const processamentoSequencial = trechoEntre(servidor, 'async function retomarFaseSequencialBatch', 'function manterLotesAnthropic');
 const inicioLote = trechoEntre(servidor, 'async function entregaCorrigirTodas(req, res)', 'async function entregaCorrigirTodasStatus');
 const validacao = trechoEntre(servidor, 'async function validarEEnviarCorrecao', '// Professor: pedir à IA um relatório com nota para uma entrega');
 const acaoProfessor = trechoEntre(servidor, 'async function entregaValidar', 'async function entregaPreviaPdf');
@@ -24,6 +25,9 @@ assert.match(processamento, /itensConcluidos\.push\(\{[\s\S]*temRascunho: true[\
 assert.doesNotMatch(processamento, /validarEEnviarCorrecao|enviarEspelhoAluno|enviarEmail\(/, 'o processamento em lote não pode validar nem enviar correções');
 assert.doesNotMatch(processamento, /for \(let tentativa = 1; tentativa <= 2/, 'o lote não deve repetir externamente uma correção integral que já passou por reparo e escalonamento internos');
 assert.doesNotMatch(processamento, /tentativasExtras\+\+/, 'falha final deve aguardar uma nova ação do professor');
+assert.match(processamento, /limitarDuracaoCorrecao\([\s\S]*LIMITE_TENTATIVA_CORRECAO_MS/, 'o lote sequencial simples deve encerrar uma chamada que ultrapasse o limite de segurança');
+assert.match(processamentoSequencial, /limitarDuracaoCorrecao\([\s\S]*LIMITE_TENTATIVA_CORRECAO_MS/, 'a fase sequencial de alto risco deve encerrar uma chamada que ultrapasse o limite de segurança');
+assert.match(processamentoSequencial, /itemAtivo[\s\S]*falharItemFaseSequencial[\s\S]*setImmediate\(\(\) => retomarFaseSequencialBatch/, 'uma falha interna deve liquidar o item órfão e continuar os demais alunos');
 assert.doesNotMatch(inicioLote, /destinatariosInvalidos|verificarServicoEmail/, 'cadastro ou indisponibilidade de e-mail não pode bloquear a geração dos rascunhos');
 assert.match(inicioLote, /!e\.validado && !e\.relatorio/, 'o lote deve reutilizar rascunhos já persistidos em vez de gerar novamente');
 assert.doesNotMatch(servidor, /automatico-sem-supervisao/, 'não pode existir modo de validação automática sem supervisão');
@@ -40,6 +44,10 @@ const sincronizacao = trechoEntre(interfaceHtml, 'function sincronizarRascunhosL
 assert.match(sincronizacao, /p\.aCorrigir\.find/, 'o rascunho deve permanecer na fila A corrigir');
 assert.doesNotMatch(sincronizacao, /corrigidas\.push|aCorrigir\.splice/, 'o lote não pode mover rascunhos para a lista de correções validadas');
 assert.match(interfaceHtml, /proc\.atualizar\(pct,/, 'a barra global deve refletir o avanço real do lote');
+assert.match(interfaceHtml, /__loteUltimoStatusPorPeca[\s\S]*htmlLoteEmAndamento/, 'a reconstrução da tela deve preservar o último progresso conhecido');
+assert.match(interfaceHtml, /Atualização automática a cada 5 segundos/, 'o professor deve saber a frequência real de atualização');
+assert.match(interfaceHtml, /function agendarAcompanhamentoLote[\s\S]*espera==null\?5000/, 'o acompanhamento ativo não pode ficar um minuto sem atualizar');
+assert.match(interfaceHtml, /\(j\.erros\|\|\[\]\)[\s\S]*esc\(x\.erro/, 'as falhas já conhecidas devem ser explicadas durante o processamento');
 assert.match(interfaceHtml, /aguardam revisão e validação individual do professor/, 'o encerramento deve orientar a revisão individual');
 assert.match(interfaceHtml, /Nenhuma nota foi liberada e nenhum e-mail foi enviado ao aluno/, 'o status final não pode sugerir liberação automática');
 assert.match(interfaceHtml, /O envio do e-mail falhou, mas isso não desfez a validação/, 'a interface deve separar claramente validação e notificação');
